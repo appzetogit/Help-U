@@ -1,8 +1,8 @@
 const Booking = require('../../models/Booking');
-const Vendor = require('../../models/Vendor');
+const Worker = require('../../models/Worker');
 const User = require('../../models/User');
 const Service = require('../../models/UserService');
-const { BOOKING_STATUS, PAYMENT_STATUS, VENDOR_STATUS } = require('../../utils/constants');
+const { BOOKING_STATUS, PAYMENT_STATUS, WORKER_STATUS } = require('../../utils/constants');
 
 /**
  * Get Booking Report Data
@@ -70,9 +70,9 @@ exports.getBookingReport = async (req, res) => {
 };
 
 /**
- * Get Vendor Report Data
+ * Get Worker Report Data
  */
-exports.getVendorReport = async (req, res) => {
+exports.getWorkerReport = async (req, res) => {
   try {
     const now = new Date();
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -80,14 +80,14 @@ exports.getVendorReport = async (req, res) => {
     const endOfPrevMonth = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
 
     // 1. Total counts
-    const totalVendors = await Vendor.countDocuments({});
-    const approvedVendors = await Vendor.countDocuments({ 
+    const totalWorkers = await Worker.countDocuments({});
+    const approvedWorkers = await Worker.countDocuments({ 
       approvalStatus: { $in: ['approved', 'APPROVED'] } 
     });
-    const pendingVendors = await Vendor.countDocuments({ 
+    const pendingWorkers = await Worker.countDocuments({ 
       approvalStatus: { $in: ['pending', 'PENDING'] } 
     });
-    const rejectedVendors = await Vendor.countDocuments({ 
+    const rejectedWorkers = await Worker.countDocuments({ 
       approvalStatus: { $in: ['rejected', 'REJECTED'] } 
     });
 
@@ -95,31 +95,31 @@ exports.getVendorReport = async (req, res) => {
     const completedBookings = await Booking.countDocuments({ status: BOOKING_STATUS.COMPLETED });
 
     // 2. Growth calculation
-    const thisMonthVendors = await Vendor.countDocuments({ createdAt: { $gte: startOfMonth } });
-    const prevMonthVendors = await Vendor.countDocuments({ 
+    const thisMonthWorkers = await Worker.countDocuments({ createdAt: { $gte: startOfMonth } });
+    const prevMonthWorkers = await Worker.countDocuments({ 
       createdAt: { $gte: startOfPrevMonth, $lte: endOfPrevMonth } 
     });
     let growth = 12.5;
-    if (prevMonthVendors > 0) {
-      growth = parseFloat((((thisMonthVendors - prevMonthVendors) / prevMonthVendors) * 100).toFixed(1));
-    } else if (thisMonthVendors > 0) {
+    if (prevMonthWorkers > 0) {
+      growth = parseFloat((((thisMonthWorkers - prevMonthWorkers) / prevMonthWorkers) * 100).toFixed(1));
+    } else if (thisMonthWorkers > 0) {
       growth = 100;
     }
 
     // 3. Status distribution normalized
     const statusDistribution = [
-      { _id: 'Approved', count: approvedVendors },
-      { _id: 'Pending', count: pendingVendors },
-      { _id: 'Rejected', count: rejectedVendors }
+      { _id: 'Approved', count: approvedWorkers },
+      { _id: 'Pending', count: pendingWorkers },
+      { _id: 'Rejected', count: rejectedWorkers }
     ];
 
-    // 4. Vendors with Analytics (Rating, Total Earnings, Completed Services, Pending Services, Monthly Earnings)
-    const vendors = await Vendor.find({})
+    // 4. Workers with Analytics (Rating, Total Earnings, Completed Services, Pending Services, Monthly Earnings)
+    const workers = await Worker.find({})
       .select('name businessName phone email rating wallet referralEarnings createdAt approvalStatus')
       .lean();
 
-    // Aggregate booking stats per vendor
-    const vendorBookingStats = await Booking.aggregate([
+    // Aggregate booking stats per worker
+    const workerBookingStats = await Booking.aggregate([
       {
         $group: {
           _id: '$vendorId',
@@ -170,11 +170,11 @@ exports.getVendorReport = async (req, res) => {
     ]);
 
     const statsMap = new Map();
-    vendorBookingStats.forEach(s => {
+    workerBookingStats.forEach(s => {
       if (s._id) statsMap.set(String(s._id), s);
     });
 
-    const enrichedVendors = vendors.map(v => {
+    const enrichedWorkers = workers.map(v => {
       const bStats = statsMap.get(String(v._id)) || {};
       const totalEarned = (v.wallet?.earnings || 0) + (bStats.totalRevenue || 0);
       const avgRate = bStats.avgRating || v.rating || 5.0;
@@ -196,8 +196,8 @@ exports.getVendorReport = async (req, res) => {
     });
 
     // Sort top performers by totalEarnings or completedServices
-    enrichedVendors.sort((a, b) => (b.totalEarnings + b.completedServices * 100) - (a.totalEarnings + a.completedServices * 100));
-    const topVendors = enrichedVendors.slice(0, 10);
+    enrichedWorkers.sort((a, b) => (b.totalEarnings + b.completedServices * 100) - (a.totalEarnings + a.completedServices * 100));
+    const topWorkers = enrichedWorkers.slice(0, 10);
 
     // 5. Monthly registration trend (last 6 months)
     const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -205,7 +205,7 @@ exports.getVendorReport = async (req, res) => {
     for (let i = 5; i >= 0; i--) {
       const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
       const endD = new Date(now.getFullYear(), now.getMonth() - i + 1, 0, 23, 59, 59);
-      const count = await Vendor.countDocuments({
+      const count = await Worker.countDocuments({
         createdAt: { $gte: d, $lte: endD }
       });
       monthlyTrend.push({
@@ -216,25 +216,25 @@ exports.getVendorReport = async (req, res) => {
     }
 
     // Active Rate safely formatted
-    const activeRate = totalVendors > 0 ? Math.round((approvedVendors / totalVendors) * 100) : 100;
+    const activeRate = totalWorkers > 0 ? Math.round((approvedWorkers / totalWorkers) * 100) : 100;
 
     res.status(200).json({
       success: true,
       data: {
-        totalVendors,
-        approvedVendors,
+        totalWorkers,
+        approvedWorkers,
         totalBookings,
         completedBookings,
         growth: `${growth > 0 ? '+' : ''}${growth}%`,
         activeRate,
         statusDistribution,
-        topVendors,
-        allVendorsAnalytics: enrichedVendors,
+        topWorkers,
+        allWorkersAnalytics: enrichedWorkers,
         monthlyTrend
       }
     });
   } catch (error) {
-    console.error('Vendor report error:', error);
+    console.error('Worker report error:', error);
     res.status(500).json({ success: false, message: 'Failed to fetch worker report' });
   }
 };

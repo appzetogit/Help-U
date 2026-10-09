@@ -105,7 +105,7 @@ app.use('/api/users/bookings', (req, res, next) => {
   }
   next();
 });
-// (Old Vendor Register Logger Removed)
+// (Old Worker Register Logger Removed)
 
 
 
@@ -208,18 +208,18 @@ app.use('/api/users/fcm-tokens', require('./routes/user-routes/fcmToken.routes')
 const scrapRoutes = require('./routes/scrap.routes');
 app.use('/api/scrap', scrapRoutes);
 
-// Vendor routes
-app.use('/api/vendors/auth', require('./routes/vendor-routes/auth.routes'));
-app.use('/api/vendors', require('./routes/vendor-routes/profile.routes'));
-app.use('/api/vendors', require('./routes/vendor-routes/settings.routes'));
-app.use('/api/vendors', require('./routes/vendor-routes/wallet.routes'));
-app.use('/api/vendors', require('./routes/vendor-routes/dashboard.routes'));
-app.use('/api/vendors', require('./routes/vendor-routes/service.routes'));
-app.use('/api/vendors/bookings', require('./routes/vendor-routes/booking.routes'));
-app.use('/api/vendors/fcm-tokens', require('./routes/vendor-routes/fcmToken.routes'));
-app.use('/api/vendors', require('./routes/vendor-routes/vendorBill.routes'));
-app.use('/api/vendors/catalog', require('./routes/vendor-routes/catalog.routes'));
-app.use('/api/vendors', require('./routes/vendor-routes/referral.routes'));
+// Worker routes
+app.use('/api/workers/auth', require('./routes/worker-routes/auth.routes'));
+app.use('/api/workers', require('./routes/worker-routes/profile.routes'));
+app.use('/api/workers', require('./routes/worker-routes/settings.routes'));
+app.use('/api/workers', require('./routes/worker-routes/wallet.routes'));
+app.use('/api/workers', require('./routes/worker-routes/dashboard.routes'));
+app.use('/api/workers', require('./routes/worker-routes/service.routes'));
+app.use('/api/workers/bookings', require('./routes/worker-routes/booking.routes'));
+app.use('/api/workers/fcm-tokens', require('./routes/worker-routes/fcmToken.routes'));
+app.use('/api/workers', require('./routes/worker-routes/workerBill.routes'));
+app.use('/api/workers/catalog', require('./routes/worker-routes/catalog.routes'));
+app.use('/api/workers', require('./routes/worker-routes/referral.routes'));
 
 
 // Admin routes
@@ -227,12 +227,12 @@ app.use('/api/admin/auth', require('./routes/admin-routes/adminAuth.routes'));
 app.use('/api/admin', require('./routes/admin-routes/cityManagement.routes.js'));
 app.use('/api/admin', require('./routes/admin-routes/dashboard.routes'));
 app.use('/api/admin', require('./routes/admin-routes/userManagement.routes'));
-app.use('/api/admin', require('./routes/admin-routes/vendorManagement.routes'));
+app.use('/api/admin', require('./routes/admin-routes/workerManagement.routes'));
 app.use('/api/admin', require('./routes/admin-routes/referral.routes'));
 app.use('/api/admin', require('./routes/admin-routes/categoryManagement.routes'));
 app.use('/api/admin', require('./routes/admin-routes/brandManagement.routes'));
 app.use('/api/admin', require('./routes/admin-routes/serviceManagement.routes'));
-app.use('/api/admin', require('./routes/admin-routes/vendorCatalogManagement.routes'));
+app.use('/api/admin', require('./routes/admin-routes/workerCatalogManagement.routes'));
 app.use('/api/admin', require('./routes/admin-routes/homePageManagement.routes'));
 app.use('/api/admin', require('./routes/admin-routes/bookingManagement.routes'));
 app.use('/api/admin', require('./routes/admin-routes/paymentManagement.routes'));
@@ -247,11 +247,11 @@ app.use('/api/admin/admins', require('./routes/admin-routes/adminManagement.rout
 app.use('/api/image', require('./routes/admin-routes/image.routes'));
 app.use('/api', require('./routes/admin-routes/upload.routes')); // Generic upload access
 
-// Vendor Wallet/Ledger routes
-// Vendor Wallet/Ledger routes
-// WARNING: This mounts at /api/vendors, meaning routes inside are relative to that.
-// e.g., router.post('/withdrawal') becomes /api/vendors/withdrawal
-app.use('/api/vendors', require('./routes/vendor-routes/vendorWallet.routes'));
+// Worker Wallet/Ledger routes
+// Worker Wallet/Ledger routes
+// WARNING: This mounts at /api/workers, meaning routes inside are relative to that.
+// e.g., router.post('/withdrawal') becomes /api/workers/withdrawal
+app.use('/api/workers', require('./routes/worker-routes/workerWallet.routes'));
 
 // Booking routes
 app.use('/api/bookings', require('./routes/booking-routes/userBooking.routes'));

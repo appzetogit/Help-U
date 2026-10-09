@@ -1,4 +1,4 @@
-const Vendor = require('../../models/Vendor');
+const Worker = require('../../models/Worker');
 const Transaction = require('../../models/Transaction');
 const Settlement = require('../../models/Settlement');
 const Withdrawal = require('../../models/Withdrawal');
@@ -6,9 +6,9 @@ const mongoose = require('mongoose');
 const { recordSettlement, recordWithdrawal } = require('../../services/earningTrackerService');
 
 /**
- * Get all vendors with their wallet balances
+ * Get all workers with their wallet balances
  */
-const getVendorBalances = async (req, res) => {
+const getWorkerBalances = async (req, res) => {
   try {
     const { page = 1, limit = 20, search, filterDue } = req.query;
     const skip = (parseInt(page) - 1) * parseInt(limit);
@@ -22,29 +22,29 @@ const getVendorBalances = async (req, res) => {
       ];
     }
 
-    // If filtering by vendors who owe money
+    // If filtering by workers who owe money
     if (filterDue === 'true') {
       matchQuery['wallet.dues'] = { $gt: 0 };
     }
 
-    const vendors = await Vendor.find(matchQuery)
+    const workers = await Worker.find(matchQuery)
       .select('name businessName phone email wallet profilePhoto')
       .sort({ 'wallet.dues': -1 }) // Highest dues first
       .skip(skip)
       .limit(parseInt(limit));
 
-    const total = await Vendor.countDocuments(matchQuery);
+    const total = await Worker.countDocuments(matchQuery);
 
     // Calculate total amount due to admin
-    const totalDueResult = await Vendor.aggregate([
+    const totalDueResult = await Worker.aggregate([
       { $match: { 'wallet.dues': { $gt: 0 } } },
       { $group: { _id: null, total: { $sum: '$wallet.dues' } } }
     ]);
 
     const totalDueToAdmin = Math.abs(totalDueResult[0]?.total || 0);
 
-    // Format vendor data
-    const vendorData = vendors.map(v => ({
+    // Format worker data
+    const workerData = workers.map(v => ({
       _id: v._id,
       name: v.name,
       businessName: v.businessName,
@@ -62,10 +62,10 @@ const getVendorBalances = async (req, res) => {
 
     res.status(200).json({
       success: true,
-      data: vendorData,
+      data: workerData,
       summary: {
         totalDueToAdmin,
-        vendorsWithDue: await Vendor.countDocuments({ 'wallet.dues': { $gt: 0 } })
+        workersWithDue: await Worker.countDocuments({ 'wallet.dues': { $gt: 0 } })
       },
       pagination: {
         page: parseInt(page),
@@ -75,26 +75,26 @@ const getVendorBalances = async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Get vendor balances error:', error);
+    console.error('Get worker balances error:', error);
     res.status(500).json({
       success: false,
-      message: 'Failed to fetch vendor balances'
+      message: 'Failed to fetch worker balances'
     });
   }
 };
 
 /**
- * Get specific vendor's ledger/transactions
+ * Get specific worker's ledger/transactions
  */
-const getVendorLedger = async (req, res) => {
+const getWorkerLedger = async (req, res) => {
   try {
     const { vendorId } = req.params;
     const { page = 1, limit = 50, type } = req.query;
 
-    const vendor = await Vendor.findById(vendorId)
+    const worker = await Worker.findById(vendorId)
       .select('name businessName phone wallet');
 
-    if (!vendor) {
+    if (!worker) {
       return res.status(404).json({
         success: false,
         message: 'Worker not found'
@@ -116,15 +116,15 @@ const getVendorLedger = async (req, res) => {
 
     res.status(200).json({
       success: true,
-      vendor: {
-        _id: vendor._id,
-        name: vendor.name,
-        businessName: vendor.businessName,
-        phone: vendor.phone,
-        phone: vendor.phone,
-        dues: vendor.wallet?.dues || 0,
-        earnings: vendor.wallet?.earnings || 0,
-        amountDue: vendor.wallet?.dues || 0
+      worker: {
+        _id: worker._id,
+        name: worker.name,
+        businessName: worker.businessName,
+        phone: worker.phone,
+        phone: worker.phone,
+        dues: worker.wallet?.dues || 0,
+        earnings: worker.wallet?.earnings || 0,
+        amountDue: worker.wallet?.dues || 0
       },
       data: transactions,
       pagination: {
@@ -135,7 +135,7 @@ const getVendorLedger = async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Get vendor ledger error:', error);
+    console.error('Get worker ledger error:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to fetch worker ledger'
@@ -212,38 +212,38 @@ const approveSettlement = async (req, res) => {
       });
     }
 
-    const vendor = await Vendor.findById(settlement.vendorId);
-    if (!vendor) {
+    const worker = await Worker.findById(settlement.vendorId);
+    if (!worker) {
       return res.status(404).json({
         success: false,
         message: 'Worker not found'
       });
     }
 
-    const currentDues = vendor.wallet?.dues || 0;
+    const currentDues = worker.wallet?.dues || 0;
 
     // Settlement reduces DUES
     // Ensure we don't go below zero (though validation handles request)
-    vendor.wallet.dues = Math.max(0, currentDues - settlement.amount);
+    worker.wallet.dues = Math.max(0, currentDues - settlement.amount);
 
     // Auto-unblock if dues drop below limit
-    if (vendor.wallet.isBlocked && vendor.wallet.dues <= (vendor.wallet.cashLimit || 10000)) {
-      vendor.wallet.isBlocked = false;
-      vendor.wallet.blockedAt = null;
-      vendor.wallet.blockReason = null;
+    if (worker.wallet.isBlocked && worker.wallet.dues <= (worker.wallet.cashLimit || 10000)) {
+      worker.wallet.isBlocked = false;
+      worker.wallet.blockedAt = null;
+      worker.wallet.blockReason = null;
     }
 
-    await vendor.save();
+    await worker.save();
 
     // Update settlement
     settlement.status = 'approved';
     settlement.processedBy = adminId;
     settlement.processedAt = new Date();
     settlement.adminNotes = adminNotes;
-    settlement.balanceAfter = vendor.wallet.dues;
+    settlement.balanceAfter = worker.wallet.dues;
     // Send Dues Payment (Settlement) Email
     const { sendDuesPaymentApprovedEmail } = require('../../services/emailService');
-    sendDuesPaymentApprovedEmail(vendor, settlement.amount, vendor.wallet.dues).catch(e => console.error(e));
+    sendDuesPaymentApprovedEmail(worker, settlement.amount, worker.wallet.dues).catch(e => console.error(e));
 
     await settlement.save();
 
@@ -255,7 +255,7 @@ const approveSettlement = async (req, res) => {
       message: 'Settlement approved successfully',
       data: {
         settlement,
-        newDues: vendor.wallet.dues
+        newDues: worker.wallet.dues
       }
     });
   } catch (error) {
@@ -365,7 +365,7 @@ const getSettlementDashboard = async (req, res) => {
   try {
     // Total amount due to admin
     // Total amount due to admin
-    const totalDueResult = await Vendor.aggregate([
+    const totalDueResult = await Worker.aggregate([
       { $match: { 'wallet.dues': { $gt: 0 } } },
       { $group: { _id: null, total: { $sum: '$wallet.dues' } } }
     ]);
@@ -420,7 +420,7 @@ const getSettlementDashboard = async (req, res) => {
       success: true,
       data: {
         totalDueToAdmin,
-        vendorsWithDue: await Vendor.countDocuments({ 'wallet.dues': { $gt: 0 } }),
+        workersWithDue: await Worker.countDocuments({ 'wallet.dues': { $gt: 0 } }),
         pendingSettlements: {
           amount: pendingSettlements[0]?.total || 0,
           count: pendingSettlements[0]?.count || 0
@@ -445,20 +445,20 @@ const getSettlementDashboard = async (req, res) => {
 };
 
 /**
- * Block Vendor (Manual or auto-triggered)
+ * Block Worker (Manual or auto-triggered)
  */
-const blockVendor = async (req, res) => {
+const blockWorker = async (req, res) => {
   try {
     const { vendorId } = req.params;
     const { reason } = req.body;
 
-    const vendor = await Vendor.findById(vendorId);
-    if (!vendor) return res.status(404).json({ success: false, message: 'Worker not found' });
+    const worker = await Worker.findById(vendorId);
+    if (!worker) return res.status(404).json({ success: false, message: 'Worker not found' });
 
-    vendor.wallet.isBlocked = true;
-    vendor.wallet.blockedAt = new Date();
-    vendor.wallet.blockReason = reason || 'Blocked by admin due to pending dues.';
-    await vendor.save();
+    worker.wallet.isBlocked = true;
+    worker.wallet.blockedAt = new Date();
+    worker.wallet.blockReason = reason || 'Blocked by admin due to pending dues.';
+    await worker.save();
 
     res.status(200).json({ success: true, message: 'Worker blocked successfully' });
   } catch (error) {
@@ -467,19 +467,19 @@ const blockVendor = async (req, res) => {
 };
 
 /**
- * Unblock Vendor
+ * Unblock Worker
  */
-const unblockVendor = async (req, res) => {
+const unblockWorker = async (req, res) => {
   try {
     const { vendorId } = req.params;
 
-    const vendor = await Vendor.findById(vendorId);
-    if (!vendor) return res.status(404).json({ success: false, message: 'Worker not found' });
+    const worker = await Worker.findById(vendorId);
+    if (!worker) return res.status(404).json({ success: false, message: 'Worker not found' });
 
-    vendor.wallet.isBlocked = false;
-    vendor.wallet.blockedAt = null;
-    vendor.wallet.blockReason = null;
-    await vendor.save();
+    worker.wallet.isBlocked = false;
+    worker.wallet.blockedAt = null;
+    worker.wallet.blockReason = null;
+    await worker.save();
 
     res.status(200).json({ success: true, message: 'Worker unblocked successfully' });
   } catch (error) {
@@ -488,7 +488,7 @@ const unblockVendor = async (req, res) => {
 };
 
 /**
- * Update Vendor Cash Limit
+ * Update Worker Cash Limit
  */
 const updateCashLimit = async (req, res) => {
   try {
@@ -499,19 +499,19 @@ const updateCashLimit = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Invalid limit' });
     }
 
-    const vendor = await Vendor.findById(vendorId);
-    if (!vendor) return res.status(404).json({ success: false, message: 'Worker not found' });
+    const worker = await Worker.findById(vendorId);
+    if (!worker) return res.status(404).json({ success: false, message: 'Worker not found' });
 
-    vendor.wallet.cashLimit = limit;
+    worker.wallet.cashLimit = limit;
 
     // Auto unblock if new limit covers dues
-    if (vendor.wallet.isBlocked && (vendor.wallet.dues || 0) <= limit) {
-      vendor.wallet.isBlocked = false;
-      vendor.wallet.blockedAt = null;
-      vendor.wallet.blockReason = null;
+    if (worker.wallet.isBlocked && (worker.wallet.dues || 0) <= limit) {
+      worker.wallet.isBlocked = false;
+      worker.wallet.blockedAt = null;
+      worker.wallet.blockReason = null;
     }
 
-    await vendor.save();
+    await worker.save();
 
     res.status(200).json({ success: true, message: 'Cash limit updated successfully', limit });
   } catch (error) {
@@ -520,15 +520,15 @@ const updateCashLimit = async (req, res) => {
 };
 
 module.exports = {
-  getVendorBalances,
-  getVendorLedger,
+  getWorkerBalances,
+  getWorkerLedger,
   getPendingSettlements,
   approveSettlement,
   rejectSettlement,
   getSettlementHistory,
   getSettlementDashboard,
-  blockVendor,
-  unblockVendor,
+  blockWorker,
+  unblockWorker,
   updateCashLimit,
 
   // Withdrawal functions
@@ -545,15 +545,15 @@ module.exports = {
 
       const normalizedWithdrawals = withdrawals.map((withdrawal) => {
         const withdrawalObj = withdrawal.toObject();
-        const vendorBankDetails = withdrawalObj.vendorId?.bankDetails || {};
+        const workerBankDetails = withdrawalObj.vendorId?.bankDetails || {};
         const requestBankDetails = withdrawalObj.bankDetails || {};
 
         return {
           ...withdrawalObj,
           bankDetails: {
-            ...vendorBankDetails,
+            ...workerBankDetails,
             ...requestBankDetails,
-            qrCodeImage: requestBankDetails.qrCodeImage || vendorBankDetails.qrCodeImage || ''
+            qrCodeImage: requestBankDetails.qrCodeImage || workerBankDetails.qrCodeImage || ''
           }
         };
       });
@@ -591,13 +591,13 @@ module.exports = {
       if (!withdrawal) return res.status(404).json({ success: false, message: 'Withdrawal not found' });
       if (withdrawal.status !== 'pending') return res.status(400).json({ success: false, message: 'Not pending' });
 
-      const vendor = await Vendor.findById(withdrawal.vendorId);
-      if (!vendor) return res.status(404).json({ success: false, message: 'Worker not found' });
+      const worker = await Worker.findById(withdrawal.vendorId);
+      if (!worker) return res.status(404).json({ success: false, message: 'Worker not found' });
 
-      if (vendor.wallet.earnings < withdrawal.amount) {
+      if (worker.wallet.earnings < withdrawal.amount) {
         return res.status(400).json({
           success: false,
-          message: `Insufficient earnings. Available: ₹${vendor.wallet.earnings}`
+          message: `Insufficient earnings. Available: ₹${worker.wallet.earnings}`
         });
       }
 
@@ -607,10 +607,10 @@ module.exports = {
       const platformFeeAmount = Math.round((grossAmount * platformFeeRate) / 100);
       const netAmount = grossAmount - tdsAmount - platformFeeAmount;
 
-      // Deduct full amount from vendor earnings (gross)
-      vendor.wallet.earnings -= grossAmount;
-      vendor.wallet.totalWithdrawn = (vendor.wallet.totalWithdrawn || 0) + grossAmount;
-      await vendor.save();
+      // Deduct full amount from worker earnings (gross)
+      worker.wallet.earnings -= grossAmount;
+      worker.wallet.totalWithdrawn = (worker.wallet.totalWithdrawn || 0) + grossAmount;
+      await worker.save();
 
       // Update withdrawal with details
       withdrawal.status = 'approved';
@@ -626,16 +626,16 @@ module.exports = {
       await withdrawal.save();
 
       // Record withdrawal payout in earning tracker
-      // We pass the amount that legitimately left platform bounds to Vendor (including TDS tracking separately later if needed)
+      // We pass the amount that legitimately left platform bounds to Worker (including TDS tracking separately later if needed)
       recordWithdrawal(new Date(), grossAmount);
 
       // Send Withdrawal Approved Email
       const { sendWithdrawalApprovedEmail } = require('../../services/emailService');
-      sendWithdrawalApprovedEmail(vendor, grossAmount, transactionReference).catch(e => console.error(e));
+      sendWithdrawalApprovedEmail(worker, grossAmount, transactionReference).catch(e => console.error(e));
 
       // Transaction 1: Withdrawal Payout (Gross Amount Debited from Wallet)
       await Transaction.create({
-        vendorId: vendor._id,
+        vendorId: worker._id,
         type: 'withdrawal',
         amount: grossAmount,
         status: 'completed',
@@ -654,7 +654,7 @@ module.exports = {
 
       // Transaction 2: TDS Deduction
       await Transaction.create({
-        vendorId: vendor._id,
+        vendorId: worker._id,
         type: 'tds_deduction',
         amount: tdsAmount,
         status: 'completed',
@@ -671,7 +671,7 @@ module.exports = {
 
       // Transaction 3: Platform Fee Deduction
       await Transaction.create({
-        vendorId: vendor._id,
+        vendorId: worker._id,
         type: 'platform_fee',
         amount: platformFeeAmount,
         status: 'completed',

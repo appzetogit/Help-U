@@ -3,7 +3,7 @@ const getUserTypeStr = (role) => {
   if (!role) return 'User';
   role = role.toLowerCase();
   if (role === 'admin' || role === 'super_admin') return 'Admin';
-  if (role === 'vendor') return 'Partner'; // 'Vendor' is internal, 'Partner' is user-facing
+  if (role === 'worker') return 'Partner'; // 'Worker' is internal, 'Partner' is user-facing
   return 'User';
 };
 

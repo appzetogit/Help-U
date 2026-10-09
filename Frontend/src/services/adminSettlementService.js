@@ -2,7 +2,7 @@ import api from './api';
 
 /**
  * Admin Settlement Service
- * Manages vendor settlements from admin perspective
+ * Manages worker settlements from admin perspective
  */
 const adminSettlementService = {
   /**
@@ -14,18 +14,18 @@ const adminSettlementService = {
   },
 
   /**
-   * Get all vendors with their wallet balances
+   * Get all workers with their wallet balances
    */
-  getVendorBalances: async (params = {}) => {
-    const response = await api.get('/admin/settlements/vendors', { params });
+  getWorkerBalances: async (params = {}) => {
+    const response = await api.get('/admin/settlements/workers', { params });
     return response.data;
   },
 
   /**
-   * Get specific vendor's ledger/transactions
+   * Get specific worker's ledger/transactions
    */
-  getVendorLedger: async (vendorId, params = {}) => {
-    const response = await api.get(`/admin/settlements/vendors/${vendorId}/ledger`, { params });
+  getWorkerLedger: async (vendorId, params = {}) => {
+    const response = await api.get(`/admin/settlements/workers/${vendorId}/ledger`, { params });
     return response.data;
   },
 
@@ -66,26 +66,26 @@ const adminSettlementService = {
   },
 
   /**
-   * Block a vendor manually
+   * Block a worker manually
    */
-  blockVendor: async (vendorId, reason = '') => {
-    const response = await api.post(`/admin/settlements/vendors/${vendorId}/block`, { reason });
+  blockWorker: async (vendorId, reason = '') => {
+    const response = await api.post(`/admin/settlements/workers/${vendorId}/block`, { reason });
     return response.data;
   },
 
   /**
-   * Unblock a vendor
+   * Unblock a worker
    */
-  unblockVendor: async (vendorId) => {
-    const response = await api.post(`/admin/settlements/vendors/${vendorId}/unblock`);
+  unblockWorker: async (vendorId) => {
+    const response = await api.post(`/admin/settlements/workers/${vendorId}/unblock`);
     return response.data;
   },
 
   /**
-   * Update vendor cash collection limit
+   * Update worker cash collection limit
    */
   updateCashLimit: async (vendorId, limit) => {
-    const response = await api.post(`/admin/settlements/vendors/${vendorId}/cash-limit`, { limit });
+    const response = await api.post(`/admin/settlements/workers/${vendorId}/cash-limit`, { limit });
     return response.data;
   },
 

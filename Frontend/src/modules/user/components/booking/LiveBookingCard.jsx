@@ -39,7 +39,7 @@ const LiveBookingCard = ({ hasBottomNav }) => {
       // New Finding Status
       case 'REQUESTED':
       case 'SEARCHING':
-        return { label: 'Finding Nearby Vendors', icon: FiClock, color: 'bg-teal-500', sub: 'Scanning within 10km...', pulse: true };
+        return { label: 'Finding Nearby Workers', icon: FiClock, color: 'bg-teal-500', sub: 'Scanning within 10km...', pulse: true };
       default:
         return null;
     }

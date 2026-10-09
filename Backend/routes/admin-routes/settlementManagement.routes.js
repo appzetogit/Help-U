@@ -4,15 +4,15 @@ const { body } = require('express-validator');
 const { authenticate } = require('../../middleware/authMiddleware');
 const { isAdmin } = require('../../middleware/roleMiddleware');
 const {
-  getVendorBalances,
-  getVendorLedger,
+  getWorkerBalances,
+  getWorkerLedger,
   getPendingSettlements,
   approveSettlement,
   rejectSettlement,
   getSettlementHistory,
   getSettlementDashboard,
-  blockVendor,
-  unblockVendor,
+  blockWorker,
+  unblockWorker,
   updateCashLimit,
   // Withdrawals
   getWithdrawalRequests,
@@ -23,16 +23,16 @@ const {
 // Dashboard summary
 router.get('/dashboard', authenticate, isAdmin, getSettlementDashboard);
 
-// Get all vendors with balances
-router.get('/vendors', authenticate, isAdmin, getVendorBalances);
+// Get all workers with balances
+router.get('/workers', authenticate, isAdmin, getWorkerBalances);
 
-// Get specific vendor's ledger
-router.get('/vendors/:vendorId/ledger', authenticate, isAdmin, getVendorLedger);
+// Get specific worker's ledger
+router.get('/workers/:vendorId/ledger', authenticate, isAdmin, getWorkerLedger);
 
-// Vendor management (blocking and limits)
-router.post('/vendors/:vendorId/block', authenticate, isAdmin, blockVendor);
-router.post('/vendors/:vendorId/unblock', authenticate, isAdmin, unblockVendor);
-router.post('/vendors/:vendorId/cash-limit', authenticate, isAdmin, updateCashLimit);
+// Worker management (blocking and limits)
+router.post('/workers/:vendorId/block', authenticate, isAdmin, blockWorker);
+router.post('/workers/:vendorId/unblock', authenticate, isAdmin, unblockWorker);
+router.post('/workers/:vendorId/cash-limit', authenticate, isAdmin, updateCashLimit);
 
 // Get all pending settlements
 router.get('/pending', authenticate, isAdmin, getPendingSettlements);

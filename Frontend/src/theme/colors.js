@@ -1,11 +1,11 @@
 /**
  * Centralized Theme Colors Configuration
- * Separate themes for User and Vendor modules
+ * Separate themes for User and Worker modules
  * Update colors here to change theme across entire app
  * 
  * Usage:
  * - User module: import { userTheme } from '../../../../theme'
- * - Vendor module: import { vendorTheme } from '../../../../theme'
+ * - Worker module: import { workerTheme } from '../../../../theme'
  */
 
 // Help U LOGO Core Brand Colors
@@ -34,8 +34,8 @@ const userTheme = {
   brand: brand
 };
 
-// Vendor Theme Colors
-const vendorTheme = {
+// Worker Theme Colors
+const workerTheme = {
   backgroundGradient: 'linear-gradient(180deg, #FFFFFF 0%, #F8FAFC 100%)',
   gradient: brand.gradient,
   headerGradient: brand.navy,
@@ -48,7 +48,7 @@ const vendorTheme = {
 const themeColors = userTheme;
 
 // Export all themes
-export { userTheme, vendorTheme, brand };
+export { userTheme, workerTheme, brand };
 export default themeColors;
 
 

@@ -217,7 +217,7 @@ self.addEventListener('notificationclick', (event) => {
         if (data.notificationType === 'job_assigned') {
           urlToOpen = `/worker/job/${data.bookingId}`;
         } else {
-          urlToOpen = `/vendor/bookings/${data.bookingId}`;
+          urlToOpen = `/worker/bookings/${data.bookingId}`;
         }
       }
       break;

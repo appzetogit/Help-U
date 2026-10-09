@@ -1,5 +1,5 @@
 const Settings = require('../../models/Settings');
-const Vendor = require('../../models/Vendor');
+const Worker = require('../../models/Worker');
 const { getAllFlags, invalidateFlagCache, FLAG_DEFAULTS } = require('../../utils/featureFlags');
 
 // Get Global Settings
@@ -149,19 +149,19 @@ exports.updateSettings = async (req, res, next) => {
       // Non-blocking socket broadcast error
     }
 
-    // Propagate vendorCashLimit to all existing vendors if it was changed
+    // Propagate vendorCashLimit to all existing workers if it was changed
     if (vendorCashLimit !== undefined) {
-      console.log(`Updating all vendors with new cash limit: ${vendorCashLimit}`);
-      await Vendor.updateMany(
-        {}, // Filter: all vendors
+      console.log(`Updating all workers with new cash limit: ${vendorCashLimit}`);
+      await Worker.updateMany(
+        {}, // Filter: all workers
         { $set: { 'wallet.cashLimit': vendorCashLimit } }
       );
     }
 
-    // Propagate searchRadius to all existing vendors if it was changed
+    // Propagate searchRadius to all existing workers if it was changed
     if (searchRadius !== undefined) {
-      console.log(`Updating all vendors with new service range: ${searchRadius}`);
-      await Vendor.updateMany(
+      console.log(`Updating all workers with new service range: ${searchRadius}`);
+      await Worker.updateMany(
         {},
         { $set: { 'settings.serviceRange': searchRadius } }
       );

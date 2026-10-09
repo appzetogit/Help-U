@@ -1,8 +1,6 @@
 # ==========================================
 # Environment Variables & Secrets (CRITICAL)
 # ==========================================
-.env
-.env.*
 *.env
 !.env.example
 !.env.*.example
@@ -64,7 +62,6 @@ lerna-debug.log*
 # ==========================================
 # IDE & Editor Specific
 # ==========================================
-.vscode/*
 !.vscode/extensions.json
 .idea/
 *.suo
@@ -107,3 +104,4 @@ data/
 *.sqlite
 *.sqlite3
 *.db
+config.bat

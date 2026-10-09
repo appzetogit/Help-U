@@ -171,8 +171,8 @@ const verifyPaymentWebhook = async (req, res) => {
 
     const isAdvancePayment = booking.advancePayment?.razorpayOrderId === razorpay_order_id;
     const Transaction = require('../../models/Transaction');
-    const Vendor = require('../../models/Vendor');
-    const VendorBill = require('../../models/VendorBill');
+    const Worker = require('../../models/Worker');
+    const WorkerBill = require('../../models/WorkerBill');
 
     if (isAdvancePayment) {
       const advanceAmount = getAdvancePaymentAmount(booking);
@@ -256,7 +256,7 @@ const verifyPaymentWebhook = async (req, res) => {
 
     await booking.save();
 
-    // ── Credit Vendor Wallet from VendorBill (single source of truth) ──
+    // ── Credit Worker Wallet from WorkerBill (single source of truth) ──
     // User payment transaction
     await Transaction.create({
       userId: booking.userId,
@@ -269,8 +269,8 @@ const verifyPaymentWebhook = async (req, res) => {
       referenceId: razorpay_payment_id
     });
 
-    // Fetch VendorBill for earnings (only if bill exists = post-completion payment)
-    const bill = await VendorBill.findOne({ bookingId: booking._id });
+    // Fetch WorkerBill for earnings (only if bill exists = post-completion payment)
+    const bill = await WorkerBill.findOne({ bookingId: booking._id });
 
     if (bill && booking.vendorId) {
       const vendorEarning = bill.vendorTotalEarning;
@@ -281,7 +281,7 @@ const verifyPaymentWebhook = async (req, res) => {
       await bill.save();
 
       // Online payment: only earnings increase, NO dues (platform holds the money)
-      await Vendor.findByIdAndUpdate(booking.vendorId, {
+      await Worker.findByIdAndUpdate(booking.vendorId, {
         $inc: { 'wallet.earnings': vendorEarning }
       });
 
@@ -304,7 +304,7 @@ const verifyPaymentWebhook = async (req, res) => {
         });
       }
 
-      console.log(`[Payment] Credited ₹${vendorEarning} to vendor ${booking.vendorId}`);
+      console.log(`[Payment] Credited ₹${vendorEarning} to worker ${booking.vendorId}`);
     }
 
     // Record stats in the Daily Earning Tracker (Async)
@@ -328,21 +328,21 @@ const verifyPaymentWebhook = async (req, res) => {
       priority: 'high'
     });
 
-    // Notify vendor
-    let vendorTitle = 'Booking Confirmed';
-    let vendorMsg = `Payment received for booking ${booking.bookingNumber}. The service is now confirmed.`;
+    // Notify worker
+    let workerTitle = 'Booking Confirmed';
+    let workerMsg = `Payment received for booking ${booking.bookingNumber}. The service is now confirmed.`;
 
     if (booking.status === BOOKING_STATUS.COMPLETED) {
-      vendorTitle = 'Payment Received (Online)';
-      vendorMsg = `User paid ₹${booking.finalAmount} online for booking ${booking.bookingNumber}. Job Completed!`;
+      workerTitle = 'Payment Received (Online)';
+      workerMsg = `User paid ₹${booking.finalAmount} online for booking ${booking.bookingNumber}. Job Completed!`;
     }
 
     if (booking.vendorId) {
       await createNotification({
         vendorId: booking.vendorId,
         type: 'payment_success',
-        title: vendorTitle,
-        message: vendorMsg,
+        title: workerTitle,
+        message: workerMsg,
         relatedId: booking._id,
         relatedType: 'booking',
         priority: 'high'
@@ -527,11 +527,11 @@ const processWalletPayment = async (req, res) => {
 
     await booking.save();
 
-    // ── Credit Vendor Wallet from VendorBill (single source of truth) ──
-    const Vendor = require('../../models/Vendor');
-    const VendorBill = require('../../models/VendorBill');
+    // ── Credit Worker Wallet from WorkerBill (single source of truth) ──
+    const Worker = require('../../models/Worker');
+    const WorkerBill = require('../../models/WorkerBill');
 
-    const bill = await VendorBill.findOne({ bookingId: booking._id });
+    const bill = await WorkerBill.findOne({ bookingId: booking._id });
 
     if (bill && booking.vendorId) {
       const vendorEarning = bill.vendorTotalEarning;
@@ -542,7 +542,7 @@ const processWalletPayment = async (req, res) => {
       await bill.save();
 
       // Wallet payment: only earnings increase, NO dues (platform holds the money)
-      await Vendor.findByIdAndUpdate(booking.vendorId, {
+      await Worker.findByIdAndUpdate(booking.vendorId, {
         $inc: { 'wallet.earnings': vendorEarning }
       });
 
@@ -564,7 +564,7 @@ const processWalletPayment = async (req, res) => {
         });
       }
 
-      console.log(`[Wallet Payment] Credited ₹${vendorEarning} to vendor ${booking.vendorId}`);
+      console.log(`[Wallet Payment] Credited ₹${vendorEarning} to worker ${booking.vendorId}`);
     }
 
     // Record stats in the Daily Earning Tracker (Async)
@@ -588,21 +588,21 @@ const processWalletPayment = async (req, res) => {
       priority: 'high'
     });
 
-    // Notify vendor
-    let vendorTitle = 'Booking Confirmed';
-    let vendorMsg = `Payment received for booking ${booking.bookingNumber}. The service is now confirmed.`;
+    // Notify worker
+    let workerTitle = 'Booking Confirmed';
+    let workerMsg = `Payment received for booking ${booking.bookingNumber}. The service is now confirmed.`;
 
     if (booking.status === BOOKING_STATUS.COMPLETED) {
-      vendorTitle = 'Payment Received (Wallet)';
-      vendorMsg = `User paid ₹${booking.finalAmount} via wallet for booking ${booking.bookingNumber}. Job Completed!`;
+      workerTitle = 'Payment Received (Wallet)';
+      workerMsg = `User paid ₹${booking.finalAmount} via wallet for booking ${booking.bookingNumber}. Job Completed!`;
     }
 
     if (booking.vendorId) {
       await createNotification({
         vendorId: booking.vendorId,
         type: 'payment_success',
-        title: vendorTitle,
-        message: vendorMsg,
+        title: workerTitle,
+        message: workerMsg,
         relatedId: booking._id,
         relatedType: 'booking',
         priority: 'high'
@@ -791,14 +791,14 @@ const confirmPayAtHome = async (req, res) => {
       });
     }
 
-    // Update booking status — NO earnings set (VendorBill handles that later)
+    // Update booking status — NO earnings set (WorkerBill handles that later)
     booking.paymentMethod = 'pay_at_home';
     booking.paymentStatus = PAYMENT_STATUS.PENDING;
     booking.status = BOOKING_STATUS.CONFIRMED;
 
     await booking.save();
 
-    // Notify Vendor that booking is confirmed
+    // Notify Worker that booking is confirmed
     await createNotification({
       vendorId: booking.vendorId,
       type: 'booking_confirmed',

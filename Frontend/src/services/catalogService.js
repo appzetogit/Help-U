@@ -175,42 +175,42 @@ export const serviceService = {
 };
 
 /**
- * Vendor Catalog API calls
+ * Worker Catalog API calls
  */
-export const vendorCatalogService = {
+export const workerCatalogService = {
   // Services
   getAllServices: async () => {
-    const response = await api.get('/admin/vendor-services');
+    const response = await api.get('/admin/worker-services');
     return response.data;
   },
   createService: async (data) => {
-    const response = await api.post('/admin/vendor-services', data);
+    const response = await api.post('/admin/worker-services', data);
     return response.data;
   },
   updateService: async (id, data) => {
-    const response = await api.put(`/admin/vendor-services/${id}`, data);
+    const response = await api.put(`/admin/worker-services/${id}`, data);
     return response.data;
   },
   deleteService: async (id) => {
-    const response = await api.delete(`/admin/vendor-services/${id}`);
+    const response = await api.delete(`/admin/worker-services/${id}`);
     return response.data;
   },
 
   // Parts
   getAllParts: async () => {
-    const response = await api.get('/admin/vendor-parts');
+    const response = await api.get('/admin/worker-parts');
     return response.data;
   },
   createPart: async (data) => {
-    const response = await api.post('/admin/vendor-parts', data);
+    const response = await api.post('/admin/worker-parts', data);
     return response.data;
   },
   updatePart: async (id, data) => {
-    const response = await api.put(`/admin/vendor-parts/${id}`, data);
+    const response = await api.put(`/admin/worker-parts/${id}`, data);
     return response.data;
   },
   deletePart: async (id) => {
-    const response = await api.delete(`/admin/vendor-parts/${id}`);
+    const response = await api.delete(`/admin/worker-parts/${id}`);
     return response.data;
   }
 };

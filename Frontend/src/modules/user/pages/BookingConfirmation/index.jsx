@@ -96,7 +96,7 @@ const BookingConfirmation = () => {
   const { id } = useParams();
   const [booking, setBooking] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [isSearching, setIsSearching] = useState(!location.state?.noVendorsFound); // Respect passed state
+  const [isSearching, setIsSearching] = useState(!location.state?.noWorkersFound); // Respect passed state
   const [confirmDialog, setConfirmDialog] = useState(false);
 
   useEffect(() => {
@@ -113,7 +113,7 @@ const BookingConfirmation = () => {
           }
           setBooking(data);
 
-          // Check if vendor is already assigned
+          // Check if worker is already assigned
           const currentStatus = data.status?.toLowerCase();
           if (data.vendorId || (currentStatus !== 'requested' && currentStatus !== 'searching')) {
             setIsSearching(false);
@@ -135,7 +135,7 @@ const BookingConfirmation = () => {
     }
   }, [id, navigate]);
 
-  // Poll for vendor acceptance
+  // Poll for worker acceptance
   useEffect(() => {
     if (!isSearching || !id) return;
 
@@ -152,7 +152,7 @@ const BookingConfirmation = () => {
           }
 
           setBooking(updatedBooking);
-          // If vendor accepted or status changed
+          // If worker accepted or status changed
           const currentStatus = updatedBooking.status?.toLowerCase();
           if (updatedBooking.vendorId || (currentStatus !== 'requested' && currentStatus !== 'searching')) {
             setIsSearching(false);
@@ -225,7 +225,7 @@ const BookingConfirmation = () => {
   const handleCancelBooking = async () => {
     try {
       setLoading(true);
-      await bookingService.cancel(booking._id || booking.id, { reason: 'Cancelled during uncertain vendor search' });
+      await bookingService.cancel(booking._id || booking.id, { reason: 'Cancelled during uncertain worker search' });
       toast.success('Booking cancelled successfully');
       navigate('/user');
     } catch (error) {
@@ -276,7 +276,7 @@ const BookingConfirmation = () => {
         </header>
 
         <main className="px-4 py-6">
-          {/* Searching Animation - Show at top when searching for vendor */}
+          {/* Searching Animation - Show at top when searching for worker */}
           {isSearching && (
             <div className="bg-white rounded-2xl shadow-md border border-gray-100 mb-4 overflow-hidden">
               <SearchingAnimation />
@@ -341,7 +341,7 @@ const BookingConfirmation = () => {
                 : 'bg-green-50 text-green-700 border border-green-200'
                 }`}>
                 <span className="text-sm font-semibold">
-                  {isSearching ? 'Finding Vendor...' : (booking?.status?.toLowerCase() === 'requested' ? 'Request Sent' : 'Confirmed')}
+                  {isSearching ? 'Finding Worker...' : (booking?.status?.toLowerCase() === 'requested' ? 'Request Sent' : 'Confirmed')}
                 </span>
               </div>
             </div>

@@ -9,7 +9,7 @@ const deleteAllNotifications = async (req, res) => {
     // Build query based on user role to ensure they only delete their own notifications
     let query = {};
     if (userRole === 'USER') query.userId = userId;
-    else if (userRole === 'VENDOR') query.vendorId = userId;
+    else if (userRole === 'WORKER') query.vendorId = userId;
     else if (userRole === 'ADMIN') query.adminId = userId;
     else {
       // Safety fallback: if role is unknown, do not delete anything

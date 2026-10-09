@@ -14,13 +14,13 @@ const platformEarningSchema = new mongoose.Schema({
   platformCommission: { type: Number, default: 0 },
   vendorEarnings: { type: Number, default: 0 },
 
-  // Vendor-to-Platform Payments (Clearing negative balance)
+  // Worker-to-Platform Payments (Clearing negative balance)
   totalSettlementReceived: { type: Number, default: 0 }, // 'total settlement done'
-  totalPendingSettlement: { type: Number, default: 0 }, // snapshot: total negative vendor balances or pending requests
+  totalPendingSettlement: { type: Number, default: 0 }, // snapshot: total negative worker balances or pending requests
 
-  // Platform-to-Vendor Payments (Payouts)
-  totalAmountPaidToVendors: { type: Number, default: 0 }, // 'total amt paid to vendors'
-  totalPendingAmountToVendors: { type: Number, default: 0 } // snapshot: total positive vendor balances or pending payouts
+  // Platform-to-Worker Payments (Payouts)
+  totalAmountPaidToVendors: { type: Number, default: 0 }, // 'total amt paid to workers'
+  totalPendingAmountToVendors: { type: Number, default: 0 } // snapshot: total positive worker balances or pending payouts
 }, { timestamps: true });
 
 module.exports = mongoose.model('PlatformEarning', platformEarningSchema);

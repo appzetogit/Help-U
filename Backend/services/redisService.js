@@ -1,6 +1,6 @@
 /**
  * Redis Service
- * High-performance caching for vendor online status, locations, and availability
+ * High-performance caching for worker online status, locations, and availability
  */
 
 const Redis = require('ioredis');
@@ -81,13 +81,13 @@ const getRedis = () => redis;
 const isRedisConnected = () => isConnected && redis !== null;
 
 // ==========================================
-// VENDOR ONLINE STATUS
+// WORKER ONLINE STATUS
 // ==========================================
 
 /**
- * Set vendor online/offline status
+ * Set worker online/offline status
  */
-const setVendorOnline = async (vendorId, isOnline) => {
+const setWorkerOnline = async (vendorId, isOnline) => {
   if (!isRedisConnected()) return false;
   try {
     const key = 'vendors:online';
@@ -100,61 +100,61 @@ const setVendorOnline = async (vendorId, isOnline) => {
     }
     return true;
   } catch (error) {
-    console.error('[Redis] setVendorOnline error:', error);
+    console.error('[Redis] setWorkerOnline error:', error);
     return false;
   }
 };
 
 /**
- * Get all online vendor IDs
+ * Get all online worker IDs
  */
-const getOnlineVendors = async () => {
+const getOnlineWorkers = async () => {
   if (!isRedisConnected()) return [];
   try {
     return await redis.smembers('vendors:online');
   } catch (error) {
-    console.error('[Redis] getOnlineVendors error:', error);
+    console.error('[Redis] getOnlineWorkers error:', error);
     return [];
   }
 };
 
 /**
- * Check if vendor is online
+ * Check if worker is online
  */
-const isVendorOnline = async (vendorId) => {
+const isWorkerOnline = async (vendorId) => {
   if (!isRedisConnected()) return null; // null means unknown
   try {
     return await redis.sismember('vendors:online', vendorId.toString()) === 1;
   } catch (error) {
-    console.error('[Redis] isVendorOnline error:', error);
+    console.error('[Redis] isWorkerOnline error:', error);
     return null;
   }
 };
 
 // ==========================================
-// VENDOR LOCATION (GEO)
+// WORKER LOCATION (GEO)
 // ==========================================
 
 /**
- * Update vendor location in Redis geo index
+ * Update worker location in Redis geo index
  */
-const setVendorLocation = async (vendorId, lat, lng) => {
+const setWorkerLocation = async (vendorId, lat, lng) => {
   if (!isRedisConnected()) return false;
   try {
     // GEOADD expects: key longitude latitude member
     await redis.geoadd('vendors:locations', lng, lat, vendorId.toString());
     return true;
   } catch (error) {
-    console.error('[Redis] setVendorLocation error:', error);
+    console.error('[Redis] setWorkerLocation error:', error);
     return false;
   }
 };
 
 /**
- * Find vendors within radius using Redis geo
+ * Find workers within radius using Redis geo
  * Returns array of { vendorId, distance }
  */
-const getNearbyVendorsFromCache = async (lat, lng, radiusKm = 10) => {
+const getNearbyWorkersFromCache = async (lat, lng, radiusKm = 10) => {
   if (!isRedisConnected()) return null; // null means cache miss
   try {
     // GEORADIUS returns [member, distance] pairs
@@ -165,9 +165,9 @@ const getNearbyVendorsFromCache = async (lat, lng, radiusKm = 10) => {
       'WITHDIST', 'ASC', 'COUNT', 50
     );
 
-    // Filter to only online vendors
-    const onlineVendors = await getOnlineVendors();
-    const onlineSet = new Set(onlineVendors);
+    // Filter to only online workers
+    const onlineWorkers = await getOnlineWorkers();
+    const onlineSet = new Set(onlineWorkers);
 
     return results
       .filter(([vendorId]) => onlineSet.has(vendorId))
@@ -176,61 +176,61 @@ const getNearbyVendorsFromCache = async (lat, lng, radiusKm = 10) => {
         distance: parseFloat(distance)
       }));
   } catch (error) {
-    console.error('[Redis] getNearbyVendorsFromCache error:', error);
+    console.error('[Redis] getNearbyWorkersFromCache error:', error);
     return null;
   }
 };
 
 // ==========================================
-// VENDOR AVAILABILITY
+// WORKER AVAILABILITY
 // ==========================================
 
 /**
- * Set vendor availability status
+ * Set worker availability status
  */
-const setVendorAvailability = async (vendorId, status) => {
+const setWorkerAvailability = async (vendorId, status) => {
   if (!isRedisConnected()) return false;
   try {
     await redis.hset('vendors:availability', vendorId.toString(), status);
     return true;
   } catch (error) {
-    console.error('[Redis] setVendorAvailability error:', error);
+    console.error('[Redis] setWorkerAvailability error:', error);
     return false;
   }
 };
 
 /**
- * Get vendor availability
+ * Get worker availability
  */
-const getVendorAvailability = async (vendorId) => {
+const getWorkerAvailability = async (vendorId) => {
   if (!isRedisConnected()) return null;
   try {
     return await redis.hget('vendors:availability', vendorId.toString());
   } catch (error) {
-    console.error('[Redis] getVendorAvailability error:', error);
+    console.error('[Redis] getWorkerAvailability error:', error);
     return null;
   }
 };
 
 /**
- * Get available vendor IDs from a list
+ * Get available worker IDs from a list
  */
-const filterAvailableVendors = async (vendorIds) => {
-  if (!isRedisConnected()) return vendorIds; // Return all if Redis unavailable
+const filterAvailableWorkers = async (workerIds) => {
+  if (!isRedisConnected()) return workerIds; // Return all if Redis unavailable
   try {
     const pipeline = redis.pipeline();
-    vendorIds.forEach(id => {
+    workerIds.forEach(id => {
       pipeline.hget('vendors:availability', id.toString());
     });
     const results = await pipeline.exec();
 
-    return vendorIds.filter((id, index) => {
+    return workerIds.filter((id, index) => {
       const status = results[index]?.[1];
       return !status || status === 'AVAILABLE' || status === 'BUSY';
     });
   } catch (error) {
-    console.error('[Redis] filterAvailableVendors error:', error);
-    return vendorIds;
+    console.error('[Redis] filterAvailableWorkers error:', error);
+    return workerIds;
   }
 };
 
@@ -322,17 +322,17 @@ module.exports = {
   initRedis,
   getRedis,
   isRedisConnected,
-  // Vendor status
-  setVendorOnline,
-  getOnlineVendors,
-  isVendorOnline,
-  // Vendor location
-  setVendorLocation,
-  getNearbyVendorsFromCache,
-  // Vendor availability
-  setVendorAvailability,
-  getVendorAvailability,
-  filterAvailableVendors,
+  // Worker status
+  setWorkerOnline,
+  getOnlineWorkers,
+  isWorkerOnline,
+  // Worker location
+  setWorkerLocation,
+  getNearbyWorkersFromCache,
+  // Worker availability
+  setWorkerAvailability,
+  getWorkerAvailability,
+  filterAvailableWorkers,
   // Booking cache
   cacheBookingSearch,
   getBookingSearchCache,

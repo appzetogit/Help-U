@@ -5,7 +5,7 @@
 // User Roles
 const USER_ROLES = {
   USER: 'USER',
-  VENDOR: 'VENDOR',
+  WORKER: 'WORKER',
   ADMIN: 'ADMIN'
 };
 
@@ -17,8 +17,8 @@ const TOKEN_TYPES = {
   REFRESH_TOKEN: 'REFRESH_TOKEN'
 };
 
-// Vendor Approval Status
-const VENDOR_STATUS = {
+// Worker Approval Status
+const WORKER_STATUS = {
   PENDING: 'pending',
   APPROVED: 'approved',
   REJECTED: 'rejected',
@@ -28,8 +28,8 @@ const VENDOR_STATUS = {
 // Booking Status
 const BOOKING_STATUS = {
   SEARCHING: 'searching', // Initial search phase
-  REQUESTED: 'requested', // Waiting for vendor to accept
-  AWAITING_PAYMENT: 'awaiting_payment', // Accepted by vendor, waiting for user payment
+  REQUESTED: 'requested', // Waiting for worker to accept
+  AWAITING_PAYMENT: 'awaiting_payment', // Accepted by worker, waiting for user payment
   PENDING: 'pending',
   CONFIRMED: 'confirmed',
   ACCEPTED: 'accepted',
@@ -40,7 +40,7 @@ const BOOKING_STATUS = {
   WORK_DONE: 'work_done',
   COMPLETED: 'completed',
   CANCELLED: 'cancelled',
-  NO_VENDORS: 'cancelled',
+  NO_WORKERS: 'cancelled',
   REJECTED: 'rejected'
 };
 
@@ -50,7 +50,7 @@ const PAYMENT_STATUS = {
   SUCCESS: 'success',
   FAILED: 'failed',
   REFUNDED: 'refunded',
-  COLLECTED_BY_VENDOR: 'collected_by_vendor',
+  COLLECTED_BY_WORKER: 'collected_by_vendor',
   PLAN_COVERED: 'plan_covered' // For plan_benefit bookings until bill is finalized
 };
 
@@ -72,7 +72,7 @@ const BILL_STATUS = {
 module.exports = {
   USER_ROLES,
   TOKEN_TYPES,
-  VENDOR_STATUS,
+  WORKER_STATUS,
   BOOKING_STATUS,
   PAYMENT_STATUS,
   SERVICE_STATUS,

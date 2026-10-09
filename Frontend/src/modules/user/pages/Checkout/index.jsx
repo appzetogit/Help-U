@@ -7,7 +7,7 @@ import { toast } from 'react-hot-toast';
 import { themeColors } from '../../../../theme';
 import AddressSelectionModal from './components/AddressSelectionModal';
 import TimeSlotModal from './components/TimeSlotModal';
-import VendorSearchModal from './components/VendorSearchModal';
+import WorkerSearchModal from './components/WorkerSearchModal';
 import { bookingService } from '../../../../services/bookingService';
 import { paymentService } from '../../../../services/paymentService';
 import { cartService } from '../../../../services/cartService';
@@ -45,12 +45,12 @@ const Checkout = () => {
   const [contactDetails, setContactDetails] = useState({ name: '', phone: '' });
   const [showContactModal, setShowContactModal] = useState(false);
 
-  // New state for vendor search flow
+  // New state for worker search flow
   const [currentStep, setCurrentStep] = useState('details'); // 'details' | 'searching' | 'waiting' | 'accepted' | 'payment'
-  const [acceptedVendor, setAcceptedVendor] = useState(null);
+  const [acceptedWorker, setAcceptedWorker] = useState(null);
   const [bookingRequest, setBookingRequest] = useState(null);
-  const [searchingVendors, setSearchingVendors] = useState(false);
-  const [showVendorModal, setShowVendorModal] = useState(false);
+  const [searchingWorkers, setSearchingWorkers] = useState(false);
+  const [showWorkerModal, setShowWorkerModal] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState('online'); // 'online' | 'pay_at_home'
 
   const [loading, setLoading] = useState(true);
@@ -286,7 +286,7 @@ const Checkout = () => {
     }
 
     try {
-      setShowVendorModal(true);
+      setShowWorkerModal(true);
       setCurrentStep('searching');
 
       const firstItem = cartItems[0];
@@ -371,31 +371,31 @@ const Checkout = () => {
       if (response.success) {
         setBookingRequest(response.data);
 
-        // If the backend returns an assigned vendor immediately (rare but possible)
+        // If the backend returns an assigned worker immediately (rare but possible)
         if (response.data.vendorId && (response.data.status === 'ACCEPTED' || response.data.status === 'ASSIGNED')) {
           setCurrentStep('accepted');
-          setAcceptedVendor({
+          setAcceptedWorker({
             ...(response.data.vendorId || {}),
             price: response.data.finalAmount || amountToPay,
             distance: 'within 5km', // default
             estimatedTime: '15-30 min'
           });
-          setSearchingVendors(false); // Finished search
+          setSearchingWorkers(false); // Finished search
         } else {
           // Normal flow: Entered pooling/searching
-          setCurrentStep('waiting'); // Waiting for vendor acceptance
-          // Keep searchingVendors = true to disable buttons and show progress
+          setCurrentStep('waiting'); // Waiting for worker acceptance
+          // Keep searchingWorkers = true to disable buttons and show progress
         }
       }
     } catch (error) {
       toast.error('Failed to initiate booking request. Please try again.');
-      setShowVendorModal(false);
-      setSearchingVendors(false);
+      setShowWorkerModal(false);
+      setSearchingWorkers(false);
     }
   };
 
 
-  // Listen for real-time vendor acceptance
+  // Listen for real-time worker acceptance
   useEffect(() => {
     if (currentStep !== 'waiting' || !bookingRequest) return;
 
@@ -414,26 +414,26 @@ const Checkout = () => {
     socket.on('booking_accepted', (data) => {
       if (data.bookingId === bookingRequest._id) {
 
-        // Construct vendor object from event data
+        // Construct worker object from event data
         // Note: Real backend should send full details, falling back to defaults for display
-        const vendorData = {
-          id: data.vendor.id,
-          name: data.vendor.name || 'Vendor',
-          businessName: data.vendor.businessName || 'Service Provider',
+        const workerData = {
+          id: data.worker.id,
+          name: data.worker.name || 'Worker',
+          businessName: data.worker.businessName || 'Service Provider',
           rating: 4.8, // Default if not sent
           distance: 'Nearby', // Default if not sent
           estimatedTime: '15-20 mins',
           price: bookingRequest.amount
         };
 
-        setAcceptedVendor(vendorData);
+        setAcceptedWorker(workerData);
         setCurrentStep('accepted');
-        setSearchingVendors(false);
-        toast.success(`${vendorData.businessName || vendorData.name || 'Worker'} accepted your booking!`);
+        setSearchingWorkers(false);
+        toast.success(`${workerData.businessName || workerData.name || 'Worker'} accepted your booking!`);
 
         // Close modal after 2 seconds and navigate to confirmation
         setTimeout(() => {
-          setShowVendorModal(false);
+          setShowWorkerModal(false);
           navigate(`/user/booking-confirmation/${bookingRequest._id}`, {
             replace: true
           });
@@ -443,7 +443,7 @@ const Checkout = () => {
 
     socket.on('booking_search_failed', (data) => {
       if (data.bookingId === bookingRequest._id) {
-        setSearchingVendors(false);
+        setSearchingWorkers(false);
         setCurrentStep('failed');
         toast.error(data.message || 'No workers available at the moment.');
 
@@ -470,8 +470,8 @@ const Checkout = () => {
     };
   }, [currentStep, bookingRequest]);
 
-  // Search for nearby vendors
-  const handleSearchVendors = async () => {
+  // Search for nearby workers
+  const handleSearchWorkers = async () => {
     try {
       // Validate required fields
       if (bookingType === 'scheduled') {
@@ -497,17 +497,17 @@ const Checkout = () => {
       }
 
       // Open modal and start searching
-      setShowVendorModal(true);
+      setShowWorkerModal(true);
       setCurrentStep('searching');
-      setSearchingVendors(true);
+      setSearchingWorkers(true);
 
       // Get first service
       const firstItem = cartItems[0];
       if (!firstItem.serviceId) {
         toast.error('Service information missing. Please try again.');
         setCurrentStep('details');
-        setSearchingVendors(false);
-        setShowVendorModal(false);
+        setSearchingWorkers(false);
+        setShowWorkerModal(false);
         return;
       }
 
@@ -599,8 +599,8 @@ const Checkout = () => {
         toast.dismiss();
         toast.error(bookingResponse.message || 'Failed to search for workers');
         setCurrentStep('details');
-        setSearchingVendors(false);
-        setShowVendorModal(false);
+        setSearchingWorkers(false);
+        setShowWorkerModal(false);
         return;
       }
 
@@ -608,8 +608,8 @@ const Checkout = () => {
       setBookingRequest(booking);
       toast.dismiss();
 
-      // Clear cart immediately as search starts (consumes items) - ONLY if vendors found
-      if (!bookingResponse.noVendorsFound) {
+      // Clear cart immediately as search starts (consumes items) - ONLY if workers found
+      if (!bookingResponse.noWorkersFound) {
         try {
           if (category) {
             await removeCategoryGlobal(category);
@@ -622,14 +622,14 @@ const Checkout = () => {
         }
       }
 
-      // If no vendors found, redirect or refresh immediately
-      if (bookingResponse.noVendorsFound) {
+      // If no workers found, redirect or refresh immediately
+      if (bookingResponse.noWorkersFound) {
         toast.dismiss();
         const bookingId = booking?._id || booking?.id;
 
         // Ensure we stop searching and close the modal
-        setSearchingVendors(false);
-        setShowVendorModal(false);
+        setSearchingWorkers(false);
+        setShowWorkerModal(false);
 
         if (bookingId) {
           toast.error('No workers currently available for this service.');
@@ -654,7 +654,7 @@ const Checkout = () => {
           setTimeout(() => window.location.reload(), 2000);
         }
       } else {
-        // Move to waiting state - alerts sent to nearby vendors
+        // Move to waiting state - alerts sent to nearby workers
         setCurrentStep('waiting');
         toast.success('Finding nearby workers... Alerts sent to workers within 10km!');
       }
@@ -667,15 +667,15 @@ const Checkout = () => {
       console.error('Search workers error:', error);
       toast.error('Failed to search for workers. Please try again.');
       setCurrentStep('details');
-      setSearchingVendors(false);
-      setShowVendorModal(false);
+      setSearchingWorkers(false);
+      setShowWorkerModal(false);
     }
   };
 
-  // Proceed to payment after vendor acceptance
+  // Proceed to payment after worker acceptance
   const handleOnlinePayment = async () => {
     try {
-      if (!acceptedVendor || !bookingRequest) {
+      if (!acceptedWorker || !bookingRequest) {
         toast.error('No worker selected or booking not created');
         return;
       }
@@ -1080,7 +1080,7 @@ const Checkout = () => {
       return allSlots;
     }
 
-    // Get current hour + 1 (minimum 1 hour buffer for vendors to accept)
+    // Get current hour + 1 (minimum 1 hour buffer for workers to accept)
     const currentHour = now.getHours();
     const minHour = currentHour + 1;
 
@@ -1119,7 +1119,7 @@ const Checkout = () => {
     );
   }
 
-  if (cartItems.length === 0 && currentStep === 'details' && !searchingVendors && !showVendorModal) {
+  if (cartItems.length === 0 && currentStep === 'details' && !searchingWorkers && !showWorkerModal) {
     return (
       <div className="min-h-screen bg-white pb-32">
         <header className="bg-white">
@@ -1391,7 +1391,7 @@ const Checkout = () => {
           <div>
             <h4 className="text-sm font-bold text-blue-900 mb-1">Note</h4>
             <p className="text-sm text-blue-800 leading-relaxed font-medium">
-              This is a base booking cost. Additional service cost is decided by the vendor after service bill preparation.
+              This is a base booking cost. Additional service cost is decided by the worker after service bill preparation.
             </p>
           </div>
         </div>
@@ -1453,7 +1453,7 @@ const Checkout = () => {
           </div>
           {bookingType === 'instant' && (
             <p className="text-xs text-center text-green-600 font-medium mt-1 mb-1">
-              <span className="font-bold">⚡ Priority Service:</span> Vendor arrives in ~45 mins
+              <span className="font-bold">⚡ Priority Service:</span> Worker arrives in ~45 mins
             </p>
           )}
         </div>
@@ -1533,18 +1533,18 @@ const Checkout = () => {
           <button
             onClick={plan ? handlePlanPayment :
               (houseNumber || addressDetails) ?
-                (currentStep === 'payment' ? handlePayment : handleSearchVendors) :
+                (currentStep === 'payment' ? handlePayment : handleSearchWorkers) :
                 handleProceed}
-            disabled={searchingVendors}
+            disabled={searchingWorkers}
             className="w-full text-white py-3 rounded-lg text-base font-semibold transition-colors disabled:opacity-50 shadow-lg shadow-teal-500/30"
             style={{ backgroundColor: themeColors.button }}
           >
-            {searchingVendors ? 'Searching for vendors...' :
+            {searchingWorkers ? 'Searching for workers...' :
               currentStep === 'payment' ? (totalAmount === 0 ? 'Confirm Booking (Free)' : (paymentMethod === 'online' ? 'Proceed to Pay' : 'Confirm Booking')) :
                 plan ? 'Proceed to Payment' :
-                  bookingType === 'instant' ? 'Find nearby vendors now' :
+                  bookingType === 'instant' ? 'Find nearby workers now' :
                     (selectedDate && selectedTime && houseNumber ?
-                      'Find nearby vendors' :
+                      'Find nearby workers' :
                       (houseNumber || addressDetails) ? 'Select Time Slot' : 'Add address to proceed')}
           </button>
         </div>
@@ -1553,11 +1553,11 @@ const Checkout = () => {
       {/* Live Booking Status Card (Visible when minimized) */}
       <LiveBookingCard key={bookingRequest?._id || 'default'} />
 
-      {/* Vendor Search Modal */}
-      <VendorSearchModal
-        isOpen={showVendorModal}
+      {/* Worker Search Modal */}
+      <WorkerSearchModal
+        isOpen={showWorkerModal}
         onClose={() => {
-          setShowVendorModal(false);
+          setShowWorkerModal(false);
           if (currentStep === 'accepted') {
             setCurrentStep('payment');
           } else if (currentStep === 'failed') {
@@ -1565,9 +1565,9 @@ const Checkout = () => {
           }
         }}
         currentStep={currentStep}
-        acceptedVendor={acceptedVendor}
+        acceptedWorker={acceptedWorker}
         onRetry={() => {
-          handleSearchVendors();
+          handleSearchWorkers();
         }}
       />
 

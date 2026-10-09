@@ -4,12 +4,12 @@ const Service = require('../../models/UserService');
 const Category = require('../../models/Category');
 const Cart = require('../../models/Cart');
 const User = require('../../models/User');
-const Vendor = require('../../models/Vendor');
+const Worker = require('../../models/Worker');
 const Review = require('../../models/Review');
 const { validationResult } = require('express-validator');
 const { BOOKING_STATUS, PAYMENT_STATUS } = require('../../utils/constants');
 const { createNotification } = require('../notificationControllers/notificationController');
-const { sendNotificationToUser, sendNotificationToVendor } = require('../../services/firebaseAdmin');
+const { sendNotificationToUser, sendNotificationToWorker } = require('../../services/firebaseAdmin');
 
 /**
  * Create a new booking
@@ -105,45 +105,45 @@ const createBooking = async (req, res) => {
     // Check for Pending Penalty
     const pendingPenalty = user.wallet?.penalty || 0;
 
-    // --- MOVE VENDOR SEARCH UP HERE ---
-    // Find nearby vendors using location service
-    const { findNearbyVendors, geocodeAddress } = require('../../services/locationService');
+    // --- MOVE WORKER SEARCH UP HERE ---
+    // Find nearby workers using location service
+    const { findNearbyWorkers, geocodeAddress } = require('../../services/locationService');
 
-    // ... (Vendor Search Logic Omitted/Unchanged - keeping context)
+    // ... (Worker Search Logic Omitted/Unchanged - keeping context)
     // Determine booking location (prioritize frontend coordinates)
     let bookingLocation;
     if (address.lat && address.lng) {
       bookingLocation = { lat: address.lat, lng: address.lng };
-      console.log('Using provided coordinates for vendor search:', bookingLocation);
+      console.log('Using provided coordinates for worker search:', bookingLocation);
     } else {
       bookingLocation = await geocodeAddress(
         `${address.addressLine1}, ${address.city}, ${address.state} ${address.pincode}`
       );
-      console.log('Geocoded address for vendor search:', bookingLocation);
+      console.log('Geocoded address for worker search:', bookingLocation);
     }
 
-    // Find vendors within 10km radius who offer this service category
+    // Find workers within 10km radius who offer this service category
     // CUSTOM - Check Cash Limit only if payment method is CASH
-    const vendorFilters = {
+    const workerFilters = {
       ...(category ? { service: category.title } : {}),
       checkCashLimit: paymentMethod === 'cash',
       city: address.city
     };
 
-    console.log(`[LocationService] Searching vendors with: center=${JSON.stringify(bookingLocation)}, radius=10km, filters=${JSON.stringify(vendorFilters)}`);
-    let nearbyVendors = await findNearbyVendors(bookingLocation, 10, vendorFilters);
+    console.log(`[LocationService] Searching workers with: center=${JSON.stringify(bookingLocation)}, radius=10km, filters=${JSON.stringify(workerFilters)}`);
+    let nearbyWorkers = await findNearbyWorkers(bookingLocation, 10, workerFilters);
 
-    // Deduplicate nearbyVendors by _id to prevent duplicate notifications
-    const uniqueVendorIds = new Set();
-    nearbyVendors = nearbyVendors.filter(vendor => {
-      const idStr = vendor._id.toString();
-      if (uniqueVendorIds.has(idStr)) return false;
-      uniqueVendorIds.add(idStr);
+    // Deduplicate nearbyWorkers by _id to prevent duplicate notifications
+    const uniqueWorkerIds = new Set();
+    nearbyWorkers = nearbyWorkers.filter(worker => {
+      const idStr = worker._id.toString();
+      if (uniqueWorkerIds.has(idStr)) return false;
+      uniqueWorkerIds.add(idStr);
       return true;
     });
 
-    console.log(`[CreateBooking] Found ${nearbyVendors.length} nearby vendors for booking`);
-    // --- END VENDOR SEARCH BLOCK ---
+    console.log(`[CreateBooking] Found ${nearbyWorkers.length} nearby workers for booking`);
+    // --- END WORKER SEARCH BLOCK ---
 
     // Calculate pricing - use amount from frontend if provided, otherwise calculate
     let basePrice, discount, tax, finalAmount;
@@ -236,9 +236,9 @@ const createBooking = async (req, res) => {
       }
     }
 
-    // NOTE: vendor earnings are NOT calculated at booking creation.
-    // They are computed ONLY at bill generation (completeSelfJob) and stored in VendorBill.
-    // This prevents inconsistency between Booking and VendorBill.
+    // NOTE: worker earnings are NOT calculated at booking creation.
+    // They are computed ONLY at bill generation (completeSelfJob) and stored in WorkerBill.
+    // This prevents inconsistency between Booking and WorkerBill.
     console.log(`[CreateBooking] Payment=${paymentMethod}, FinalAmount=${finalAmount}, Penalty=${pendingPenalty}`);
 
     // Clear penalty from user wallet if we charged it
@@ -292,7 +292,7 @@ const createBooking = async (req, res) => {
     const booking = await Booking.create({
       bookingNumber,
       userId,
-      vendorId: null, // Will be assigned when vendor accepts
+      vendorId: null, // Will be assigned when worker accepts
       serviceId,
       categoryId: finalCategory?._id || categoryId,
       serviceName: service.title,
@@ -389,35 +389,35 @@ const createBooking = async (req, res) => {
           console.log(`User ${userId} upgraded to Plus Membership until ${expiryDate}`);
         }
 
-        // Nearby vendors already found above
+        // Nearby workers already found above
         // WAVE-BASED ALERTING: Sort by distance and only notify first wave
-        const sortedVendors = nearbyVendors.sort((a, b) => (a.distance || 0) - (b.distance || 0));
+        const sortedWorkers = nearbyWorkers.sort((a, b) => (a.distance || 0) - (b.distance || 0));
 
-        // Wave 1: First 3 vendors
+        // Wave 1: First 3 workers
         const WAVE_1_COUNT = 3;
-        const wave1Vendors = sortedVendors.slice(0, WAVE_1_COUNT);
+        const wave1Workers = sortedWorkers.slice(0, WAVE_1_COUNT);
 
-        // Store all potential vendors in booking for scheduler to use
-        bookingForBackground.potentialVendors = sortedVendors.map(v => ({
+        // Store all potential workers in booking for scheduler to use
+        bookingForBackground.potentialVendors = sortedWorkers.map(v => ({
           vendorId: v._id,
           distance: v.distance || 0
         }));
         bookingForBackground.currentWave = 1;
         bookingForBackground.waveStartedAt = new Date();
-        bookingForBackground.notifiedVendors = wave1Vendors.map(v => v._id);
+        bookingForBackground.notifiedVendors = wave1Workers.map(v => v._id);
         await bookingForBackground.save();
 
-        if (wave1Vendors.length > 0) {
-          console.log(`[CreateBooking] Wave 1: Alerting ${wave1Vendors.length} closest vendors (of ${sortedVendors.length} total)`);
+        if (wave1Workers.length > 0) {
+          console.log(`[CreateBooking] Wave 1: Alerting ${wave1Workers.length} closest workers (of ${sortedWorkers.length} total)`);
 
-          // Create BookingRequest entries for Wave 1 vendors
+          // Create BookingRequest entries for Wave 1 workers
           const BookingRequest = require('../../models/BookingRequest');
-          const bookingRequests = wave1Vendors.map(vendor => ({
+          const bookingRequests = wave1Workers.map(worker => ({
             bookingId: bookingForBackground._id,
-            vendorId: vendor._id,
+            vendorId: worker._id,
             status: 'PENDING',
             wave: 1,
-            distance: vendor.distance || null,
+            distance: worker.distance || null,
             sentAt: new Date(),
             expiresAt: new Date(Date.now() + 60 * 60 * 1000) // Expires in 1 hour
           }));
@@ -430,22 +430,22 @@ const createBooking = async (req, res) => {
             if (err.code !== 11000) console.error('[CreateBooking] BookingRequest insert error:', err);
           }
         } else {
-          console.warn(`[CreateBooking] NO VENDORS FOUND nearby! Push notifications will not be sent.`);
-          // Update booking status if no vendors found
-          bookingForBackground.status = BOOKING_STATUS.NO_VENDORS;
+          console.warn(`[CreateBooking] NO WORKERS FOUND nearby! Push notifications will not be sent.`);
+          // Update booking status if no workers found
+          bookingForBackground.status = BOOKING_STATUS.NO_WORKERS;
           await bookingForBackground.save();
         }
 
-        // Send notifications to Wave 1 vendors ONLY
+        // Send notifications to Wave 1 workers ONLY
         // 1. Emit Socket.IO event FIRST (Instant & Reliable)
         const { getIO } = require('../../sockets');
         const io = getIO();
         if (io) {
-          console.log(`[CreateBooking] Emitting Socket.IO events to ${wave1Vendors.length} vendors in Wave 1...`);
-          wave1Vendors.forEach(vendor => {
-            const vendorRoom = `vendor_${vendor._id.toString()}`;
-            console.log(`[Wave 1] Emitting to ${vendorRoom} (dist: ${vendor.distance?.toFixed(1) || 'N/A'}km)`);
-            io.to(vendorRoom).emit('new_booking_request', {
+          console.log(`[CreateBooking] Emitting Socket.IO events to ${wave1Workers.length} workers in Wave 1...`);
+          wave1Workers.forEach(worker => {
+            const workerRoom = `vendor_${worker._id.toString()}`;
+            console.log(`[Wave 1] Emitting to ${workerRoom} (dist: ${worker.distance?.toFixed(1) || 'N/A'}km)`);
+            io.to(workerRoom).emit('new_booking_request', {
               bookingId: bookingForBackground._id,
               serviceName: serviceForBackground.title,
               customerName: userForBackground.name,
@@ -454,7 +454,7 @@ const createBooking = async (req, res) => {
               scheduledTime: scheduledTime,
               price: finalAmount,
               address: address,
-              distance: vendor.distance,
+              distance: worker.distance,
               serviceCategory: bookingForBackground.serviceCategory,
               brandName: bookingForBackground.brandName,
               brandIcon: bookingForBackground.brandIcon,
@@ -462,16 +462,16 @@ const createBooking = async (req, res) => {
               createdAt: bookingForBackground.createdAt || new Date(),
               expiresAt: new Date(new Date(bookingForBackground.createdAt || Date.now()).getTime() + (60 * 1000)).toISOString(),
               playSound: true,
-              message: `New booking request within ${vendor.distance?.toFixed(1) || '?'}km!`
+              message: `New booking request within ${worker.distance?.toFixed(1) || '?'}km!`
             });
           });
         }
 
         // 2. Send Firebase/FCM notifications (External service - call AFTER socket)
         try {
-          const vendorNotifications = wave1Vendors.map(vendor =>
+          const workerNotifications = wave1Workers.map(worker =>
             createNotification({
-              vendorId: vendor._id,
+              vendorId: worker._id,
               type: 'booking_request',
               title: 'New Booking Request',
               message: `New service request for ${serviceForBackground.title} from ${userForBackground.name}`,
@@ -486,16 +486,16 @@ const createBooking = async (req, res) => {
                 scheduledTime: scheduledTime,
                 location: address,
                 price: finalAmount,
-                distance: vendor.distance
+                distance: worker.distance
               },
               pushData: {
                 type: 'new_booking',
                 dataOnly: false,
-                link: `/vendor/bookings/${bookingForBackground._id}`
+                link: `/worker/bookings/${bookingForBackground._id}`
               }
             })
           );
-          await Promise.all(vendorNotifications);
+          await Promise.all(workerNotifications);
         } catch (notifError) {
           console.error('[CreateBooking] Firebase/Notification Error (Non-blocking):', notifError.message);
         }
@@ -519,7 +519,7 @@ const createBooking = async (req, res) => {
         await Cart.findOneAndUpdate({ userId }, { $set: { items: [] } });
         console.log(`[CreateBooking][bg] Cart cleared for user ${userId}`);
 
-        // Send vendor notification if it was a direct booking (vendorId provided)
+        // Send worker notification if it was a direct booking (vendorId provided)
         if (vendorId) {
           await createNotification({
             vendorId,
@@ -532,9 +532,9 @@ const createBooking = async (req, res) => {
         }
 
         // Send confirmation emails (fire-and-forget — never blocks)
-        const vendorObj = vendorId ? await require('../../models/Vendor').findById(vendorId).lean() : null;
+        const workerObj = vendorId ? await require('../../models/Worker').findById(vendorId).lean() : null;
         const { sendBookingEmails } = require('../../services/emailService');
-        sendBookingEmails(bookingForBackground, userForBackground, vendorObj, serviceForBackground)
+        sendBookingEmails(bookingForBackground, userForBackground, workerObj, serviceForBackground)
           .catch(err => console.error('[CreateBooking][bg] Email error:', err));
 
       } catch (bgErr) {
@@ -634,9 +634,9 @@ const getBookingById = async (req, res) => {
       });
     }
 
-    // Fetch Vendor Bill if exists
-    const VendorBill = require('../../models/VendorBill');
-    const bill = await VendorBill.findOne({ bookingId: booking._id });
+    // Fetch Worker Bill if exists
+    const WorkerBill = require('../../models/WorkerBill');
+    const bill = await WorkerBill.findOne({ bookingId: booking._id });
 
     // Convert to object to attach bill
     const bookingData = booking;
@@ -726,7 +726,7 @@ const cancelBooking = async (req, res) => {
     const isCash = booking.paymentMethod === 'cash';
 
     if (hasStartedJourney) {
-      // SCENARIO: Vendor already started journey
+      // SCENARIO: Worker already started journey
 
       const hasReached = !!booking.visitedAt || booking.status === 'visited';
 
@@ -829,7 +829,7 @@ const cancelBooking = async (req, res) => {
 
     // Manual FCM push removed (handled by createNotification)
 
-    // Send notification to vendor
+    // Send notification to worker
     if (booking.vendorId) {
       await createNotification({
         vendorId: booking.vendorId,
@@ -841,7 +841,7 @@ const cancelBooking = async (req, res) => {
         pushData: {
           type: 'booking_cancelled',
           bookingId: booking._id.toString(),
-          link: `/vendor/bookings/${booking._id}`
+          link: `/worker/bookings/${booking._id}`
         }
       });
       // Manual FCM push removed
@@ -918,7 +918,7 @@ const rescheduleBooking = async (req, res) => {
 
     await booking.save();
 
-    // Send notification to vendor
+    // Send notification to worker
     await createNotification({
       vendorId: booking.vendorId,
       type: 'booking_created', // Keeping type as is for now
@@ -929,7 +929,7 @@ const rescheduleBooking = async (req, res) => {
       pushData: {
         type: 'booking_rescheduled',
         bookingId: booking._id.toString(),
-        link: `/vendor/bookings/${booking._id}`
+        link: `/worker/bookings/${booking._id}`
       }
     });
 
@@ -1035,12 +1035,12 @@ const addReview = async (req, res) => {
       }
     };
 
-    // Update Vendor Rating (Always)
+    // Update Worker Rating (Always)
     if (booking.vendorId) {
-      await updateCumulativeRating(Vendor, booking.vendorId, rating);
+      await updateCumulativeRating(Worker, booking.vendorId, rating);
     }
 
-    // Send notification to vendor
+    // Send notification to worker
     await createNotification({
       vendorId: booking.vendorId,
       type: 'review_submitted',

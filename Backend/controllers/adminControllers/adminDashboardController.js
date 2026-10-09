@@ -1,12 +1,12 @@
 const User = require('../../models/User');
-const Vendor = require('../../models/Vendor');
+const Worker = require('../../models/Worker');
 const Booking = require('../../models/Booking');
 const Withdrawal = require('../../models/Withdrawal');
 const Settlement = require('../../models/Settlement');
 const Scrap = require('../../models/Scrap');
-const VendorBill = require('../../models/VendorBill');
+const WorkerBill = require('../../models/WorkerBill');
 const Transaction = require('../../models/Transaction');
-const { BOOKING_STATUS, PAYMENT_STATUS, VENDOR_STATUS } = require('../../utils/constants');
+const { BOOKING_STATUS, PAYMENT_STATUS, WORKER_STATUS } = require('../../utils/constants');
 
 /**
  * Get overall dashboard stats
@@ -37,35 +37,35 @@ const getDashboardStats = async (req, res) => {
       }
     }
 
-    const vendorBillDateFilter = {};
+    const workerBillDateFilter = {};
     if (startDate || endDate) {
-      vendorBillDateFilter.paidAt = {};
-      if (startDate) vendorBillDateFilter.paidAt.$gte = new Date(startDate);
+      workerBillDateFilter.paidAt = {};
+      if (startDate) workerBillDateFilter.paidAt.$gte = new Date(startDate);
       if (endDate) {
         const end = new Date(endDate);
         end.setHours(23, 59, 59, 999);
-        vendorBillDateFilter.paidAt.$lte = end;
+        workerBillDateFilter.paidAt.$lte = end;
       }
     }
 
     const [
       totalUsers,
-      totalVendors,
+      totalWorkers,
       totalBookings,
       pendingBookings,
       completedBookings,
       cancelledBookings,
       revenueResult,
-      vendorBillRevenueResult,
-      pendingVendors,
-      approvedVendors,
+      workerBillRevenueResult,
+      pendingWorkers,
+      approvedWorkers,
       pendingWithdrawals,
       pendingSettlementsCount,
       pendingScraps,
       recentActivityDocs
     ] = await Promise.all([
       User.countDocuments({ isActive: true, ...dateFilter }),
-      Vendor.countDocuments({ isActive: true, ...dateFilter }),
+      Worker.countDocuments({ isActive: true, ...dateFilter }),
       Booking.countDocuments(dateFilter),
       Booking.countDocuments({
         ...dateFilter,
@@ -83,7 +83,7 @@ const getDashboardStats = async (req, res) => {
         {
           $match: {
             status: BOOKING_STATUS.COMPLETED,
-            paymentStatus: { $in: [PAYMENT_STATUS.SUCCESS, PAYMENT_STATUS.COLLECTED_BY_VENDOR, 'success', 'collected_by_vendor', 'paid'] },
+            paymentStatus: { $in: [PAYMENT_STATUS.SUCCESS, PAYMENT_STATUS.COLLECTED_BY_WORKER, 'success', 'collected_by_vendor', 'paid'] },
             ...revenueDateFilter
           }
         },
@@ -95,24 +95,24 @@ const getDashboardStats = async (req, res) => {
           }
         }
       ]),
-      VendorBill.aggregate([
+      WorkerBill.aggregate([
         {
           $match: {
             status: 'paid',
-            ...vendorBillDateFilter
+            ...workerBillDateFilter
           }
         },
         {
           $group: {
             _id: null,
             totalPlatformFeeCollected: { $sum: '$companyRevenue' },
-            totalVendorEarnings: { $sum: '$vendorTotalEarning' },
+            totalWorkerEarnings: { $sum: '$vendorTotalEarning' },
             totalGSTCollected: { $sum: '$totalGST' }
           }
         }
       ]),
-      Vendor.countDocuments({ approvalStatus: VENDOR_STATUS.PENDING, ...dateFilter }),
-      Vendor.countDocuments({ approvalStatus: VENDOR_STATUS.APPROVED, ...dateFilter }),
+      Worker.countDocuments({ approvalStatus: WORKER_STATUS.PENDING, ...dateFilter }),
+      Worker.countDocuments({ approvalStatus: WORKER_STATUS.APPROVED, ...dateFilter }),
       Withdrawal.countDocuments({ status: 'pending', ...dateFilter }),
       Settlement.countDocuments({ status: 'pending', ...dateFilter }),
       Scrap.countDocuments({ status: 'pending', ...dateFilter }),
@@ -125,12 +125,12 @@ const getDashboardStats = async (req, res) => {
     ]);
 
     const revenue = revenueResult[0] || { totalRevenue: 0, totalBookings: 0 };
-    const vendorBillRevenue = vendorBillRevenueResult[0] || {
+    const workerBillRevenue = workerBillRevenueResult[0] || {
       totalPlatformFeeCollected: 0,
-      totalVendorEarnings: 0,
+      totalWorkerEarnings: 0,
       totalGSTCollected: 0
     };
-    const platformCommission = vendorBillRevenue.totalPlatformFeeCollected || (revenue.totalRevenue * 0.2);
+    const platformCommission = workerBillRevenue.totalPlatformFeeCollected || (revenue.totalRevenue * 0.2);
 
     const recentBookings = recentActivityDocs.map(b => ({
       id: b.bookingNumber || b._id,
@@ -151,18 +151,18 @@ const getDashboardStats = async (req, res) => {
       data: {
         stats: {
           totalUsers,
-          totalVendors,
+          totalWorkers,
           totalBookings,
           pendingBookings,
           completedBookings,
           cancelledBookings,
           totalRevenue: revenue.totalRevenue,
           platformCommission,
-          totalPlatformFeeCollected: vendorBillRevenue.totalPlatformFeeCollected || 0,
-          totalVendorEarnings: vendorBillRevenue.totalVendorEarnings || 0,
-          totalGSTCollected: vendorBillRevenue.totalGSTCollected || 0,
-          pendingVendors,
-          approvedVendors,
+          totalPlatformFeeCollected: workerBillRevenue.totalPlatformFeeCollected || 0,
+          totalWorkerEarnings: workerBillRevenue.totalWorkerEarnings || 0,
+          totalGSTCollected: workerBillRevenue.totalGSTCollected || 0,
+          pendingWorkers,
+          approvedWorkers,
           pendingWithdrawals,
           pendingSettlements: pendingSettlementsCount,
           pendingScraps
@@ -206,7 +206,7 @@ const getRevenueAnalytics = async (req, res) => {
       {
         $match: {
           status: BOOKING_STATUS.COMPLETED,
-          paymentStatus: { $in: [PAYMENT_STATUS.SUCCESS, PAYMENT_STATUS.COLLECTED_BY_VENDOR, 'success', 'collected_by_vendor', 'paid'] },
+          paymentStatus: { $in: [PAYMENT_STATUS.SUCCESS, PAYMENT_STATUS.COLLECTED_BY_WORKER, 'success', 'collected_by_vendor', 'paid'] },
           ...dateFilter
         }
       },
@@ -330,8 +330,8 @@ const getUserGrowthMetrics = async (req, res) => {
       { $sort: { _id: 1 } }
     ]);
 
-    // Vendor growth
-    const vendorGrowth = await Vendor.aggregate([
+    // Worker growth
+    const workerGrowth = await Worker.aggregate([
       {
         $match: {
           createdAt: { $gte: startDate }
@@ -356,7 +356,7 @@ const getUserGrowthMetrics = async (req, res) => {
       data: {
         days: parseInt(days),
         userGrowth,
-        vendorGrowth
+        workerGrowth
       }
     });
   } catch (error) {

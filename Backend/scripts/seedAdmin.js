@@ -32,7 +32,7 @@ const seedAdmin = async () => {
       isActive: true,
       permissions: {
         users: { read: true, write: true, delete: true },
-        vendors: { read: true, write: true, delete: true },
+        workers: { read: true, write: true, delete: true },
         bookings: { read: true, write: true, delete: true },
         payments: { read: true, write: true, delete: true },
         categories: { read: true, write: true, delete: true },
