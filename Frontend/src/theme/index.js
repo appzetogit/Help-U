@@ -3,10 +3,10 @@
  * Import this file to use centralized theme colors
  */
 
-import themeColors, { userTheme, vendorTheme } from './colors';
+import themeColors, { userTheme, workerTheme } from './colors';
 
 // Re-export all themes
-export { themeColors, userTheme, vendorTheme };
+export { themeColors, userTheme, workerTheme };
 
 // Helper functions for common theme usage
 export const getThemeColor = (colorPath) => {

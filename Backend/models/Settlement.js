@@ -2,12 +2,12 @@ const mongoose = require('mongoose');
 
 /**
  * Settlement Model
- * Tracks vendor settlements (payments to admin to clear negative balance)
+ * Tracks worker settlements (payments to admin to clear negative balance)
  */
 const settlementSchema = new mongoose.Schema({
   vendorId: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'Vendor',
+    ref: 'Worker',
     required: true
   },
   amount: {
@@ -35,7 +35,7 @@ const settlementSchema = new mongoose.Schema({
     enum: ['upi', 'bank_transfer', 'cash', 'other', 'razorpay'],
     default: 'upi'
   },
-  // Reference/Transaction ID from vendor's payment
+  // Reference/Transaction ID from worker's payment
   paymentReference: {
     type: String,
     default: null
@@ -62,7 +62,7 @@ const settlementSchema = new mongoose.Schema({
     type: String,
     default: null
   },
-  // Vendor notes
+  // Worker notes
   vendorNotes: {
     type: String,
     default: null

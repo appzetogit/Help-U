@@ -18,9 +18,9 @@ export const CartProvider = ({ children }) => {
   // Fetch cart from server (only on initial load)
   const fetchCart = useCallback(async () => {
     try {
-      // Prevention: Do not fetch user cart if we are in vendor/admin apps
+      // Prevention: Do not fetch user cart if we are in worker/admin apps
       const path = window.location.pathname;
-      if (path.startsWith('/vendor') || path.startsWith('/admin')) {
+      if (path.startsWith('/worker') || path.startsWith('/admin')) {
         return;
       }
 

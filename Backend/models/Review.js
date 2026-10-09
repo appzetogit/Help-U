@@ -21,7 +21,7 @@ const reviewSchema = new mongoose.Schema({
   },
   vendorId: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'Vendor',
+    ref: 'Worker',
     required: true,
     index: true
   },

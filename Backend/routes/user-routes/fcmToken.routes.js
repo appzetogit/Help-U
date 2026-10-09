@@ -8,7 +8,7 @@ const router = express.Router();
 const { authenticate } = require('../../middleware/authMiddleware');
 const { sendPushNotification } = require('../../services/firebaseAdmin');
 const User = require('../../models/User');
-const Vendor = require('../../models/Vendor');
+const Worker = require('../../models/Worker');
 
 const MAX_TOKENS = 10; // Maximum tokens per platform
 
@@ -62,12 +62,12 @@ router.post('/save', authenticate, async (req, res) => {
       return res.status(404).json({ success: false, error: 'User not found' });
     }
 
-    // Remove this token from Vendor collection to prevent cross-account notifications
-    // Remove this token from Vendor collection to prevent cross-account notifications
+    // Remove this token from Worker collection to prevent cross-account notifications
+    // Remove this token from Worker collection to prevent cross-account notifications
     // COMMENTED OUT to allow testing on same device (e.g. localhost) without tokens getting deleted
     /*
     try {
-      await Vendor.updateMany(
+      await Worker.updateMany(
         { $or: [{ fcmTokens: token }, { fcmTokenMobile: token }] },
         { $pull: { fcmTokens: token, fcmTokenMobile: token } }
       );

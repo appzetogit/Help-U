@@ -14,7 +14,7 @@ const {
 // All routes require authentication
 router.use(authenticate);
 
-// Vendor routes
+// Worker routes
 router.post('/:id/initiate', initiateCashCollection);
 router.post('/:id/initiate-online', initiateOnlineCollection);
 router.post('/:id/confirm', confirmCashCollection);

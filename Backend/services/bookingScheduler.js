@@ -1,21 +1,21 @@
 /**
  * Booking Scheduler Service — Optimized
- * Handles Wave-Based Vendor Alerting
+ * Handles Wave-Based Worker Alerting
  *
  * Wave Logic:
- * - Wave 1: First 3 closest vendors (alerted immediately on booking creation)
- * - Wave 2: Next 3 vendors (after 15s if no accept)
- * - Wave 3: Next 4 vendors (after another 15s)
- * - Wave 4+: All remaining vendors
+ * - Wave 1: First 3 closest workers (alerted immediately on booking creation)
+ * - Wave 2: Next 3 workers (after 15s if no accept)
+ * - Wave 3: Next 4 workers (after another 15s)
+ * - Wave 4+: All remaining workers
  *
  * OPTIMIZATIONS:
  * - All active bookings processed in PARALLEL (Promise.all, not serial for-loop)
  * - Circuit breaker: if no searching bookings exist, extend check interval to 30s
- * - Single Vendor.find per wave instead of per booking
+ * - Single Worker.find per wave instead of per booking
  */
 
 const Booking = require('../models/Booking');
-const Vendor = require('../models/Vendor');
+const Worker = require('../models/Worker');
 const mongoose = require('mongoose');
 const { BOOKING_STATUS } = require('../utils/constants');
 const { createNotification } = require('../controllers/notificationControllers/notificationController');
@@ -35,8 +35,8 @@ let MAX_SEARCH_TIME_MS = 5 * 60 * 1000; // 5 mins fallback
 const ACTIVE_INTERVAL_MS = 5000;  // Poll every 5s when bookings exist
 const IDLE_INTERVAL_MS = 30000;   // Poll every 30s when no active bookings (circuit breaker)
 
-// Calculate vendor index range for a wave
-const getVendorRange = (wave) => {
+// Calculate worker index range for a wave
+const getWorkerRange = (wave) => {
   let start = 0;
   for (let i = 1; i < wave; i++) {
     start += WAVE_CONFIG[i]?.count || 0;
@@ -162,10 +162,10 @@ class BookingScheduler {
                 });
               }
 
-              // Remove from all notified vendors
+              // Remove from all notified workers
               if (booking.notifiedVendors && booking.notifiedVendors.length > 0) {
                 booking.notifiedVendors.forEach(vId => {
-                  this.io.to(`vendor_${vId}`).emit('removeVendorBooking', { id: booking._id });
+                  this.io.to(`vendor_${vId}`).emit('removeWorkerBooking', { id: booking._id });
                 });
               }
 
@@ -177,45 +177,45 @@ class BookingScheduler {
             if (waveConfig.duration === 0 || waveElapsed < waveConfig.duration) return;
 
             const nextWave = currentWave + 1;
-            const { start, end } = getVendorRange(nextWave);
+            const { start, end } = getWorkerRange(nextWave);
 
-            // Get vendors to notify in this wave
-            let vendorsToNotify = booking.potentialVendors.slice(
+            // Get workers to notify in this wave
+            let workersToNotify = booking.potentialVendors.slice(
               start,
               end === Infinity ? undefined : end
             );
 
-            if (vendorsToNotify.length === 0) {
-              console.log(`[BookingScheduler] Booking ${booking.bookingNumber}: No vendors left in Wave ${nextWave}`);
+            if (workersToNotify.length === 0) {
+              console.log(`[BookingScheduler] Booking ${booking.bookingNumber}: No workers left in Wave ${nextWave}`);
               return;
             }
 
-            // Filter to only online+available vendors (single batch find for this booking)
-            const vendorIds = vendorsToNotify.map(v => v.vendorId);
-            const onlineVendors = await Vendor.find(
-              { _id: { $in: vendorIds }, isOnline: true, availability: { $in: ['AVAILABLE', 'BUSY'] } },
+            // Filter to only online+available workers (single batch find for this booking)
+            const workerIds = workersToNotify.map(v => v.vendorId);
+            const onlineWorkers = await Worker.find(
+              { _id: { $in: workerIds }, isOnline: true, availability: { $in: ['AVAILABLE', 'BUSY'] } },
               '_id'
             ).lean();
 
-            const onlineSet = new Set(onlineVendors.map(v => v._id.toString()));
-            vendorsToNotify = vendorsToNotify.filter(v => onlineSet.has(v.vendorId.toString()));
+            const onlineSet = new Set(onlineWorkers.map(v => v._id.toString()));
+            workersToNotify = workersToNotify.filter(v => onlineSet.has(v.vendorId.toString()));
 
             // Advance wave in DB — use findByIdAndUpdate for atomicity (avoids race with accept)
-            const notifyIds = vendorsToNotify.map(v => v.vendorId);
+            const notifyIds = workersToNotify.map(v => v.vendorId);
             await Booking.findByIdAndUpdate(booking._id, {
               $set: { currentWave: nextWave, waveStartedAt: new Date() },
               $addToSet: { notifiedVendors: { $each: notifyIds } }
             });
 
-            if (vendorsToNotify.length === 0) {
+            if (workersToNotify.length === 0) {
               console.log(`[BookingScheduler] Booking ${booking.bookingNumber}: Wave ${nextWave} all offline, advancing quietly`);
               return;
             }
 
-            console.log(`[BookingScheduler] ${booking.bookingNumber}: Wave ${nextWave} → notifying ${vendorsToNotify.length} vendors`);
+            console.log(`[BookingScheduler] ${booking.bookingNumber}: Wave ${nextWave} → notifying ${workersToNotify.length} workers`);
 
             // Insert BookingRequest records + send notifications (both in parallel)
-            const bookingRequests = vendorsToNotify.map(v => ({
+            const bookingRequests = workersToNotify.map(v => ({
               bookingId: booking._id,
               vendorId: v.vendorId,
               status: 'PENDING',
@@ -229,7 +229,7 @@ class BookingScheduler {
               BookingRequest.insertMany(bookingRequests, { ordered: false }).catch(err => {
                 if (err.code !== 11000) console.error('[BookingScheduler] BookingRequest insert error:', err);
               }),
-              this.notifyVendors(booking, vendorsToNotify)
+              this.notifyWorkers(booking, workersToNotify)
             ]);
 
           } catch (bookingErr) {
@@ -245,7 +245,7 @@ class BookingScheduler {
     }
   }
 
-  async notifyVendors(booking, vendors) {
+  async notifyWorkers(booking, workers) {
     try {
       // Fetch booking details for notification (single query for the whole wave)
       const populatedBooking = await Booking.findById(booking._id)
@@ -258,9 +258,9 @@ class BookingScheduler {
       const serviceName = populatedBooking.serviceId?.title || populatedBooking.serviceName;
       const customerName = populatedBooking.userId?.name || 'Customer';
 
-      // Send all vendor notifications in parallel
+      // Send all worker notifications in parallel
       await Promise.all(
-        vendors.map(async (v) => {
+        workers.map(async (v) => {
           // Fire socket immediately (synchronous, non-blocking)
           if (this.io) {
             this.io.to(`vendor_${v.vendorId}`).emit('new_booking_request', {
@@ -304,15 +304,15 @@ class BookingScheduler {
             pushData: {
               type: 'new_booking',
               dataOnly: false,
-              link: `/vendor/bookings/${booking._id}`
+              link: `/worker/bookings/${booking._id}`
             }
           });
         })
       );
 
-      console.log(`[BookingScheduler] Notified ${vendors.length} vendors for booking ${booking.bookingNumber}`);
+      console.log(`[BookingScheduler] Notified ${workers.length} workers for booking ${booking.bookingNumber}`);
     } catch (error) {
-      console.error('[BookingScheduler] Error notifying vendors:', error);
+      console.error('[BookingScheduler] Error notifying workers:', error);
     }
   }
 }

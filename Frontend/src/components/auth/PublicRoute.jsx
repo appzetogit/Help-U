@@ -18,10 +18,10 @@ const PublicRoute = ({ children, userType = 'user', redirectTo = null }) => {
 
       // Determine keys based on userType
       switch (userType) {
-        case 'vendor':
-          tokenKey = 'vendorAccessToken';
-          refreshTokenKey = 'vendorRefreshToken';
-          dataKey = 'vendorData';
+        case 'worker':
+          tokenKey = 'workerAccessToken';
+          refreshTokenKey = 'workerRefreshToken';
+          dataKey = 'workerData';
           break;
         case 'admin':
           tokenKey = 'adminAccessToken';
@@ -60,7 +60,7 @@ const PublicRoute = ({ children, userType = 'user', redirectTo = null }) => {
             // Check if token role matches expected userType
             const roleMap = {
               user: 'user',
-              vendor: 'vendor',
+              worker: 'worker',
               admin: 'admin'
             };
 
@@ -104,7 +104,7 @@ const PublicRoute = ({ children, userType = 'user', redirectTo = null }) => {
     // Determine redirect path
     const defaultRedirects = {
       user: '/user',
-      vendor: '/worker/dashboard',
+      worker: '/worker/dashboard',
       admin: '/admin/dashboard'
     };
 

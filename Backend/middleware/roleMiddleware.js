@@ -13,8 +13,8 @@ const isUser = (req, res, next) => {
   next();
 };
 
-const isVendor = (req, res, next) => {
-  if (req.userRole !== USER_ROLES.VENDOR) {
+const isWorker = (req, res, next) => {
+  if (req.userRole !== USER_ROLES.WORKER) {
     return res.status(403).json({
       success: false,
       message: 'Access denied. Worker role required.'
@@ -33,8 +33,8 @@ const isAdmin = (req, res, next) => {
   next();
 };
 
-const isAdminOrVendor = (req, res, next) => {
-  if (req.userRole !== USER_ROLES.ADMIN && req.userRole !== 'super_admin' && req.userRole !== USER_ROLES.VENDOR) {
+const isAdminOrWorker = (req, res, next) => {
+  if (req.userRole !== USER_ROLES.ADMIN && req.userRole !== 'super_admin' && req.userRole !== USER_ROLES.WORKER) {
     return res.status(403).json({
       success: false,
       message: 'Access denied. Admin or Worker role required.'
@@ -75,9 +75,9 @@ const isSuperAdmin = async (req, res, next) => {
 
 module.exports = {
   isUser,
-  isVendor,
+  isWorker,
   isAdmin,
-  isAdminOrVendor,
+  isAdminOrWorker,
   isSuperAdmin
 };
 

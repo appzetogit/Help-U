@@ -12,7 +12,7 @@ const {
 // All Admin referral routes require admin auth
 router.use(authenticate, isAdmin);
 
-// GET /api/admin/referrals - Get all vendor referrals & stats
+// GET /api/admin/referrals - Get all worker referrals & stats
 router.get('/referrals', getAllReferrals);
 
 // PUT /api/admin/referrals/:id/approve - Approve and credit reward to referrer wallet

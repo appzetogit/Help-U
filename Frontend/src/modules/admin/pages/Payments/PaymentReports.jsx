@@ -348,7 +348,7 @@ const PaymentReports = () => {
           { key: 'bookingNumber', header: 'Booking ID' },
           { key: 'service', header: 'Service' },
           { key: 'customer', header: 'Customer' },
-          { key: 'vendor', header: 'Worker' },
+          { key: 'worker', header: 'Worker' },
           { key: 'amount', header: 'Amount', render: (val) => `₹${(val || 0).toLocaleString('en-IN')}` },
           { key: 'platformFee', header: 'Platform Fee', render: (val) => `₹${(val || 0).toLocaleString('en-IN')}` },
           { key: 'paymentMethod', header: 'Method' },
@@ -375,7 +375,7 @@ const PaymentReports = () => {
         ];
       case 'tds':
         return [
-          { key: 'vendorName', header: 'Worker Name' },
+          { key: 'workerName', header: 'Worker Name' },
           { key: 'panNumber', header: 'PAN Number' },
           { key: 'grossSales', header: 'Gross Sales', render: (val) => `₹${(val || 0).toLocaleString('en-IN')}` },
           { key: 'tdsRate', header: 'Rate (%)', render: (val) => `${val}%` },
@@ -384,7 +384,7 @@ const PaymentReports = () => {
         ];
       case 'cod':
         return [
-          { key: 'vendorName', header: 'Worker Name' },
+          { key: 'workerName', header: 'Worker Name' },
           { key: 'phone', header: 'Phone' },
           { key: 'totalCashCollected', header: 'Cash Collected', render: (val) => `₹${(val || 0).toLocaleString('en-IN')}` },
           {
@@ -447,7 +447,7 @@ const PaymentReports = () => {
         />
         <StatsCard
           title="Worker Earnings"
-          value={`₹${(overview?.revenue?.totalVendorEarnings || 0).toLocaleString('en-IN')}`}
+          value={`₹${(overview?.revenue?.totalWorkerEarnings || 0).toLocaleString('en-IN')}`}
           subtitle="Total Workers Gross"
           icon={FiDollarSign}
           color="teal"
@@ -564,7 +564,7 @@ const PaymentReports = () => {
                 <>
                   <div><span className="text-gray-500">Total Gross Sales:</span> <span className="font-semibold">₹{(reportSummary.totalGrossSales || 0).toLocaleString('en-IN')}</span></div>
                   <div><span className="text-gray-500">Total TDS Liability:</span> <span className="font-semibold text-purple-600">₹{(reportSummary.totalTDS || 0).toFixed(2)}</span></div>
-                  <div><span className="text-gray-500">Workers:</span> <span className="font-semibold">{reportSummary.vendorCount || 0}</span></div>
+                  <div><span className="text-gray-500">Workers:</span> <span className="font-semibold">{reportSummary.workerCount || 0}</span></div>
                 </>
               )}
               {activeReport === 'cod' && (
@@ -587,7 +587,7 @@ const PaymentReports = () => {
                 <>
                   <div><span className="text-gray-500">Total Amount:</span> <span className="font-semibold">₹{(reportSummary.totalAmount || 0).toLocaleString('en-IN')}</span></div>
                   <div><span className="text-gray-500">Platform Commission:</span> <span className="font-semibold text-green-600">₹{(reportSummary.totalCommission || 0).toLocaleString('en-IN')}</span></div>
-                  <div><span className="text-gray-500">Worker Earnings:</span> <span className="font-semibold">₹{(reportSummary.totalVendorEarnings || 0).toLocaleString('en-IN')}</span></div>
+                  <div><span className="text-gray-500">Worker Earnings:</span> <span className="font-semibold">₹{(reportSummary.totalWorkerEarnings || 0).toLocaleString('en-IN')}</span></div>
                 </>
               )}
             </div>

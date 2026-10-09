@@ -92,7 +92,7 @@ const cartItemSchema = new mongoose.Schema({
   },
   vendorId: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'Vendor',
+    ref: 'Worker',
     default: null
   }
 }, { _id: true });

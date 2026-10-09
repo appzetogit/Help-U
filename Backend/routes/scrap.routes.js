@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { authenticate } = require('../middleware/authMiddleware');
-const { isUser, isVendor, isAdmin } = require('../middleware/roleMiddleware');
+const { isUser, isWorker, isAdmin } = require('../middleware/roleMiddleware');
 const {
   createScrap,
   getMyScrap,

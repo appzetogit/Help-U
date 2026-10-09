@@ -15,7 +15,7 @@ const SettlementManagement = () => {
   const [activeTab, setActiveTab] = useState('pending');
   const [dashboard, setDashboard] = useState(null);
   const [pendingSettlements, setPendingSettlements] = useState([]);
-  const [vendors, setVendors] = useState([]);
+  const [workers, setWorkers] = useState([]);
   const [history, setHistory] = useState([]);
   const [withdrawals, setWithdrawals] = useState([]);
   const [actionLoading, setActionLoading] = useState(false);
@@ -54,9 +54,9 @@ const SettlementManagement = () => {
       if (activeTab === 'pending') {
         const res = await adminSettlementService.getPendingSettlements();
         if (res.success) setPendingSettlements(res.data || []);
-      } else if (activeTab === 'vendors' || activeTab === 'workers') {
-        const res = await adminSettlementService.getVendorBalances({ filterDue: 'true' });
-        if (res.success) setVendors(res.data || []);
+      } else if (activeTab === 'workers') {
+        const res = await adminSettlementService.getWorkerBalances({ filterDue: 'true' });
+        if (res.success) setWorkers(res.data || []);
       } else if (activeTab === 'history') {
         const res = await adminSettlementService.getSettlementHistory();
         if (res.success) setHistory(res.data || []);
@@ -88,20 +88,20 @@ const SettlementManagement = () => {
     setActiveModal('reject_settlement');
   };
 
-  const openBlockVendor = (vendor) => {
-    setSelectedItem(vendor);
+  const openBlockWorker = (worker) => {
+    setSelectedItem(worker);
     setModalInput('');
     setActiveModal('block_vendor');
   };
 
-  const openUnblockVendor = (vendor) => {
-    setSelectedItem(vendor);
+  const openUnblockWorker = (worker) => {
+    setSelectedItem(worker);
     setActiveModal('unblock_vendor');
   };
 
-  const openUpdateLimit = (vendor) => {
-    setSelectedItem(vendor);
-    setModalInput(vendor.cashLimit || 10000);
+  const openUpdateLimit = (worker) => {
+    setSelectedItem(worker);
+    setModalInput(worker.cashLimit || 10000);
     setActiveModal('update_limit');
   };
 
@@ -165,11 +165,11 @@ const SettlementManagement = () => {
     }
   };
 
-  const handleBlockVendor = async () => {
+  const handleBlockWorker = async () => {
     if (!modalInput.trim()) return toast.error('Blocking reason is required');
     try {
       setActionLoading(true);
-      const res = await adminSettlementService.blockVendor(selectedItem._id, modalInput);
+      const res = await adminSettlementService.blockWorker(selectedItem._id, modalInput);
       if (res.success) {
         toast.success('Worker blocked');
         loadData();
@@ -199,10 +199,10 @@ const SettlementManagement = () => {
     }
   };
 
-  const handleUnblockVendorSubmit = async () => {
+  const handleUnblockWorkerSubmit = async () => {
     try {
       setActionLoading(true);
-      const res = await adminSettlementService.unblockVendor(selectedItem._id);
+      const res = await adminSettlementService.unblockWorker(selectedItem._id);
       if (res.success) {
         toast.success('Worker unblocked');
         loadData();
@@ -284,8 +284,8 @@ const SettlementManagement = () => {
         { key: 'status', label: 'Status' },
         { key: 'createdAt', label: 'Date', type: 'datetime' }
       ]);
-    } else if ((activeTab === 'vendors' || activeTab === 'workers') && vendors.length > 0) {
-      exportToCSV(vendors, 'worker_dues', [
+    } else if (activeTab === 'workers' && workers.length > 0) {
+      exportToCSV(workers, 'worker_dues', [
         { key: 'name', label: 'Worker Name' },
         { key: 'businessName', label: 'Business / Agency Name' },
         { key: 'phone', label: 'Phone', type: 'phone' },
@@ -361,12 +361,12 @@ const SettlementManagement = () => {
           border: 'border-purple-100'
         }
       ];
-    } else if (activeTab === 'vendors' || activeTab === 'workers') {
+    } else if (activeTab === 'workers') {
       // Worker Payables stats
-      const totalVendors = vendors.length;
-      const totalDue = vendors.reduce((sum, v) => sum + (v.amountDue || 0), 0);
-      const blockedCount = vendors.filter(v => v.isBlocked).length;
-      const totalLimit = vendors.reduce((sum, v) => sum + (v.cashLimit || 0), 0);
+      const totalWorkers = workers.length;
+      const totalDue = workers.reduce((sum, v) => sum + (v.amountDue || 0), 0);
+      const blockedCount = workers.filter(v => v.isBlocked).length;
+      const totalLimit = workers.reduce((sum, v) => sum + (v.cashLimit || 0), 0);
 
       cards = [
         {
@@ -379,7 +379,7 @@ const SettlementManagement = () => {
         },
         {
           title: 'Workers with Dues',
-          value: totalVendors,
+          value: totalWorkers,
           icon: FiUsers,
           color: 'text-blue-600',
           bg: 'bg-blue-50',
@@ -503,7 +503,6 @@ const SettlementManagement = () => {
   const getPageTitle = () => {
     switch (activeTab) {
       case 'pending': return 'Pending Settlements';
-      case 'vendors':
       case 'workers': return 'Worker Balances & Limits';
       case 'history': return 'Settlement History';
       case 'withdrawals': return 'Withdrawal Requests';
@@ -578,8 +577,8 @@ const SettlementManagement = () => {
     )
   );
 
-  const renderVendorsList = () => (
-    vendors.length === 0 ? (
+  const renderWorkersList = () => (
+    workers.length === 0 ? (
       <div className="text-center py-10">
         <FiCheck className="w-12 h-12 mx-auto mb-3 text-gray-200" />
         <p className="text-gray-500 text-sm font-medium">All workers are settled!</p>
@@ -596,64 +595,64 @@ const SettlementManagement = () => {
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
-            {vendors.map(vendor => (
-              <tr key={vendor._id} className="hover:bg-gray-50/50 transition-colors">
+            {workers.map(worker => (
+              <tr key={worker._id} className="hover:bg-gray-50/50 transition-colors">
                 <td className="px-6 py-4">
                   <div className="flex items-center gap-3">
-                    <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-bold ${vendor.isBlocked ? 'bg-red-500' : 'bg-blue-600'}`}>
-                      {vendor.name.charAt(0)}
+                    <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-bold ${worker.isBlocked ? 'bg-red-500' : 'bg-blue-600'}`}>
+                      {worker.name.charAt(0)}
                     </div>
                     <div>
-                      <p className="font-bold text-gray-900 text-sm">{vendor.name}</p>
-                      <p className="text-xs text-gray-500">{vendor.businessName} • {vendor.phone}</p>
+                      <p className="font-bold text-gray-900 text-sm">{worker.name}</p>
+                      <p className="text-xs text-gray-500">{worker.businessName} • {worker.phone}</p>
                     </div>
                   </div>
                 </td>
                 <td className="px-6 py-4 text-right">
                   <div className="flex flex-col items-end">
                     <p className="text-xs font-semibold text-gray-700 mb-1">
-                      ₹{Math.abs(vendor.balance).toLocaleString()} <span className="text-gray-400">/</span> ₹{vendor.cashLimit?.toLocaleString()}
+                      ₹{Math.abs(worker.balance).toLocaleString()} <span className="text-gray-400">/</span> ₹{worker.cashLimit?.toLocaleString()}
                     </p>
                     <div className="w-32 h-2 bg-gray-100 rounded-full overflow-hidden">
                       <div
-                        className={`h-full rounded-full transition-all duration-500 ${vendor.isBlocked ? 'bg-red-500' : 'bg-blue-500'}`}
-                        style={{ width: `${Math.min((vendor.amountDue / vendor.cashLimit) * 100, 100)}%` }}
+                        className={`h-full rounded-full transition-all duration-500 ${worker.isBlocked ? 'bg-red-500' : 'bg-blue-500'}`}
+                        style={{ width: `${Math.min((worker.amountDue / worker.cashLimit) * 100, 100)}%` }}
                       />
                     </div>
-                    {vendor.isBlocked && <span className="text-[10px] text-red-600 font-semibold mt-1 uppercase tracking-wide">Blocked</span>}
+                    {worker.isBlocked && <span className="text-[10px] text-red-600 font-semibold mt-1 uppercase tracking-wide">Blocked</span>}
                   </div>
                 </td>
                 <td className="px-6 py-4 text-right">
                   <span className="font-bold text-red-600 text-base">
-                    ₹{vendor.amountDue?.toLocaleString() || 0}
+                    ₹{worker.amountDue?.toLocaleString() || 0}
                   </span>
                 </td>
                 <td className="px-6 py-4 text-right">
                   <div className="flex justify-end gap-2">
                     <button
-                      onClick={() => navigate(`/admin/settlements/vendor/${vendor._id}`)}
+                      onClick={() => navigate(`/admin/settlements/worker/${worker._id}`)}
                       className="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                       title="View Ledger"
                     >
                       <FiEye className="w-4 h-4" />
                     </button>
                     <button
-                      onClick={() => openUpdateLimit(vendor)}
+                      onClick={() => openUpdateLimit(worker)}
                       className="p-2 text-gray-500 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
                       title="Update Limit"
                     >
                       <FiDollarSign className="w-4 h-4" />
                     </button>
-                    {vendor.isBlocked ? (
+                    {worker.isBlocked ? (
                       <button
-                        onClick={() => openUnblockVendor(vendor)}
+                        onClick={() => openUnblockWorker(worker)}
                         className="px-3 py-1.5 bg-orange-100 text-orange-700 rounded-lg text-xs font-bold uppercase hover:bg-orange-200 transition-colors"
                       >
                         Unblock
                       </button>
                     ) : (
                       <button
-                        onClick={() => openBlockVendor(vendor)}
+                        onClick={() => openBlockWorker(worker)}
                         className="px-3 py-1.5 bg-red-50 text-red-600 rounded-lg text-xs font-bold uppercase hover:bg-red-100 transition-colors"
                       >
                         Block
@@ -901,7 +900,7 @@ const SettlementManagement = () => {
         ) : (
           <div className="p-6">
             {activeTab === 'pending' && renderPendingSettlements()}
-            {activeTab === 'vendors' && renderVendorsList()}
+            {activeTab === 'workers' && renderWorkersList()}
             {activeTab === 'history' && renderHistoryList()}
             {activeTab === 'withdrawals' && renderWithdrawalsList()}
           </div>
@@ -985,7 +984,7 @@ const SettlementManagement = () => {
           <div className="flex justify-end gap-3 mt-4">
             <Button variant="ghost" onClick={closeModals}>Cancel</Button>
             <Button
-              onClick={handleBlockVendor}
+              onClick={handleBlockWorker}
               isLoading={actionLoading}
               className="bg-red-600 hover:bg-red-700 text-white"
             >
@@ -1010,7 +1009,7 @@ const SettlementManagement = () => {
           <div className="flex justify-end gap-3 mt-6">
             <Button variant="ghost" onClick={closeModals}>Cancel</Button>
             <Button
-              onClick={handleUnblockVendorSubmit}
+              onClick={handleUnblockWorkerSubmit}
               isLoading={actionLoading}
               className="bg-orange-600 hover:bg-orange-700 text-white"
             >

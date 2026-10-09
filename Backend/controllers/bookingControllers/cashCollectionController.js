@@ -1,5 +1,5 @@
 const Booking = require('../../models/Booking');
-const Vendor = require('../../models/Vendor');
+const Worker = require('../../models/Worker');
 const Transaction = require('../../models/Transaction');
 const { PAYMENT_STATUS, BOOKING_STATUS } = require('../../utils/constants');
 const { recordBookingEarning } = require('../../services/earningTrackerService');
@@ -250,8 +250,8 @@ exports.initiateCashCollection = async (req, res) => {
 };
 
 /**
- * Confirm Cash Collection (by Vendor)
- * Uses VendorBill as the single source of truth for earnings.
+ * Confirm Cash Collection (by Worker)
+ * Uses WorkerBill as the single source of truth for earnings.
  */
 exports.confirmCashCollection = async (req, res) => {
   try {
@@ -316,9 +316,9 @@ exports.confirmCashCollection = async (req, res) => {
       booking.markModified('extraCharges');
     }
 
-    // Fetch VendorBill (single source of truth for earnings)
-    const VendorBill = require('../../models/VendorBill');
-    const bill = await VendorBill.findOne({ bookingId: booking._id });
+    // Fetch WorkerBill (single source of truth for earnings)
+    const WorkerBill = require('../../models/WorkerBill');
+    const bill = await WorkerBill.findOne({ bookingId: booking._id });
 
     let vendorEarning = 0;
     let grandTotal = collectionAmount;
@@ -351,7 +351,7 @@ exports.confirmCashCollection = async (req, res) => {
     if (booking.paymentMethod === 'plan_benefit') {
       booking.paymentStatus = PAYMENT_STATUS.SUCCESS;
     } else {
-      booking.paymentStatus = PAYMENT_STATUS.COLLECTED_BY_VENDOR;
+      booking.paymentStatus = PAYMENT_STATUS.COLLECTED_BY_WORKER;
       booking.paymentMethod = 'cash collected'; // Standardized label
     }
 
@@ -366,15 +366,15 @@ exports.confirmCashCollection = async (req, res) => {
 
     await booking.save();
 
-    // Update Vendor Wallet
+    // Update Worker Wallet
     const vendorId = booking.vendorId;
-    const vendor = await Vendor.findById(vendorId).lean();
+    const worker = await Worker.findById(vendorId).lean();
     let newDues = 0;
 
-    if (vendor) {
-      newDues = (vendor.wallet?.dues || 0) + collectionAmount;
-      const newEarnings = (vendor.wallet?.earnings || 0) + vendorEarning;
-      const cashLimit = vendor.wallet?.cashLimit || 10000;
+    if (worker) {
+      newDues = (worker.wallet?.dues || 0) + collectionAmount;
+      const newEarnings = (worker.wallet?.earnings || 0) + vendorEarning;
+      const cashLimit = worker.wallet?.cashLimit || 10000;
       const netOwed = newDues - newEarnings;
       const isOverLimit = netOwed > cashLimit;
 
@@ -394,7 +394,7 @@ exports.confirmCashCollection = async (req, res) => {
         };
       }
 
-      await Vendor.findByIdAndUpdate(vendorId, walletUpdate, { runValidators: false });
+      await Worker.findByIdAndUpdate(vendorId, walletUpdate, { runValidators: false });
 
       // Record Transaction - Cash Collected
       try {
@@ -417,7 +417,7 @@ exports.confirmCashCollection = async (req, res) => {
         });
       } catch (txnErr) {
         console.error('[ConfirmCash] Transaction 1 (cash_collected) failed:', txnErr);
-        // We don't throw here to ensure the payment status remains 'completed' since booking.save and Vendor update already finished
+        // We don't throw here to ensure the payment status remains 'completed' since booking.save and Worker update already finished
       }
 
       // Record Transaction - Earnings Credit
@@ -484,7 +484,7 @@ exports.confirmCashCollection = async (req, res) => {
       data: {
         bookingId: booking._id,
         amount: collectionAmount,
-        walletDues: vendor ? newDues : null
+        walletDues: worker ? newDues : null
       }
     });
   } catch (error) {
@@ -565,8 +565,8 @@ exports.verifyOnlinePayment = async (req, res) => {
         await booking.save();
 
         // 2. Handle Earnings & Wallet
-        const VendorBill = require('../../models/VendorBill');
-        const bill = await VendorBill.findOne({ bookingId: booking._id });
+        const WorkerBill = require('../../models/WorkerBill');
+        const bill = await WorkerBill.findOne({ bookingId: booking._id });
 
         let vendorEarning = 0;
         if (bill) {
@@ -587,8 +587,8 @@ exports.verifyOnlinePayment = async (req, res) => {
         }
 
         const vendorId = booking.vendorId;
-        const Vendor = require('../../models/Vendor');
-        await Vendor.findByIdAndUpdate(vendorId, {
+        const Worker = require('../../models/Worker');
+        await Worker.findByIdAndUpdate(vendorId, {
           $inc: { 'wallet.earnings': vendorEarning }
         });
 
@@ -709,8 +709,8 @@ exports.confirmManualOnlinePayment = async (req, res) => {
     await booking.save();
 
     // 2. Handle Earnings & Wallet (Reuse logic)
-    const VendorBill = require('../../models/VendorBill');
-    const bill = await VendorBill.findOne({ bookingId: booking._id });
+    const WorkerBill = require('../../models/WorkerBill');
+    const bill = await WorkerBill.findOne({ bookingId: booking._id });
 
     let vendorEarning = 0;
     if (bill) {
@@ -731,7 +731,7 @@ exports.confirmManualOnlinePayment = async (req, res) => {
     }
 
     const vendorId = booking.vendorId;
-    await Vendor.findByIdAndUpdate(vendorId, {
+    await Worker.findByIdAndUpdate(vendorId, {
       $inc: { 'wallet.earnings': vendorEarning }
     });
 
