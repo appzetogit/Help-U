@@ -20,7 +20,7 @@ const Notifications = () => {
   const [filter, setFilter] = useState('all'); // all, alerts, jobs, payments
 
   useLayoutEffect(() => {
-    // Optional: Set background color if needed, similar to Vendor
+    // Optional: Set background color if needed, similar to Worker
     const html = document.documentElement;
     const body = document.body;
     const root = document.getElementById('root');

@@ -24,7 +24,7 @@ import CardShell from '../UserCategories/components/CardShell';
 // Import sub-report components
 import RevenueReport from './RevenueReport';
 import BookingReport from './BookingReport';
-import VendorReport from './VendorReport';
+import WorkerReport from './WorkerReport';
 
 const ReportsOverview = () => {
   const [loading, setLoading] = useState(true);
@@ -49,11 +49,11 @@ const ReportsOverview = () => {
       if (trendsRes.success) setBookingTrends(trendsRes.data.trends);
       if (growthRes.success) {
         const merged = growthRes.data.userGrowth.map(ug => {
-          const vg = growthRes.data.vendorGrowth.find(v => v._id === ug._id);
+          const vg = growthRes.data.workerGrowth.find(v => v._id === ug._id);
           return {
             date: ug._id,
             users: ug.count,
-            vendors: vg ? vg.count : 0
+            workers: vg ? vg.count : 0
           };
         });
         setGrowthData(merged);
@@ -101,7 +101,7 @@ const ReportsOverview = () => {
       icon: FiUsers,
       color: 'text-indigo-600',
       bg: 'bg-indigo-50',
-      link: '/admin/reports/vendors'
+      link: '/admin/reports/workers'
     }
   ];
 
@@ -252,7 +252,7 @@ const ReportsOverview = () => {
                 <Tooltip contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }} />
                 <Legend iconType="circle" wrapperStyle={{ paddingTop: '10px' }} />
                 <Area type="monotone" dataKey="users" name="New Users" stroke="#4F46E5" fill="#4F46E5" fillOpacity={0.1} strokeWidth={3} />
-                <Area type="monotone" dataKey="vendors" name="New Workers" stroke="#EC4899" fill="#EC4899" fillOpacity={0.1} strokeWidth={3} />
+                <Area type="monotone" dataKey="workers" name="New Workers" stroke="#EC4899" fill="#EC4899" fillOpacity={0.1} strokeWidth={3} />
               </AreaChart>
             </ResponsiveContainer>
           </div>
@@ -270,7 +270,6 @@ const Reports = () => {
     switch (currentPath) {
       case 'revenue': return 'Revenue Report';
       case 'bookings': return 'Booking Report';
-      case 'vendors':
       case 'workers': return 'Worker Report';
       default: return 'Analytics & Reports';
     }
@@ -294,7 +293,7 @@ const Reports = () => {
         <Route index element={<ReportsOverview />} />
         <Route path="revenue" element={<RevenueReport />} />
         <Route path="bookings" element={<BookingReport />} />
-        <Route path="workers" element={<VendorReport />} />
+        <Route path="workers" element={<WorkerReport />} />
         <Route path="vendors" element={<Navigate to="/admin/reports/workers" replace />} />
       </Routes>
     </div>

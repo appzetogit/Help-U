@@ -200,7 +200,7 @@ const sendWelcomeEmail = async (email, name) => {
 /**
  * Send Booking Email - Detailed App Style
  */
-const sendBookingEmails = async (booking, user, vendor, service) => {
+const sendBookingEmails = async (booking, user, worker, service) => {
   try {
     if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) return;
     const transporter = createTransporter();
@@ -238,11 +238,11 @@ const sendBookingEmails = async (booking, user, vendor, service) => {
       });
     }
 
-    if (vendor && vendor.email) {
+    if (worker && worker.email) {
       const vContent = `
         <div class="badge badge-primary">New Job</div>
         <h2>Incoming Order</h2>
-        <p>Hello ${vendor.name}, a new booking has been assigned to you. Plan your resources accordingly.</p>
+        <p>Hello ${worker.name}, a new booking has been assigned to you. Plan your resources accordingly.</p>
         
         <div class="card">
           <div class="card-title">Job Details</div>
@@ -260,7 +260,7 @@ const sendBookingEmails = async (booking, user, vendor, service) => {
 
       await transporter.sendMail({
         from: process.env.EMAIL_FROM || 'Help U <noreply@homster.com>',
-        to: vendor.email,
+        to: worker.email,
         subject: `New Job Assigned #${bookingId} - Help U`,
         html: emailWrapper(vContent, 'New Job', 'Action Required: New job assigned')
       });
@@ -322,16 +322,16 @@ const sendBookingCompletionEmails = async (booking) => {
 /**
  * Send Withdrawal Approved Email
  */
-const sendWithdrawalApprovedEmail = async (vendor, amount, transactionId) => {
+const sendWithdrawalApprovedEmail = async (worker, amount, transactionId) => {
   try {
-    if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS || !vendor.email) return;
+    if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS || !worker.email) return;
     const transporter = createTransporter();
 
     const content = `
       <div style="text-align: center;">
         <div class="badge badge-success">Settlemet Done</div>
         <h2>Funds Withdrawn Successfully</h2>
-        <p>Hi ${vendor.name}, your withdrawal request has been approved and successfully processed to your account.</p>
+        <p>Hi ${worker.name}, your withdrawal request has been approved and successfully processed to your account.</p>
         
         <div class="card">
           <div class="data-row"><span class="data-label">Transaction Ref</span><span class="data-value">${transactionId || 'N/A'}</span></div>
@@ -346,7 +346,7 @@ const sendWithdrawalApprovedEmail = async (vendor, amount, transactionId) => {
 
     await transporter.sendMail({
       from: process.env.EMAIL_FROM || 'Help U <noreply@homster.com>',
-      to: vendor.email,
+      to: worker.email,
       subject: 'Withdrawal Success - Help U',
       html: emailWrapper(content, 'Withdrawal', 'Your funds are on the way')
     });
@@ -356,16 +356,16 @@ const sendWithdrawalApprovedEmail = async (vendor, amount, transactionId) => {
 /**
  * Send Dues Payment Approved Email
  */
-const sendDuesPaymentApprovedEmail = async (vendor, amount, balanceAfter) => {
+const sendDuesPaymentApprovedEmail = async (worker, amount, balanceAfter) => {
   try {
-    if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS || !vendor.email) return;
+    if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS || !worker.email) return;
     const transporter = createTransporter();
 
     const content = `
       <div style="text-align: center;">
         <div class="badge badge-success">Verified</div>
         <h2>Payment Acknowledged</h2>
-        <p>Hi ${vendor.name}, we've successfully verified your dues payment. Your wallet has been updated.</p>
+        <p>Hi ${worker.name}, we've successfully verified your dues payment. Your wallet has been updated.</p>
         
         <div class="card">
           <div class="data-row"><span class="data-label">Payment Amount</span><span class="data-value">₹${amount}</span></div>
@@ -379,7 +379,7 @@ const sendDuesPaymentApprovedEmail = async (vendor, amount, balanceAfter) => {
 
     await transporter.sendMail({
       from: process.env.EMAIL_FROM || 'Help U <noreply@homster.com>',
-      to: vendor.email,
+      to: worker.email,
       subject: 'Dues Payment Verified - Help U',
       html: emailWrapper(content, 'Verified', 'We have received your payment')
     });

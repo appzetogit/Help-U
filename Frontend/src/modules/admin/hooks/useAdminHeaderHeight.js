@@ -5,7 +5,7 @@ import { useState, useEffect } from 'react';
  * Used to add padding-top to admin page content on mobile (fixed header).
  */
 const useAdminHeaderHeight = () => {
-  const [headerHeight, setHeaderHeight] = useState(72); // default ~ single-vendor
+  const [headerHeight, setHeaderHeight] = useState(72); // default ~ single-worker
 
   useEffect(() => {
     const calculateHeight = () => {

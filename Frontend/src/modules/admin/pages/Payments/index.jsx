@@ -1,7 +1,7 @@
 import React from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import PaymentOverview from './PaymentOverview';
-import VendorPayments from './VendorPayments';
+import WorkerPayments from './WorkerPayments';
 import UserPayments from './UserPayments';
 import PaymentReports from './PaymentReports';
 import AdminRevenue from './AdminRevenue';
@@ -15,7 +15,7 @@ const Payments = () => {
           <Route index element={<Navigate to="overview" replace />} />
           <Route path="overview" element={<PaymentOverview />} />
           <Route path="users" element={<UserPayments />} />
-          <Route path="workers" element={<VendorPayments />} />
+          <Route path="workers" element={<WorkerPayments />} />
           <Route path="vendors" element={<Navigate to="../workers" replace />} />
           <Route path="revenue" element={<AdminRevenue />} />
           <Route path="reports" element={<PaymentReports />} />

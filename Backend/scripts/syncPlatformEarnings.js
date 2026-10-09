@@ -1,11 +1,11 @@
 const mongoose = require('mongoose');
 const dotenv = require('dotenv');
 const Booking = require('../models/Booking');
-const VendorBill = require('../models/VendorBill');
+const WorkerBill = require('../models/WorkerBill');
 const Settlement = require('../models/Settlement');
 const Withdrawal = require('../models/Withdrawal');
 const PlatformEarning = require('../models/PlatformEarning');
-const Vendor = require('../models/Vendor');
+const Worker = require('../models/Worker');
 const { BOOKING_STATUS, PAYMENT_STATUS } = require('../utils/constants');
 
 // For local testing from scripts dir
@@ -23,9 +23,9 @@ const syncPlatformEarnings = async () => {
     // 1. Wipe existing history strictly during this sync
     await PlatformEarning.deleteMany({});
 
-    // 2. Map all VendorBills
-    console.log('Fetching vendor bills...');
-    const bills = await VendorBill.find().lean();
+    // 2. Map all WorkerBills
+    console.log('Fetching worker bills...');
+    const bills = await WorkerBill.find().lean();
     const billMap = {};
     bills.forEach(b => { billMap[b.bookingId.toString()] = b; });
 
@@ -36,7 +36,7 @@ const syncPlatformEarnings = async () => {
       paymentStatus: {
         $in: [
           PAYMENT_STATUS.SUCCESS,
-          PAYMENT_STATUS.COLLECTED_BY_VENDOR,
+          PAYMENT_STATUS.COLLECTED_BY_WORKER,
           'success',
           'collected_by_vendor',
           'paid'
@@ -70,14 +70,14 @@ const syncPlatformEarnings = async () => {
 
       const revenue = bill?.grandTotal || finalAmount;
       const commission = bill?.companyRevenue || (finalAmount * 0.2);
-      const vendorEarn = bill?.vendorTotalEarning || (finalAmount * 0.8);
+      const workerEarn = bill?.vendorTotalEarning || (finalAmount * 0.8);
       const gst = bill?.totalGST || 0;
-      // Note: TDS usually isn't in VendorBill, handled separately in Withdrawals but we leave it at 0 here
+      // Note: TDS usually isn't in WorkerBill, handled separately in Withdrawals but we leave it at 0 here
 
       dailyEarnings[dateStr].totalRevenue += revenue;
       dailyEarnings[dateStr].totalBookings += 1;
       dailyEarnings[dateStr].platformCommission += commission;
-      dailyEarnings[dateStr].vendorEarnings += vendorEarn;
+      dailyEarnings[dateStr].vendorEarnings += workerEarn;
       dailyEarnings[dateStr].totalGST += gst;
     });
 
@@ -133,11 +133,11 @@ const syncPlatformEarnings = async () => {
     // 7. Finally, calculate the static pending snapshots for TODAY dynamically and drop it into today's string
     const todayStr = getTodayDateString();
 
-    const vendors = await Vendor.find({}, 'walletBalance').lean();
+    const workers = await Worker.find({}, 'walletBalance').lean();
     let totalPendingSettlement = 0;
     let totalPendingAmountToVendors = 0;
 
-    vendors.forEach(v => {
+    workers.forEach(v => {
       if (v.walletBalance < 0) totalPendingSettlement += Math.abs(v.walletBalance);
       else if (v.walletBalance > 0) totalPendingAmountToVendors += v.walletBalance;
     });

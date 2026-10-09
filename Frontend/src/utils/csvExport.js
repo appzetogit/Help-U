@@ -191,7 +191,7 @@ export const CSV_COLUMNS = {
     { key: 'user.name', label: 'Customer Name' },
     { key: 'user.phone', label: 'Phone', type: 'phone' },
     { key: 'service.name', label: 'Service' },
-    { key: 'vendor.businessName', label: 'Vendor' },
+    { key: 'worker.businessName', label: 'Worker' },
     { key: 'status', label: 'Status' },
     { key: 'pricing.subtotal', label: 'Subtotal', type: 'currency' },
     { key: 'pricing.gst', label: 'GST', type: 'currency' },
@@ -213,7 +213,7 @@ export const CSV_COLUMNS = {
   settlements: [
     { key: '_id', label: 'Settlement ID' },
     { key: 'createdAt', label: 'Date', type: 'date' },
-    { key: 'vendor.businessName', label: 'Vendor' },
+    { key: 'worker.businessName', label: 'Worker' },
     { key: 'grossAmount', label: 'Gross Amount', type: 'currency' },
     { key: 'commission', label: 'Platform Fee', type: 'currency' },
     { key: 'netAmount', label: 'Net Payout', type: 'currency' },
@@ -230,7 +230,7 @@ export const CSV_COLUMNS = {
     { key: 'totalSpent', label: 'Total Spent', type: 'currency' }
   ],
 
-  vendors: [
+  workers: [
     { key: 'businessName', label: 'Business Name' },
     { key: 'name', label: 'Owner Name' },
     { key: 'email', label: 'Email' },

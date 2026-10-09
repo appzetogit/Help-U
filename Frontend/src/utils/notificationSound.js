@@ -158,8 +158,8 @@ export const stopAlertRing = () => {
 };
 
 // Check if sound is enabled in settings
-export const isSoundEnabled = (userType = 'vendor') => {
-  let storageKey = 'vendorData';
+export const isSoundEnabled = (userType = 'worker') => {
+  let storageKey = 'workerData';
   if (userType === 'user') storageKey = 'userData';
   else if (userType === 'admin') storageKey = 'adminData';
 

@@ -6,8 +6,8 @@ import HomePage from "./pages/HomePage";
 import CategoriesPage from "./pages/CategoriesPage";
 import ServicesPage from "./pages/ServicesPage";
 import BrandsPage from "./pages/BrandsPage";
-import VendorServicesPage from "./pages/VendorServicesPage";
-import VendorPartsPage from "./pages/VendorPartsPage";
+import WorkerServicesPage from "./pages/WorkerServicesPage";
+import WorkerPartsPage from "./pages/WorkerPartsPage";
 
 import { cityService } from "../../services/cityService";
 
@@ -94,9 +94,9 @@ const UserCategories = () => {
           <Route path="categories" element={<CategoriesPage catalog={catalog} setCatalog={setCatalog} selectedCity={selectedCity} />} />
           <Route path="sections" element={<ServicesPage catalog={catalog} setCatalog={setCatalog} selectedCity={selectedCity} />} />
           <Route path="brands" element={<BrandsPage catalog={catalog} setCatalog={setCatalog} selectedCity={selectedCity} />} />
-          <Route path="worker-services" element={<VendorServicesPage />} />
+          <Route path="worker-services" element={<WorkerServicesPage />} />
           <Route path="vendor-services" element={<Navigate to="../worker-services" replace />} />
-          <Route path="worker-parts" element={<VendorPartsPage />} />
+          <Route path="worker-parts" element={<WorkerPartsPage />} />
           <Route path="vendor-parts" element={<Navigate to="../worker-parts" replace />} />
           <Route path="*" element={<Navigate to="home" replace />} />
         </Routes>

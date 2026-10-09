@@ -82,7 +82,7 @@ exports.getMyScrap = async (req, res) => {
   }
 };
 
-// Get scrap items accepted by vendor
+// Get scrap items accepted by worker
 exports.getMyAcceptedScrap = async (req, res) => {
   try {
     const scraps = await Scrap.find({ vendorId: req.user.id })
@@ -95,7 +95,7 @@ exports.getMyAcceptedScrap = async (req, res) => {
   }
 };
 
-// Get all pending scrap items (Vendor view)
+// Get all pending scrap items (Worker view)
 // Can filter by nearby location logic
 exports.getAvailableScrap = async (req, res) => {
   try {
@@ -286,7 +286,7 @@ exports.respondToOffer = async (req, res) => {
   }
 };
 
-// Vendor marks item as picked up / completed
+// Worker marks item as picked up / completed
 exports.completeScrap = async (req, res) => {
   try {
     const { id } = req.params;
@@ -295,7 +295,7 @@ exports.completeScrap = async (req, res) => {
     const scrap = await Scrap.findById(id);
     if (!scrap) return res.status(404).json({ success: false, message: 'Scrap item not found' });
 
-    // Check if the user is the assigned vendor OR an admin
+    // Check if the user is the assigned worker OR an admin
     const { USER_ROLES } = require('../utils/constants');
     const isAdmin = req.userRole === USER_ROLES.ADMIN || req.userRole === 'admin' || req.userRole === 'super_admin';
 

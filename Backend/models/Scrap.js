@@ -65,7 +65,7 @@ const scrapSchema = new mongoose.Schema({
   },
   vendorId: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'Vendor',
+    ref: 'Worker',
     default: null
   },
   pickupDate: {

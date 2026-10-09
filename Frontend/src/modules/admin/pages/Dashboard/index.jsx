@@ -24,12 +24,12 @@ const AdminDashboard = () => {
   const [recentBookingsList, setRecentBookingsList] = useState([]);
   const [stats, setStats] = useState({
     totalUsers: 0,
-    totalVendors: 0,
+    totalWorkers: 0,
     activeBookings: 0,
     completedBookings: 0,
     totalRevenue: 0,
     totalPlatformFeeCollected: 0,
-    totalVendorEarnings: 0,
+    totalWorkerEarnings: 0,
     totalGSTCollected: 0,
     todayRevenue: 0,
   });
@@ -74,12 +74,12 @@ const AdminDashboard = () => {
           const s = statsRes.data.stats;
           setStats({
             totalUsers: s.totalUsers,
-            totalVendors: s.totalVendors,
+            totalWorkers: s.totalWorkers,
             activeBookings: s.pendingBookings,
             completedBookings: s.completedBookings,
             totalRevenue: s.totalRevenue,
             totalPlatformFeeCollected: s.totalPlatformFeeCollected || s.platformCommission || 0,
-            totalVendorEarnings: s.totalVendorEarnings || 0,
+            totalWorkerEarnings: s.totalWorkerEarnings || 0,
             totalGSTCollected: s.totalGSTCollected || 0,
             todayRevenue: 0,
           });
@@ -168,7 +168,7 @@ const AdminDashboard = () => {
     },
     {
       title: 'Worker Earnings',
-      value: formatCurrency(stats.totalVendorEarnings || 0),
+      value: formatCurrency(stats.totalWorkerEarnings || 0),
       change: 0,
       icon: FiBriefcase,
       color: 'text-white',
@@ -223,7 +223,7 @@ const AdminDashboard = () => {
     },
     {
       title: 'New Workers',
-      value: (stats.totalVendors || 0).toLocaleString(),
+      value: (stats.totalWorkers || 0).toLocaleString(),
       change: 0,
       icon: FiBriefcase,
       color: 'text-white',

@@ -2,7 +2,7 @@ import React, { forwardRef } from 'react';
 import { motion } from 'framer-motion';
 import { FiLoader } from 'react-icons/fi';
 
-// Copied structure from single-vendor admin Button (kept lightweight).
+// Copied structure from single-worker admin Button (kept lightweight).
 const Button = forwardRef(
   (
     {

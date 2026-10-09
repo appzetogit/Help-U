@@ -6,7 +6,7 @@
  * directly — so every toggle that disables an action is enforced here too.
  *
  * Usage:
- *   router.post('/signup', requireFlag('isVendorRegistrationEnabled', 'Vendor registration is currently closed.'), signup);
+ *   router.post('/signup', requireFlag('isVendorRegistrationEnabled', 'Worker registration is currently closed.'), signup);
  */
 
 const { getFlag } = require('../utils/featureFlags');

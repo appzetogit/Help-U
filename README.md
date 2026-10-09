@@ -5,7 +5,7 @@
 <h1 align="center">🏠 Appzeto - Home Services Platform</h1>
 
 <p align="center">
-  <strong>A comprehensive on-demand home services marketplace connecting users with trusted vendors and skilled workers</strong>
+  <strong>A comprehensive on-demand home services marketplace connecting users with trusted workers and skilled workers</strong>
 </p>
 
 <p align="center">
@@ -55,7 +55,7 @@
 **Appzeto** is a full-stack, enterprise-grade home services marketplace platform that connects customers with professional service providers. The platform supports multiple user roles including:
 
 - **Users/Customers** - Book services, track bookings, make payments
-- **Vendors** - Manage services, accept bookings, manage workers
+- **Workers** - Manage services, accept bookings, manage workers
 - **Workers** - Handle assigned jobs, collect payments, track earnings
 - **Administrators** - Complete platform management and analytics
 
@@ -78,7 +78,7 @@ The platform features real-time notifications, live location tracking, secure pa
 | ⭐ **Reviews & Ratings** | Rate and review completed services |
 | 💰 **Wallet System** | In-app wallet for quick payments |
 
-### 🏪 Vendor Features
+### 🏪 Worker Features
 | Feature | Description |
 |---------|-------------|
 | 📋 **Service Management** | Create and manage service offerings |
@@ -102,11 +102,11 @@ The platform features real-time notifications, live location tracking, secure pa
 | Feature | Description |
 |---------|-------------|
 | 📊 **Comprehensive Dashboard** | Platform-wide analytics and metrics |
-| 👥 **User Management** | Manage users, vendors, and workers |
+| 👥 **User Management** | Manage users, workers, and workers |
 | 📦 **Service & Category Management** | Configure service catalog |
 | 💼 **Booking Oversight** | Monitor all platform bookings |
 | 💳 **Payment Management** | Track transactions and process refunds |
-| 📑 **Settlement Management** | Handle vendor settlements and withdrawals |
+| 📑 **Settlement Management** | Handle worker settlements and withdrawals |
 | 📄 **Report Generation** | Generate business reports |
 | ⚙️ **Platform Settings** | Configure platform-wide settings |
 | 🏷️ **Plan Management** | Create and manage subscription plans |
@@ -158,7 +158,7 @@ The platform features real-time notifications, live location tracking, secure pa
 ┌─────────────────────────────────────────────────────────────────────┐
 │                          CLIENT APPLICATIONS                         │
 ├─────────────────┬─────────────────┬─────────────────┬───────────────┤
-│   User App      │   Vendor App    │   Worker App    │   Admin Panel │
+│   User App      │   Worker App    │   Worker App    │   Admin Panel │
 │   (React PWA)   │   (React PWA)   │   (React PWA)   │   (React SPA) │
 └────────┬────────┴────────┬────────┴────────┬────────┴───────┬───────┘
          │                 │                 │                │
@@ -180,7 +180,7 @@ The platform features real-time notifications, live location tracking, secure pa
 │                 │      │                     │    │                   │
 │ - Auth Routes   │      │ - Location Updates  │    │ - Push Notifs     │
 │ - User Routes   │      │ - Booking Alerts    │    │ - Background Msgs │
-│ - Vendor Routes │      │ - Live Tracking     │    │                   │
+│ - Worker Routes │      │ - Live Tracking     │    │                   │
 │ - Admin Routes  │      │ - Chat (Future)     │    │                   │
 └────────┬────────┘      └──────────┬──────────┘    └───────────────────┘
          │                          │
@@ -190,7 +190,7 @@ The platform features real-time notifications, live location tracking, secure pa
          │      MongoDB Atlas      │
          │    (Primary Database)   │
          │                         │
-         │ - Users, Vendors, Workers│
+         │ - Users, Workers, Workers│
          │ - Bookings, Services    │
          │ - Transactions, Payments │
          └────────────┬────────────┘
@@ -427,7 +427,7 @@ appzeto/
 │   ├── 📁 controllers/         # Route handlers (42 controllers)
 │   │   ├── 📁 admin/           # Admin-specific controllers
 │   │   ├── 📁 user/            # User-specific controllers
-│   │   ├── 📁 vendor/          # Vendor-specific controllers
+│   │   ├── 📁 worker/          # Worker-specific controllers
 │   │   └── 📁 worker/          # Worker-specific controllers
 │   │
 │   ├── 📁 middleware/          # Custom middleware
@@ -438,7 +438,7 @@ appzeto/
 │   │
 │   ├── 📁 models/              # Mongoose schemas (20 models)
 │   │   ├── User.js             # User model
-│   │   ├── Vendor.js           # Vendor model
+│   │   ├── Worker.js           # Worker model
 │   │   ├── Worker.js           # Worker model
 │   │   ├── Booking.js          # Booking model
 │   │   ├── Service.js          # Service model
@@ -448,7 +448,7 @@ appzeto/
 │   ├── 📁 routes/              # API route definitions
 │   │   ├── 📁 admin-routes/    # Admin API routes
 │   │   ├── 📁 user-routes/     # User API routes
-│   │   ├── 📁 vendor-routes/   # Vendor API routes
+│   │   ├── 📁 worker-routes/   # Worker API routes
 │   │   ├── 📁 worker-routes/   # Worker API routes
 │   │   ├── 📁 public-routes/   # Public API routes
 │   │   └── 📁 payment-routes/  # Payment API routes
@@ -501,7 +501,7 @@ appzeto/
 │   │   ├── 📁 modules/         # Feature modules
 │   │   │   ├── 📁 admin/       # Admin dashboard (75 files)
 │   │   │   ├── 📁 user/        # User app (83 files)
-│   │   │   ├── 📁 vendor/      # Vendor app (60 files)
+│   │   │   ├── 📁 worker/      # Worker app (60 files)
 │   │   │   └── 📁 worker/      # Worker app (23 files)
 │   │   │
 │   │   ├── 📁 services/        # API service functions
@@ -552,8 +552,8 @@ Authorization: Bearer <access_token>
 | POST | `/users/auth/send-otp` | Send OTP to user |
 | POST | `/users/auth/verify-otp` | Verify OTP and login |
 | POST | `/users/auth/register` | Register new user |
-| POST | `/vendors/auth/send-otp` | Send OTP to vendor |
-| POST | `/vendors/auth/verify-otp` | Verify vendor OTP |
+| POST | `/workers/auth/send-otp` | Send OTP to worker |
+| POST | `/workers/auth/verify-otp` | Verify worker OTP |
 | POST | `/workers/auth/send-otp` | Send OTP to worker |
 | POST | `/admin/auth/login` | Admin login |
 
@@ -568,16 +568,16 @@ Authorization: Bearer <access_token>
 | GET | `/users/cart` | Get cart items |
 | POST | `/users/cart` | Add to cart |
 
-#### 🏪 Vendor APIs
+#### 🏪 Worker APIs
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| GET | `/vendors/profile` | Get vendor profile |
-| PUT | `/vendors/profile` | Update vendor profile |
-| GET | `/vendors/bookings` | Get vendor bookings |
-| PUT | `/vendors/bookings/:id` | Update booking status |
-| GET | `/vendors/workers` | Get vendor workers |
-| POST | `/vendors/workers` | Add new worker |
+| GET | `/workers/profile` | Get worker profile |
+| PUT | `/workers/profile` | Update worker profile |
+| GET | `/workers/bookings` | Get worker bookings |
+| PUT | `/workers/bookings/:id` | Update booking status |
+| GET | `/workers/workers` | Get worker workers |
+| POST | `/workers/workers` | Add new worker |
 
 #### 👷 Worker APIs
 
@@ -594,7 +594,7 @@ Authorization: Bearer <access_token>
 |--------|----------|-------------|
 | GET | `/admin/dashboard` | Get dashboard stats |
 | GET | `/admin/users` | Get all users |
-| GET | `/admin/vendors` | Get all vendors |
+| GET | `/admin/workers` | Get all workers |
 | GET | `/admin/bookings` | Get all bookings |
 | GET | `/admin/transactions` | Get all transactions |
 | POST | `/admin/categories` | Create category |
@@ -643,7 +643,7 @@ Authorization: Bearer <access_token>
 }
 ```
 
-#### Vendor Model
+#### Worker Model
 ```javascript
 {
   businessName: String,
@@ -668,7 +668,7 @@ Authorization: Bearer <access_token>
 ```javascript
 {
   user: ObjectId,
-  vendor: ObjectId,
+  worker: ObjectId,
   worker: ObjectId,
   service: ObjectId,
   items: [{ service, quantity, price }],

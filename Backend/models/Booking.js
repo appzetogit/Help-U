@@ -23,20 +23,20 @@ const bookingSchema = new mongoose.Schema({
   },
   vendorId: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'Vendor',
+    ref: 'Worker',
     required: false,
     index: true
   },
   notifiedVendors: [{
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'Vendor'
+    ref: 'Worker'
   }],
 
   // ==========================================
   // WAVE-BASED ALERTING
   // ==========================================
   potentialVendors: [{
-    vendorId: { type: mongoose.Schema.Types.ObjectId, ref: 'Vendor' },
+    vendorId: { type: mongoose.Schema.Types.ObjectId, ref: 'Worker' },
     distance: { type: Number } // in km
   }],
   currentWave: {
@@ -153,10 +153,10 @@ const bookingSchema = new mongoose.Schema({
     type: Number,
     default: 0
   },
-  // Reference to VendorBill (single source of truth for earnings/commission)
+  // Reference to WorkerBill (single source of truth for earnings/commission)
   vendorBillId: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'VendorBill',
+    ref: 'WorkerBill',
     default: null
   },
 
@@ -221,7 +221,7 @@ const bookingSchema = new mongoose.Schema({
     },
     requestedBy: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'Vendor',
+      ref: 'Worker',
       default: null
     },
     paidAt: {
@@ -361,8 +361,8 @@ const bookingSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.Mixed,
     default: {}
   },
-  // Note: Detailed billing (items/parts) is now handled by VendorBill model
-  // workDoneDetails and extraCharges are deprecated in favor of VendorBill
+  // Note: Detailed billing (items/parts) is now handled by WorkerBill model
+  // workDoneDetails and extraCharges are deprecated in favor of WorkerBill
 
   // ==========================================
   // 10. CANCELLATION

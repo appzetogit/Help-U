@@ -1,11 +1,11 @@
-const VendorReferral = require('../../models/VendorReferral');
-const Vendor = require('../../models/Vendor');
+const WorkerReferral = require('../../models/WorkerReferral');
+const Worker = require('../../models/Worker');
 const Settings = require('../../models/Settings');
 const Transaction = require('../../models/Transaction');
 const { createNotification } = require('../notificationControllers/notificationController');
 
 /**
- * Admin: Get all vendor referrals with filters and statistics
+ * Admin: Get all worker referrals with filters and statistics
  */
 exports.getAllReferrals = async (req, res) => {
   try {
@@ -16,7 +16,7 @@ exports.getAllReferrals = async (req, res) => {
       query.status = status;
     }
 
-    const referrals = await VendorReferral.find(query)
+    const referrals = await WorkerReferral.find(query)
       .populate('referrerId', 'name email phone businessName wallet referralEarnings')
       .populate('referredVendorId', 'name email phone businessName service profilePhoto approvalStatus createdAt')
       .sort({ createdAt: -1 });
@@ -36,7 +36,7 @@ exports.getAllReferrals = async (req, res) => {
     }
 
     // Stats
-    const allRefs = await VendorReferral.find({});
+    const allRefs = await WorkerReferral.find({});
     const totalReferrals = allRefs.length;
     const pendingReferrals = allRefs.filter(r => r.status === 'pending').length;
     const rewardedReferrals = allRefs.filter(r => r.status === 'rewarded' || r.status === 'approved').length;
@@ -69,14 +69,14 @@ exports.getAllReferrals = async (req, res) => {
 };
 
 /**
- * Admin: Approve and credit reward directly into referrer vendor's wallet
+ * Admin: Approve and credit reward directly into referrer worker's wallet
  */
 exports.approveAndRewardReferral = async (req, res) => {
   try {
     const { id } = req.params;
     const { customRewardAmount } = req.body;
 
-    const referral = await VendorReferral.findById(id)
+    const referral = await WorkerReferral.findById(id)
       .populate('referrerId')
       .populate('referredVendorId');
 
@@ -97,7 +97,7 @@ exports.approveAndRewardReferral = async (req, res) => {
     let reward = customRewardAmount ? Number(customRewardAmount) : (referral.rewardAmount || 100);
     if (isNaN(reward) || reward < 0) reward = 100;
 
-    // Credit to Referrer Vendor Wallet
+    // Credit to Referrer Worker Wallet
     const currentEarnings = referrer.wallet?.earnings || 0;
     const updatedEarnings = currentEarnings + reward;
 
@@ -128,7 +128,7 @@ exports.approveAndRewardReferral = async (req, res) => {
     referral.rewardedAt = new Date();
     await referral.save();
 
-    // Send push and in-app notification to Referrer Vendor
+    // Send push and in-app notification to Referrer Worker
     try {
       await createNotification({
         vendorId: referrer._id,
@@ -162,7 +162,7 @@ exports.rejectReferral = async (req, res) => {
     const { id } = req.params;
     const { reason } = req.body;
 
-    const referral = await VendorReferral.findById(id);
+    const referral = await WorkerReferral.findById(id);
     if (!referral) {
       return res.status(404).json({ success: false, message: 'Referral record not found' });
     }

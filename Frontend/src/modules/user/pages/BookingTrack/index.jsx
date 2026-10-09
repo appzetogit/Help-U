@@ -229,7 +229,7 @@ const BookingTrack = () => {
             if (provider.location && provider.location.lat && provider.location.lng) {
               setCurrentLocation({ lat: parseFloat(provider.location.lat), lng: parseFloat(provider.location.lng) });
             } else if (response.data.vendorId && provider.address && provider.address.lat && provider.address.lng) {
-              // Fallback to vendor address
+              // Fallback to worker address
               setCurrentLocation({ lat: parseFloat(provider.address.lat), lng: parseFloat(provider.address.lng) });
             } else {
               // Reset if no location found to avoid wrong location display
@@ -615,7 +615,7 @@ const BookingTrack = () => {
 
   if (!isLoaded || loading || !booking) return <LogoLoader />;
 
-  // Determine active provider based on priority: Assigned -> Vendor
+  // Determine active provider based on priority: Assigned -> Worker
   const provider = booking?.assignedTo || booking?.vendorId || {};
 
   return (
@@ -839,7 +839,7 @@ const BookingTrack = () => {
           </div>
         )}
 
-        {/* Waiting for Vendor to initiate Payment */}
+        {/* Waiting for Worker to initiate Payment */}
         {!booking?.customerConfirmationOTP && booking?.status?.toLowerCase() === 'work_done' && !booking?.cashCollected && (
           <div className="bg-white rounded-2xl p-4 shadow-lg border border-teal-100 mb-4 flex items-center gap-4 relative overflow-hidden">
             <div className="absolute top-0 right-0 w-20 h-20 bg-teal-50 rounded-full -translate-y-10 translate-x-10 blur-2xl"></div>

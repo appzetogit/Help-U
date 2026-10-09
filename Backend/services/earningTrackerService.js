@@ -1,5 +1,5 @@
 const PlatformEarning = require('../models/PlatformEarning');
-const Vendor = require('../models/Vendor');
+const Worker = require('../models/Worker');
 
 /**
  * Utility to track aggregated daily platform earnings to prevent heavy querying
@@ -46,7 +46,7 @@ const recordBookingEarning = async ({
 };
 
 /**
- * Records an approved settlement (vendor paid platform)
+ * Records an approved settlement (worker paid platform)
  */
 const recordSettlement = async (date, amount) => {
   try {
@@ -65,7 +65,7 @@ const recordSettlement = async (date, amount) => {
 };
 
 /**
- * Records an approved withdrawal (platform paid vendor)
+ * Records an approved withdrawal (platform paid worker)
  */
 const recordWithdrawal = async (date, amount) => {
   try {
@@ -84,17 +84,17 @@ const recordWithdrawal = async (date, amount) => {
 };
 
 /**
- * Updates the 'snapshot' metrics for pending vendor payouts and settlements
- * Reads directly from vendor wallet balances to remain perfectly accurate
+ * Updates the 'snapshot' metrics for pending worker payouts and settlements
+ * Reads directly from worker wallet balances to remain perfectly accurate
  */
 const updatePendingSnapshots = async (dateStr) => {
   try {
-    const vendors = await Vendor.find({}, 'wallet').lean();
+    const workers = await Worker.find({}, 'wallet').lean();
 
-    let totalPendingSettlement = 0; // Negative balances (Vendor owes us)
-    let totalPendingAmountToVendors = 0; // Positive balances (We owe Vendor)
+    let totalPendingSettlement = 0; // Negative balances (Worker owes us)
+    let totalPendingAmountToVendors = 0; // Positive balances (We owe Worker)
 
-    vendors.forEach(v => {
+    workers.forEach(v => {
       const earnings = v.wallet?.earnings || 0;
       const dues = v.wallet?.dues || 0;
       const net = earnings - dues;

@@ -2,10 +2,10 @@
 
 ## Why Redis?
 Redis provides high-performance caching for:
-- **Online vendor tracking** - Fast lookup of who's online
+- **Online worker tracking** - Fast lookup of who's online
 - **Location caching** - Avoid DB hits for geo queries
 - **Session management** - Faster auth token validation
-- **Rate limiting** - Per-vendor request throttling
+- **Rate limiting** - Per-worker request throttling
 
 ## Installation Steps
 
@@ -97,8 +97,8 @@ const initRedis = () => {
   }
 };
 
-// Cache vendor online status
-const setVendorOnline = async (vendorId, isOnline) => {
+// Cache worker online status
+const setWorkerOnline = async (vendorId, isOnline) => {
   if (!redis) return;
   if (isOnline) {
     await redis.sadd('vendors:online', vendorId);
@@ -107,18 +107,18 @@ const setVendorOnline = async (vendorId, isOnline) => {
   }
 };
 
-const getOnlineVendors = async () => {
+const getOnlineWorkers = async () => {
   if (!redis) return [];
   return redis.smembers('vendors:online');
 };
 
-// Cache vendor location (for fast geo queries)
-const setVendorLocation = async (vendorId, lat, lng) => {
+// Cache worker location (for fast geo queries)
+const setWorkerLocation = async (vendorId, lat, lng) => {
   if (!redis) return;
   await redis.geoadd('vendors:locations', lng, lat, vendorId);
 };
 
-const getNearbyVendors = async (lat, lng, radiusKm = 10) => {
+const getNearbyWorkers = async (lat, lng, radiusKm = 10) => {
   if (!redis) return [];
   return redis.georadius('vendors:locations', lng, lat, radiusKm, 'km', 'WITHDIST', 'ASC');
 };
@@ -126,10 +126,10 @@ const getNearbyVendors = async (lat, lng, radiusKm = 10) => {
 module.exports = {
   initRedis,
   getRedis: () => redis,
-  setVendorOnline,
-  getOnlineVendors,
-  setVendorLocation,
-  getNearbyVendors
+  setWorkerOnline,
+  getOnlineWorkers,
+  setWorkerLocation,
+  getNearbyWorkers
 };
 ```
 
@@ -142,10 +142,10 @@ module.exports = {
 ## When to Implement
 
 Redis is a **Phase 4 (Future)** optimization. Current MongoDB implementation works fine for:
-- Up to 1000 vendors
+- Up to 1000 workers
 - Up to 100 concurrent bookings
 
 Consider Redis when you see:
-- Slow vendor search (>500ms)
+- Slow worker search (>500ms)
 - High database CPU usage
 - Need for real-time online status at scale

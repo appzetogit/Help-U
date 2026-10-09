@@ -21,13 +21,13 @@ export const adminTransactionService = {
     }
   },
 
-  // Settlement / Vendor endpoints
-  getVendorBalances: async (params) => {
+  // Settlement / Worker endpoints
+  getWorkerBalances: async (params) => {
     try {
-      const response = await api.get('/admin/settlements/vendors', { params });
+      const response = await api.get('/admin/settlements/workers', { params });
       return response.data;
     } catch (error) {
-      console.error('Error fetching vendor balances:', error);
+      console.error('Error fetching worker balances:', error);
       throw error;
     }
   },

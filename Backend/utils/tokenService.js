@@ -35,12 +35,21 @@ const generateTokenPair = (payload) => {
 };
 
 /**
+ * Tokens issued before the vendor -> worker rename carry role 'VENDOR'.
+ * Treat them as 'WORKER' so existing worker sessions stay logged in.
+ */
+const normalizeLegacyRole = (decoded) => {
+  if (decoded && decoded.role === 'VENDOR') decoded.role = 'WORKER';
+  return decoded;
+};
+
+/**
  * Verify access token
  * @param {string} token - JWT token
  * @returns {Object} - Decoded token
  */
 const verifyAccessToken = (token) => {
-  return jwt.verify(token, process.env.JWT_SECRET);
+  return normalizeLegacyRole(jwt.verify(token, process.env.JWT_SECRET));
 };
 
 /**
@@ -49,7 +58,7 @@ const verifyAccessToken = (token) => {
  * @returns {Object} - Decoded token
  */
 const verifyRefreshToken = (token) => {
-  return jwt.verify(token, process.env.JWT_REFRESH_SECRET);
+  return normalizeLegacyRole(jwt.verify(token, process.env.JWT_REFRESH_SECRET));
 };
 
 module.exports = {

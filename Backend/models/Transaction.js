@@ -8,7 +8,7 @@ const transactionSchema = new mongoose.Schema({
   },
   vendorId: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'Vendor',
+    ref: 'Worker',
     default: null
   },
   bookingId: {

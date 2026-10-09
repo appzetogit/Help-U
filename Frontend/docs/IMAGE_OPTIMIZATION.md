@@ -122,11 +122,11 @@ import LazyImage from '../../../components/common/LazyImage';
 
 ### 3. Use Placeholders Matching Brand Colors
 ```javascript
-import { vendorTheme } from '../../../theme';
+import { workerTheme } from '../../../theme';
 
 <LazyImage 
-  src="/vendor-photo.jpg"
-  placeholder={vendorTheme.brand.teal + '20'} // 20% opacity
+  src="/worker-photo.jpg"
+  placeholder={workerTheme.brand.teal + '20'} // 20% opacity
 />
 ```
 
@@ -146,7 +146,7 @@ For above-the-fold hero images, skip lazy loading:
 
 - [ ] Replace `<img>` in Dashboard cards
 - [ ] Replace `<img>` in Profile photos
-- [ ] Replace `<img>` in Worker/Vendor lists
+- [ ] Replace `<img>` in Worker/Worker lists
 - [ ] Replace `<img>` in Job/Booking cards
 - [ ] Replace `<img>` in Category thumbnails
 - [ ] Keep eager loading for logo/hero images

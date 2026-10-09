@@ -25,13 +25,13 @@ const settingsSchema = new mongoose.Schema({
   },
   servicePayoutPercentage: {
     type: Number,
-    default: 90, // Vendor gets 90% of service base price
+    default: 90, // Worker gets 90% of service base price
     min: 0,
     max: 100
   },
   partsPayoutPercentage: {
     type: Number,
-    default: 100, // Vendor gets 100% of parts base price
+    default: 100, // Worker gets 100% of parts base price
     min: 0,
     max: 100
   },
@@ -178,14 +178,14 @@ const settingsSchema = new mongoose.Schema({
     default: true
   },
 
-  // Vendor Referral Program Settings
+  // Worker Referral Program Settings
   vendorReferralEnabled: {
     type: Boolean,
     default: true
   },
   vendorReferralReward: {
     type: Number,
-    default: 100, // Reward amount in INR credited to referrer vendor wallet
+    default: 100, // Reward amount in INR credited to referrer worker wallet
     min: 0
   },
   vendorReferralCriteria: {
@@ -200,7 +200,7 @@ const settingsSchema = new mongoose.Schema({
   // one of these fields never changes how a running deployment works.
   // ==========================================
 
-  // When ON, the user and vendor apps show a maintenance screen.
+  // When ON, the user and worker apps show a maintenance screen.
   // The admin panel stays reachable so the toggle can be turned back off.
   isUnderMaintenance: {
     type: Boolean,
@@ -223,7 +223,7 @@ const settingsSchema = new mongoose.Schema({
     default: true
   },
 
-  // When OFF, new vendor sign-ups are refused. Existing vendors are unaffected.
+  // When OFF, new worker sign-ups are refused. Existing workers are unaffected.
   isVendorRegistrationEnabled: {
     type: Boolean,
     default: true

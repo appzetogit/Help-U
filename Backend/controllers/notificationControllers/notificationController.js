@@ -1,6 +1,6 @@
 const Notification = require('../../models/Notification');
 const { validationResult } = require('express-validator');
-const { sendNotificationToUser, sendNotificationToVendor } = require('../../services/firebaseAdmin');
+const { sendNotificationToUser, sendNotificationToWorker } = require('../../services/firebaseAdmin');
 
 /**
  * Create notification (internal use)
@@ -132,7 +132,7 @@ const createNotification = async ({
       // Send to target
       try {
         if (userId) await sendNotificationToUser(userId, payload);
-        if (vendorId) await sendNotificationToVendor(vendorId, payload);
+        if (vendorId) await sendNotificationToWorker(vendorId, payload);
         if (adminId) {
           const { sendNotificationToAdmin } = require('../../services/firebaseAdmin');
           await sendNotificationToAdmin(adminId, payload);
@@ -203,9 +203,9 @@ const getUserNotifications = async (req, res) => {
 };
 
 /**
- * Get vendor notifications
+ * Get worker notifications
  */
-const getVendorNotifications = async (req, res) => {
+const getWorkerNotifications = async (req, res) => {
   try {
     const vendorId = req.user.id;
     const { isRead, page = 1, limit = 20 } = req.query;
@@ -243,7 +243,7 @@ const getVendorNotifications = async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Get vendor notifications error:', error);
+    console.error('Get worker notifications error:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to fetch notifications. Please try again.'
@@ -312,7 +312,7 @@ const markAsRead = async (req, res) => {
     // Build query based on user role
     let query = { _id: id };
     if (userRole === 'USER') query.userId = userId;
-    else if (userRole === 'VENDOR') query.vendorId = userId;
+    else if (userRole === 'WORKER') query.vendorId = userId;
     else if (userRole === 'ADMIN') query.adminId = userId;
 
     const notification = await Notification.findOne(query);
@@ -353,7 +353,7 @@ const markAllAsRead = async (req, res) => {
     // Build query based on user role
     let query = { isRead: false };
     if (userRole === 'USER') query.userId = userId;
-    else if (userRole === 'VENDOR') query.vendorId = userId;
+    else if (userRole === 'WORKER') query.vendorId = userId;
     else if (userRole === 'ADMIN') query.adminId = userId;
 
     await Notification.updateMany(query, {
@@ -386,7 +386,7 @@ const deleteNotification = async (req, res) => {
     // Build query based on user role
     let query = { _id: id };
     if (userRole === 'USER') query.userId = userId;
-    else if (userRole === 'VENDOR') query.vendorId = userId;
+    else if (userRole === 'WORKER') query.vendorId = userId;
     else if (userRole === 'ADMIN') query.adminId = userId;
 
     const notification = await Notification.findOneAndDelete(query);
@@ -422,7 +422,7 @@ const deleteAllNotifications = async (req, res) => {
     // Build query based on user role to ensure they only delete their own notifications
     let query = {};
     if (userRole === 'USER' || userRole === 'user') query.userId = userId;
-    else if (userRole === 'VENDOR' || userRole === 'vendor') query.vendorId = userId;
+    else if (userRole === 'WORKER' || userRole === 'worker') query.vendorId = userId;
     else if (userRole === 'ADMIN' || userRole === 'admin' || userRole === 'super_admin') query.adminId = userId;
     else {
       console.log('Role mismatch in deleteAllNotifications:', userRole);
@@ -451,7 +451,7 @@ const deleteAllNotifications = async (req, res) => {
 module.exports = {
   createNotification,
   getUserNotifications,
-  getVendorNotifications,
+  getWorkerNotifications,
   getAdminNotifications,
   markAsRead,
   markAllAsRead,
