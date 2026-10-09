@@ -31,7 +31,7 @@ const dashboardService = {
   },
 
   /**
-   * Get user and vendor growth metrics
+   * Get user and worker growth metrics
    * @param {Object} params - days
    */
   getGrowthMetrics: async (params = {}) => {

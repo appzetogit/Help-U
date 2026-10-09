@@ -2,7 +2,7 @@ const mongoose = require('mongoose');
 
 /**
  * Notification Model
- * Stores notifications for users, vendors, and admins
+ * Stores notifications for users, workers, and admins
  */
 const notificationSchema = new mongoose.Schema({
   // Recipient Information
@@ -14,7 +14,7 @@ const notificationSchema = new mongoose.Schema({
   },
   vendorId: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'Vendor',
+    ref: 'Worker',
     default: null,
     index: true
   },
@@ -30,9 +30,9 @@ const notificationSchema = new mongoose.Schema({
     required: true,
     enum: [
       'booking_created',
-      'booking_request',      // New booking request to vendor
+      'booking_request',      // New booking request to worker
       'booking_requested',    // New booking created confirmation to user
-      'booking_accepted',     // Vendor accepted booking
+      'booking_accepted',     // Worker accepted booking
       'booking_confirmed',
       'booking_cancelled',
       'booking_completed',
@@ -42,7 +42,7 @@ const notificationSchema = new mongoose.Schema({
       'job_rejected',
       'job_cancelled',
       'work_done',
-      'work_completed',       // Added for vendor self completion
+      'work_completed',       // Added for worker self completion
       'vendor_reached',
       'journey_started',
       'visit_verified',

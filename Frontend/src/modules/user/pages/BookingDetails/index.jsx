@@ -140,7 +140,7 @@ const BookingDetails = () => {
   // Track if we've shown the payment modal this session to prevent re-opening on data refresh
 
 
-  // Handle Payment Modal Visibility - Auto-open on new payment request from vendor
+  // Handle Payment Modal Visibility - Auto-open on new payment request from worker
   useEffect(() => {
     if (!booking) return;
     
@@ -148,7 +148,7 @@ const BookingDetails = () => {
     const isAdvancePaid = booking.advancePayment?.status === 'paid';
     const hasAdvanceRequest = booking.advancePayment?.status === 'requested';
 
-    // Track the latest OTP to detect a fresh payment request from the vendor
+    // Track the latest OTP to detect a fresh payment request from the worker
     const lastSeenOtp = sessionStorage.getItem(`last_seen_otp_${booking._id}`);
     const hasNewOtpRequest = booking.customerConfirmationOTP && booking.customerConfirmationOTP !== lastSeenOtp;
     
@@ -541,7 +541,7 @@ const BookingDetails = () => {
   // Use bill.originalServiceBase if available, else booking.basePrice
   const originalBase = bill ? (bill.originalServiceBase || 0) : (parseFloat(booking.basePrice) || 0);
 
-  // Extra Services & Parts from vendor bill (if available)
+  // Extra Services & Parts from worker bill (if available)
   const allBillServices = bill?.services || [];
   const services = allBillServices.filter(s => !s.isOriginal);
   const originalServiceFromBill = allBillServices.find(s => s.isOriginal);
@@ -897,7 +897,7 @@ const BookingDetails = () => {
             </div>
           )}
 
-          {/* Waiting for Vendor to initiate Payment */}
+          {/* Waiting for Worker to initiate Payment */}
           {!booking.customerConfirmationOTP && ['work_done'].includes(booking.status?.toLowerCase()) && !booking.cashCollected && (
             <div className="bg-white rounded-3xl p-6 shadow-lg border border-teal-100 mb-6 flex items-center gap-4 relative overflow-hidden">
               <div className="absolute top-0 right-0 w-24 h-24 bg-teal-50 rounded-full -translate-y-12 translate-x-12 blur-2xl"></div>
@@ -929,7 +929,7 @@ const BookingDetails = () => {
                         {booking.status?.toLowerCase() === 'work_done' ? 'Finalizing Bill' : 'Plan Benefit Active'}
                       </h3>
                       <p className="text-xs font-medium text-emerald-100">
-                        {booking.status?.toLowerCase() === 'work_done' ? 'Vendor preparing final bill' : 'Base service covered by your plan'}
+                        {booking.status?.toLowerCase() === 'work_done' ? 'Worker preparing final bill' : 'Base service covered by your plan'}
                       </p>
                     </div>
                   </div>
@@ -940,14 +940,14 @@ const BookingDetails = () => {
                       <span className="font-bold text-white">Base Service Covered</span>
                     </div>
                     <p className="text-sm text-emerald-100 leading-relaxed">
-                      Your base service fee is covered by your membership plan. {booking.status?.toLowerCase() === 'work_done' ? 'The vendor is preparing the final bill for any additional charges.' : 'You may only need to pay for extra parts or services.'}
+                      Your base service fee is covered by your membership plan. {booking.status?.toLowerCase() === 'work_done' ? 'The worker is preparing the final bill for any additional charges.' : 'You may only need to pay for extra parts or services.'}
                     </p>
                   </div>
 
                   {booking.status?.toLowerCase() === 'work_done' && (
                     <div className="mt-4 flex items-center justify-center gap-2 text-white/80">
                       <div className="w-2 h-2 bg-white rounded-full animate-pulse"></div>
-                      <span className="text-xs font-medium">Waiting for vendor to finalize...</span>
+                      <span className="text-xs font-medium">Waiting for worker to finalize...</span>
                     </div>
                   )}
                 </div>

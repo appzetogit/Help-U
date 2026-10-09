@@ -2,7 +2,7 @@ const mongoose = require('mongoose');
 
 /**
  * BookingRequest Model
- * Tracks individual vendor alerts for bookings
+ * Tracks individual worker alerts for bookings
  * Enables retry logic, delivery confirmation, and analytics
  */
 const bookingRequestSchema = new mongoose.Schema({
@@ -14,7 +14,7 @@ const bookingRequestSchema = new mongoose.Schema({
   },
   vendorId: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'Vendor',
+    ref: 'Worker',
     required: true,
     index: true
   },

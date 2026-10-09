@@ -11,10 +11,10 @@ const adminReportService = {
     }
   },
 
-  // Get Vendor Report
-  getVendorReport: async (params) => {
+  // Get Worker Report
+  getWorkerReport: async (params) => {
     try {
-      const response = await api.get('/admin/reports/vendors', { params });
+      const response = await api.get('/admin/reports/workers', { params });
       return response.data;
     } catch (error) {
       throw error.response?.data || { message: 'Failed to fetch worker report' };

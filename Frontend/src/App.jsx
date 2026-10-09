@@ -20,8 +20,8 @@ function App() {
       // console.log('📬 Notification received:', payload);
 
       // Dispatch update events for listening components to refresh UI
-      window.dispatchEvent(new Event('vendorJobsUpdated'));
-      window.dispatchEvent(new Event('vendorStatsUpdated'));
+      window.dispatchEvent(new Event('workerJobsUpdated'));
+      window.dispatchEvent(new Event('workerStatsUpdated'));
       window.dispatchEvent(new Event('userBookingsUpdated'));
 
       // Also dispatch generic one if needed

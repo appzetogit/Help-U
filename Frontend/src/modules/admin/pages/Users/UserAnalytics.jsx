@@ -39,7 +39,7 @@ const UserAnalytics = () => {
   const fetchData = async () => {
     try {
       setLoading(true);
-      // Reusing vendor report endpoint for now if user report isn't specific, 
+      // Reusing worker report endpoint for now if user report isn't specific, 
       // but ideally we should have getCustomerReport
       const res = await adminReportService.getCustomerReport();
       if (res.success) {

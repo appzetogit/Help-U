@@ -1,8 +1,8 @@
 const Transaction = require('../../models/Transaction');
 const Booking = require('../../models/Booking');
-const VendorBill = require('../../models/VendorBill');
+const WorkerBill = require('../../models/WorkerBill');
 const User = require('../../models/User');
-const Vendor = require('../../models/Vendor');
+const Worker = require('../../models/Worker');
 const PlatformEarning = require('../../models/PlatformEarning');
 
 /**
@@ -24,15 +24,15 @@ const getAllTransactions = async (req, res) => {
       // Search filter
       if (search) {
         const searchRegex = new RegExp(search, 'i');
-        const [users, vendors] = await Promise.all([
+        const [users, workers] = await Promise.all([
           User.find({ $or: [{ name: searchRegex }, { email: searchRegex }] }).select('_id'),
-          Vendor.find({ $or: [{ name: searchRegex }, { email: searchRegex }] }).select('_id'),
+          Worker.find({ $or: [{ name: searchRegex }, { email: searchRegex }] }).select('_id'),
         ]);
 
         bookingQuery.$or = [
           { bookingNumber: searchRegex },
           { userId: { $in: users.map(u => u._id) } },
-          { vendorId: { $in: vendors.map(v => v._id) } }
+          { vendorId: { $in: workers.map(v => v._id) } }
         ];
       }
 
@@ -55,19 +55,19 @@ const getAllTransactions = async (req, res) => {
       let virtualTransactions = [];
 
       bookings.forEach(booking => {
-        // We'll look up VendorBill data lazily below
+        // We'll look up WorkerBill data lazily below
       });
 
-      // Fetch VendorBills for these bookings
+      // Fetch WorkerBills for these bookings
       const bookingIds = bookings.map(b => b._id);
-      const bills = await VendorBill.find({ bookingId: { $in: bookingIds }, status: 'paid' });
+      const bills = await WorkerBill.find({ bookingId: { $in: bookingIds }, status: 'paid' });
       const billMap = {};
       bills.forEach(b => { billMap[b.bookingId.toString()] = b; });
 
       bookings.forEach(booking => {
         const bill = billMap[booking._id.toString()];
 
-        // 1. Company Revenue (from VendorBill)
+        // 1. Company Revenue (from WorkerBill)
         if (shouldInclude('commission') && bill && bill.companyRevenue > 0) {
           virtualTransactions.push({
             _id: `${booking._id}_comm`,
@@ -84,7 +84,7 @@ const getAllTransactions = async (req, res) => {
           });
         }
 
-        // 2. GST (from VendorBill)
+        // 2. GST (from WorkerBill)
         if (shouldInclude('gst') && bill && bill.totalGST > 0) {
           virtualTransactions.push({
             _id: `${booking._id}_gst`,
@@ -128,7 +128,7 @@ const getAllTransactions = async (req, res) => {
 
     }
 
-    // --- STANDARD LOGIC FOR OTHERS (User, Vendor, All) ---
+    // --- STANDARD LOGIC FOR OTHERS (User, Worker, All) ---
     const skip = (parseInt(page) - 1) * parseInt(limit);
     let query = {};
 
@@ -150,24 +150,24 @@ const getAllTransactions = async (req, res) => {
           { type: 'cash_collected' },
           { type: 'payment' }
         ];
-      } else if (entity === 'vendor') {
+      } else if (entity === 'worker') {
         query.vendorId = { $ne: null };
       }
     }
 
-    // Apply search filter (Transaction ID, Order ID, or Customer/Vendor Name/Email)
+    // Apply search filter (Transaction ID, Order ID, or Customer/Worker Name/Email)
     if (search) {
       const searchRegex = new RegExp(search, 'i');
 
-      // We need to find matching users, vendors and bookings first
-      const [users, vendors, bookings] = await Promise.all([
+      // We need to find matching users, workers and bookings first
+      const [users, workers, bookings] = await Promise.all([
         User.find({ $or: [{ name: searchRegex }, { email: searchRegex }] }).select('_id'),
-        Vendor.find({ $or: [{ name: searchRegex }, { email: searchRegex }] }).select('_id'),
+        Worker.find({ $or: [{ name: searchRegex }, { email: searchRegex }] }).select('_id'),
         Booking.find({ bookingNumber: searchRegex }).select('_id')
       ]);
 
       const userIds = users.map(u => u._id);
-      const vendorIds = vendors.map(v => v._id);
+      const workerIds = workers.map(v => v._id);
       const bookingIds = bookings.map(b => b._id);
 
       // Find bookings where the USER matches the search (for indirect transactions like cash_collected)
@@ -177,7 +177,7 @@ const getAllTransactions = async (req, res) => {
       query.$or = [
         { referenceId: searchRegex },
         { userId: { $in: userIds } },
-        { vendorId: { $in: vendorIds } },
+        { vendorId: { $in: workerIds } },
         { bookingId: { $in: allBookingIds } }
       ];
 
@@ -239,12 +239,12 @@ const getTransactionStats = async (req, res) => {
             totalRevenue: { $sum: '$totalRevenue' },
             totalCommission: { $sum: '$platformCommission' },
             totalGST: { $sum: '$totalGST' },
-            totalVendorEarnings: { $sum: '$vendorEarnings' }
+            totalWorkerEarnings: { $sum: '$vendorEarnings' }
           }
         }
       ]);
 
-      const data = stats[0] || { totalRevenue: 0, totalCommission: 0, totalGST: 0, totalVendorEarnings: 0 };
+      const data = stats[0] || { totalRevenue: 0, totalCommission: 0, totalGST: 0, totalWorkerEarnings: 0 };
 
       return res.status(200).json({
         success: true,
@@ -252,7 +252,7 @@ const getTransactionStats = async (req, res) => {
           totalRevenue: data.totalRevenue,
           totalCommission: data.totalCommission,
           totalGST: data.totalGST,
-          totalVendorEarnings: data.totalVendorEarnings,
+          totalWorkerEarnings: data.totalWorkerEarnings,
           netRevenue: data.totalCommission
         }
       });
@@ -267,7 +267,7 @@ const getTransactionStats = async (req, res) => {
     // Apply entity filter
     if (entity) {
       if (entity === 'user') matchQuery.userId = { $ne: null };
-      if (entity === 'vendor') matchQuery.vendorId = { $ne: null };
+      if (entity === 'worker') matchQuery.vendorId = { $ne: null };
     }
 
     // We count 'completed' transactions for revenue

@@ -28,16 +28,12 @@ const iconMap = {
   Dashboard: FiHome,
   Users: FiUsers,
   Workers: FiBriefcase,
-  Vendors: FiBriefcase,
   "Worker Referrals": FiGift,
-  "Vendor Referrals": FiGift,
   Referrals: FiGift,
   Bookings: FiShoppingBag,
   "User Catalog": FiGrid,
   "Worker Services": FiGrid,
-  "Vendor Services": FiGrid,
   "Worker Parts": FiPackage,
-  "Vendor Parts": FiPackage,
   Payments: FiDollarSign,
   Reports: FiFileText,
   Notifications: FiBell,
@@ -65,18 +61,6 @@ const getChildRoute = (parentRoute, childName) => {
       "Worker Analytics": "/admin/workers/analytics",
       "Worker Payments": "/admin/workers/payments",
     },
-    "/admin/vendors": {
-      "All Vendors": "/admin/workers/all",
-      "Vendor Bookings": "/admin/workers/bookings",
-      "Vendor Referrals": "/admin/workers/referrals",
-      "Vendor Analytics": "/admin/workers/analytics",
-      "Vendor Payments": "/admin/workers/payments",
-      "All Workers": "/admin/workers/all",
-      "Worker Bookings": "/admin/workers/bookings",
-      "Worker Referrals": "/admin/workers/referrals",
-      "Worker Analytics": "/admin/workers/analytics",
-      "Worker Payments": "/admin/workers/payments",
-    },
     "/admin/bookings": {
       "All Bookings": "/admin/bookings",
       "Booking Tracking": "/admin/bookings/tracking",
@@ -92,15 +76,13 @@ const getChildRoute = (parentRoute, childName) => {
       "Payment Overview": "/admin/payments/overview",
       "User Payments": "/admin/payments/users",
       "Worker Payments": "/admin/payments/workers",
-      "Vendor Payments": "/admin/payments/workers",
       "Admin Revenue": "/admin/payments/revenue",
       "Payment Reports": "/admin/payments/reports",
     },
     "/admin/reports": {
       "Revenue Report": "/admin/reports/revenue",
       "Booking Report": "/admin/reports/bookings",
-      "Worker Report": "/admin/reports/vendors",
-      "Vendor Report": "/admin/reports/vendors",
+      "Worker Report": "/admin/reports/workers",
       "Payment Report": "/admin/payments/reports",
     },
     "/admin/notifications": {
@@ -117,7 +99,6 @@ const getChildRoute = (parentRoute, childName) => {
       "Pending": "/admin/settlements/pending",
       "Withdrawals": "/admin/settlements/withdrawals",
       "Workers with Due": "/admin/settlements/workers",
-      "Vendors with Due": "/admin/settlements/workers",
       "History": "/admin/settlements/history",
     },
   };
@@ -133,7 +114,7 @@ const AdminSidebar = ({ isOpen, onClose }) => {
   const [adminUser, setAdminUser] = useState({ name: 'Admin', email: '', role: 'admin' });
   const [counts, setCounts] = useState({
     bookings: 0,
-    vendors: 0,
+    workers: 0,
     withdrawals: 0,
     pendingSettlements: 0,
     scraps: 0
@@ -171,7 +152,7 @@ const AdminSidebar = ({ isOpen, onClose }) => {
           const stats = response.data.stats;
           setCounts({
             bookings: stats.pendingBookings || 0,
-            vendors: stats.pendingVendors || 0,
+            workers: stats.pendingWorkers || 0,
             withdrawals: stats.pendingWithdrawals || 0,
             pendingSettlements: stats.pendingSettlements || 0,
             scraps: stats.pendingScraps || 0
@@ -208,11 +189,11 @@ const AdminSidebar = ({ isOpen, onClose }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.pathname]); // Remove onClose to prevent re-triggering when parent re-renders
 
-  const isVendorCatalogSubroute = (pathname) =>
+  const isWorkerCatalogSubroute = (pathname) =>
     pathname.startsWith("/admin/user-categories/worker-services") ||
-    pathname.startsWith("/admin/user-categories/vendor-services") ||
+    pathname.startsWith("/admin/user-categories/worker-services") ||
     pathname.startsWith("/admin/user-categories/worker-parts") ||
-    pathname.startsWith("/admin/user-categories/vendor-parts");
+    pathname.startsWith("/admin/user-categories/worker-parts");
 
   // Auto-expand menu items when their route is active
   useEffect(() => {
@@ -220,7 +201,7 @@ const AdminSidebar = ({ isOpen, onClose }) => {
       if (item.route === "/admin/dashboard") {
         return location.pathname === "/admin/dashboard";
       }
-      if (item.route === "/admin/user-categories" && isVendorCatalogSubroute(location.pathname)) {
+      if (item.route === "/admin/user-categories" && isWorkerCatalogSubroute(location.pathname)) {
         return false;
       }
       const isChildRoute =
@@ -246,9 +227,9 @@ const AdminSidebar = ({ isOpen, onClose }) => {
       return location.pathname === "/admin/dashboard";
     }
 
-    // Special case for User Catalog to avoid overlap with Worker/Vendor Services/Parts
+    // Special case for User Catalog to avoid overlap with Worker/Worker Services/Parts
     if (route === "/admin/user-categories") {
-      if (isVendorCatalogSubroute(location.pathname)) {
+      if (isWorkerCatalogSubroute(location.pathname)) {
         return false;
       }
     }
@@ -325,9 +306,9 @@ const AdminSidebar = ({ isOpen, onClose }) => {
               {counts.bookings > 99 ? '99+' : counts.bookings}
             </span>
           )}
-          {(item.title === "Workers" || item.title === "Vendors") && counts.vendors > 0 && (
+          {item.title === "Workers" && counts.workers > 0 && (
             <span className="bg-red-500 text-white text-[10px] font-black px-2 py-0.5 rounded-full shadow-sm animate-pulse mr-2">
-              {counts.vendors > 99 ? '99+' : counts.vendors}
+              {counts.workers > 99 ? '99+' : counts.workers}
             </span>
           )}
           {item.title === "Settlements" && (counts.withdrawals + counts.pendingSettlements) > 0 && (

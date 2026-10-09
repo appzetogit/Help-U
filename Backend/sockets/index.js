@@ -44,18 +44,18 @@ const initializeSocket = (server) => {
     // Join user-specific room for notifications
     if (socket.userRole === 'USER') {
       socket.join(`user_${socket.userId.toString()}`);
-    } else if (socket.userRole === 'VENDOR') {
+    } else if (socket.userRole === 'WORKER') {
       socket.join(`vendor_${socket.userId.toString()}`);
-      // Update vendor online status
-      updateVendorOnlineStatus(socket.userId, true, socket.id);
+      // Update worker online status
+      updateWorkerOnlineStatus(socket.userId, true, socket.id);
     } else if (socket.userRole === 'ADMIN') {
       socket.join(`admin_${socket.userId.toString()}`);
     }
 
     // Explicit Room Join Events (Fallback/Frontend Initiated)
     socket.on('join_vendor_room', (vendorId) => {
-      // Security check: ensure the socket user actually IS this vendor
-      if (socket.userRole === 'VENDOR' && socket.userId.toString() === vendorId.toString()) {
+      // Security check: ensure the socket user actually IS this worker
+      if (socket.userRole === 'WORKER' && socket.userId.toString() === vendorId.toString()) {
         socket.join(`vendor_${vendorId.toString()}`);
         console.log(`Socket ${socket.id} explicitly joined room vendor_${vendorId}`);
       }
@@ -87,7 +87,7 @@ const initializeSocket = (server) => {
       }
     });
 
-    // Vendor acknowledges receiving booking alert
+    // Worker acknowledges receiving booking alert
     socket.on('booking_alert_received', async (data) => {
       try {
         const BookingRequest = require('../models/BookingRequest');
@@ -95,19 +95,19 @@ const initializeSocket = (server) => {
           { bookingId: data.bookingId, vendorId: socket.userId },
           { status: 'VIEWED', viewedAt: new Date(), socketDelivered: true }
         );
-        console.log(`[Socket] Vendor ${socket.userId} viewed booking ${data.bookingId}`);
+        console.log(`[Socket] Worker ${socket.userId} viewed booking ${data.bookingId}`);
       } catch (error) {
         console.error('[Socket] Error updating booking request:', error);
       }
     });
 
-    // Vendor sets availability
+    // Worker sets availability
     socket.on('set_availability', async (data) => {
       try {
-        const Vendor = require('../models/Vendor');
+        const Worker = require('../models/Worker');
 
-        if (socket.userRole === 'VENDOR') {
-          await Vendor.findByIdAndUpdate(socket.userId, {
+        if (socket.userRole === 'WORKER') {
+          await Worker.findByIdAndUpdate(socket.userId, {
             availability: data.status // 'AVAILABLE', 'BUSY', etc.
           });
         }
@@ -152,12 +152,12 @@ const initializeSocket = (server) => {
 
       // 2. Cache in Redis with TTL for disconnect recovery
       try {
-        const { setLiveLocation, setVendorLocation } = require('../services/redisService');
+        const { setLiveLocation, setWorkerLocation } = require('../services/redisService');
         await setLiveLocation(data.bookingId, locationPayload, 30); // 30 second TTL
 
-        // Also update vendor geo cache
-        if (socket.userRole === 'VENDOR') {
-          await setVendorLocation(socket.userId, lat, lng);
+        // Also update worker geo cache
+        if (socket.userRole === 'WORKER') {
+          await setWorkerLocation(socket.userId, lat, lng);
         }
       } catch (error) {
         console.error('[Socket] Error caching live location:', error);
@@ -165,7 +165,7 @@ const initializeSocket = (server) => {
 
       // 3. Save latest location to Database (for initial tracking load)
       try {
-        const Vendor = require('../models/Vendor');
+        const Worker = require('../models/Worker');
 
         const updateData = {
           location: {
@@ -180,8 +180,8 @@ const initializeSocket = (server) => {
           }
         };
 
-        if (socket.userRole === 'VENDOR') {
-          await Vendor.findByIdAndUpdate(socket.userId, updateData);
+        if (socket.userRole === 'WORKER') {
+          await Worker.findByIdAndUpdate(socket.userId, updateData);
         }
       } catch (error) {
         console.error('Error saving live location:', error);
@@ -191,8 +191,8 @@ const initializeSocket = (server) => {
     socket.on('disconnect', () => {
       console.log(`Socket disconnected: ${socket.id}`);
       // Update online status
-      if (socket.userRole === 'VENDOR') {
-        updateVendorOnlineStatus(socket.userId, false, null);
+      if (socket.userRole === 'WORKER') {
+        updateWorkerOnlineStatus(socket.userId, false, null);
       }
     });
   });
@@ -200,11 +200,11 @@ const initializeSocket = (server) => {
   console.log('Socket.io initialized successfully');
 };
 
-// Helper function to update vendor online status
-const updateVendorOnlineStatus = async (vendorId, isOnline, socketId) => {
+// Helper function to update worker online status
+const updateWorkerOnlineStatus = async (vendorId, isOnline, socketId) => {
   try {
-    const Vendor = require('../models/Vendor');
-    const { setVendorOnline, setVendorAvailability } = require('../services/redisService');
+    const Worker = require('../models/Worker');
+    const { setWorkerOnline, setWorkerAvailability } = require('../services/redisService');
 
     const updateData = {
       isOnline,
@@ -219,15 +219,15 @@ const updateVendorOnlineStatus = async (vendorId, isOnline, socketId) => {
     }
 
     // Update MongoDB
-    await Vendor.findByIdAndUpdate(vendorId, updateData);
+    await Worker.findByIdAndUpdate(vendorId, updateData);
 
     // Update Redis cache (fast lookup)
-    await setVendorOnline(vendorId, isOnline);
-    await setVendorAvailability(vendorId, updateData.availability);
+    await setWorkerOnline(vendorId, isOnline);
+    await setWorkerAvailability(vendorId, updateData.availability);
 
-    console.log(`[Socket] Vendor ${vendorId} is now ${isOnline ? 'ONLINE' : 'OFFLINE'}`);
+    console.log(`[Socket] Worker ${vendorId} is now ${isOnline ? 'ONLINE' : 'OFFLINE'}`);
   } catch (error) {
-    console.error('[Socket] Error updating vendor online status:', error);
+    console.error('[Socket] Error updating worker online status:', error);
   }
 };
 

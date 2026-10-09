@@ -1,7 +1,7 @@
 const Booking = require('../../models/Booking');
-const VendorBill = require('../../models/VendorBill');
+const WorkerBill = require('../../models/WorkerBill');
 const Settlement = require('../../models/Settlement');
-const Vendor = require('../../models/Vendor');
+const Worker = require('../../models/Worker');
 const User = require('../../models/User');
 const Settings = require('../../models/Settings');
 const PlatformEarning = require('../../models/PlatformEarning');
@@ -32,7 +32,7 @@ const getFinanceOverview = async (req, res) => {
           _id: null,
           totalTransactionValue: { $sum: '$totalRevenue' },
           totalPlatformRevenue: { $sum: '$platformCommission' },
-          totalVendorEarnings: { $sum: '$vendorEarnings' },
+          totalWorkerEarnings: { $sum: '$vendorEarnings' },
           totalTaxCollected: { $sum: '$totalGST' },
           totalTDSCollected: { $sum: '$totalTDS' },
           count: { $sum: '$totalBookings' },
@@ -45,7 +45,7 @@ const getFinanceOverview = async (req, res) => {
     let revenueStats = revenueDocs[0] || {
       totalTransactionValue: 0,
       totalPlatformRevenue: 0,
-      totalVendorEarnings: 0,
+      totalWorkerEarnings: 0,
       totalTaxCollected: 0,
       totalTDSCollected: 0,
       count: 0,
@@ -61,7 +61,7 @@ const getFinanceOverview = async (req, res) => {
     revenueStats.totalPendingSettlement = latestSnapshot?.totalPendingSettlement || 0;
     revenueStats.totalPendingPayout = latestSnapshot?.totalPendingAmountToVendors || 0;
 
-    // 2. Pending Settlements (What we owe vendors)
+    // 2. Pending Settlements (What we owe workers)
     const pendingSettlements = await Settlement.aggregate([
       {
         $match: {
@@ -159,9 +159,9 @@ const getPaymentTransactions = async (req, res) => {
 
     const total = await Booking.countDocuments(query);
 
-    // Fetch VendorBills for these bookings
+    // Fetch WorkerBills for these bookings
     const bookingIds = bookings.map(b => b._id);
-    const bills = await VendorBill.find({ bookingId: { $in: bookingIds } }).lean();
+    const bills = await WorkerBill.find({ bookingId: { $in: bookingIds } }).lean();
     const billMap = {};
     bills.forEach(b => { billMap[b.bookingId.toString()] = b; });
 
@@ -172,7 +172,7 @@ const getPaymentTransactions = async (req, res) => {
         bookingNumber: b.bookingNumber,
         service: b.serviceId?.title || 'N/A',
         customer: b.userId?.name || 'Guest',
-        vendor: b.vendorId?.businessName || 'Unassigned',
+        worker: b.vendorId?.businessName || 'Unassigned',
         amount: bill?.grandTotal || b.finalAmount || 0,
         platformFee: bill?.companyRevenue || (b.finalAmount ? b.finalAmount * 0.2 : 0),
         vendorEarnings: bill?.vendorTotalEarning || (b.finalAmount ? b.finalAmount * 0.8 : 0),
@@ -188,10 +188,10 @@ const getPaymentTransactions = async (req, res) => {
     const totalsResult = reportData.reduce((acc, row) => {
       acc.totalAmount += row.amount;
       acc.totalCommission += row.platformFee;
-      acc.totalVendorEarnings += row.vendorEarnings;
+      acc.totalWorkerEarnings += row.vendorEarnings;
       acc.totalTax += row.tax;
       return acc;
-    }, { totalAmount: 0, totalCommission: 0, totalVendorEarnings: 0, totalTax: 0 });
+    }, { totalAmount: 0, totalCommission: 0, totalWorkerEarnings: 0, totalTax: 0 });
 
     if (format === 'csv') {
       return sendCSV(res, reportData, 'payment_transactions');
@@ -248,9 +248,9 @@ const getGSTRReport = async (req, res) => {
       .sort({ completedAt: -1 })
       .lean();
 
-    // Get VendorBills for these bookings
+    // Get WorkerBills for these bookings
     const billBookingIds = bookings.map(b => b._id);
-    const gstBills = await VendorBill.find({ bookingId: { $in: billBookingIds } }).lean();
+    const gstBills = await WorkerBill.find({ bookingId: { $in: billBookingIds } }).lean();
     const gstBillMap = {};
     gstBills.forEach(b => { gstBillMap[b.bookingId.toString()] = b; });
 
@@ -258,7 +258,7 @@ const getGSTRReport = async (req, res) => {
     const reportData = bookings.map(b => {
       const bill = gstBillMap[b._id.toString()];
 
-      // Use VendorBill GST data if available, otherwise fallback
+      // Use WorkerBill GST data if available, otherwise fallback
       let taxAmount = bill?.totalGST || 0;
       let taxableValue = (bill?.totalServiceBase || 0) + (bill?.totalPartsBase || 0);
 
@@ -336,8 +336,8 @@ const getTDSReport = async (req, res) => {
       };
     }
 
-    // Group by Vendor for the period
-    const vendorStats = await Booking.aggregate([
+    // Group by Worker for the period
+    const workerStats = await Booking.aggregate([
       { $match: query },
       {
         $group: {
@@ -351,15 +351,15 @@ const getTDSReport = async (req, res) => {
           from: 'vendors',
           localField: '_id',
           foreignField: '_id',
-          as: 'vendor'
+          as: 'worker'
         }
       },
-      { $unwind: '$vendor' },
+      { $unwind: '$worker' },
       {
         $project: {
-          vendorName: '$vendor.businessName',
-          vendorPhone: '$vendor.phone',
-          panNumber: { $ifNull: ['$vendor.panNumber', 'Not Provided'] },
+          workerName: '$worker.businessName',
+          workerPhone: '$worker.phone',
+          panNumber: { $ifNull: ['$worker.panNumber', 'Not Provided'] },
           grossSales: 1,
           tdsRate: { $literal: tdsRate },
           tdsAmount: { $multiply: ['$grossSales', (tdsRate / 100)] }, // Use Admin Setting Rate
@@ -370,20 +370,20 @@ const getTDSReport = async (req, res) => {
     ]);
 
     // Summary
-    const summary = vendorStats.reduce((acc, row) => {
+    const summary = workerStats.reduce((acc, row) => {
       acc.totalGrossSales += row.grossSales;
       acc.totalTDS += row.tdsAmount;
-      acc.vendorCount++;
+      acc.workerCount++;
       return acc;
-    }, { totalGrossSales: 0, totalTDS: 0, vendorCount: 0 });
+    }, { totalGrossSales: 0, totalTDS: 0, workerCount: 0 });
 
     if (format === 'csv') {
-      return sendCSV(res, vendorStats, 'tds_report_admin');
+      return sendCSV(res, workerStats, 'tds_report_admin');
     }
 
     res.status(200).json({
       success: true,
-      data: vendorStats,
+      data: workerStats,
       summary
     });
 
@@ -395,7 +395,7 @@ const getTDSReport = async (req, res) => {
 
 /**
  * Get Cash Collected Report (formerly COD Reconciliation)
- * Track Cash Collected by Vendor vs Commission Owed
+ * Track Cash Collected by Worker vs Commission Owed
  */
 const getCODReport = async (req, res) => {
   try {
@@ -411,13 +411,13 @@ const getCODReport = async (req, res) => {
       };
     }
 
-    // Get all vendors (even if blocked/unapproved, as they might owe money)
-    const vendors = await Vendor.find({})
+    // Get all workers (even if blocked/unapproved, as they might owe money)
+    const workers = await Worker.find({})
       .select('businessName phone walletBalance')
       .lean();
 
-    // For each vendor, calculate their cash-related bookings
-    const reportData = await Promise.all(vendors.map(async (v) => {
+    // For each worker, calculate their cash-related bookings
+    const reportData = await Promise.all(workers.map(async (v) => {
       // Build match query
       const matchQuery = {
         vendorId: v._id,
@@ -444,8 +444,8 @@ const getCODReport = async (req, res) => {
         }
       ]);
 
-      // Get company revenue from VendorBills for these cash bookings
-      const vendorBillStats = await VendorBill.aggregate([
+      // Get company revenue from WorkerBills for these cash bookings
+      const workerBillStats = await WorkerBill.aggregate([
         { $match: { vendorId: v._id, status: 'paid' } },
         {
           $group: {
@@ -456,14 +456,14 @@ const getCODReport = async (req, res) => {
       ]);
 
       const cashData = cashBookings[0] || { totalCashCollected: 0, count: 0 };
-      const billData = vendorBillStats[0] || { platformCommission: 0 };
+      const billData = workerBillStats[0] || { platformCommission: 0 };
 
       // Outstanding dues = Commission they owe platform (if negative wallet, they owe)
       const outstandingDues = v.walletBalance < 0 ? Math.abs(v.walletBalance) : 0;
       const riskLevel = outstandingDues > 5000 ? 'HIGH' : (outstandingDues > 1000 ? 'MEDIUM' : 'LOW');
 
       return {
-        vendorName: v.businessName || 'Unknown',
+        workerName: v.businessName || 'Unknown',
         phone: v.phone,
         totalCashCollected: cashData.totalCashCollected,
         platformCommissionDue: billData.platformCommission,
@@ -474,7 +474,7 @@ const getCODReport = async (req, res) => {
       };
     }));
 
-    // Filter to show only vendors with cash dealings or outstanding dues
+    // Filter to show only workers with cash dealings or outstanding dues
     const filteredData = reportData.filter(r => r.totalCashCollected > 0 || r.outstandingDues > 0);
 
     // Sort by outstanding dues (highest first)
@@ -519,7 +519,7 @@ const getRevenueBreakdown = async (req, res) => {
       };
     }
 
-    // Revenue by Service Category — use VendorBill with lookup
+    // Revenue by Service Category — use WorkerBill with lookup
     const billDateFilter = {};
     if (startDate && endDate) {
       billDateFilter.paidAt = {
@@ -528,7 +528,7 @@ const getRevenueBreakdown = async (req, res) => {
       };
     }
 
-    const byService = await VendorBill.aggregate([
+    const byService = await WorkerBill.aggregate([
       {
         $match: {
           ...billDateFilter,
@@ -565,7 +565,7 @@ const getRevenueBreakdown = async (req, res) => {
     ]);
 
     // Revenue by Payment Method
-    const byPaymentMethod = await VendorBill.aggregate([
+    const byPaymentMethod = await WorkerBill.aggregate([
       {
         $match: {
           ...billDateFilter,
@@ -592,7 +592,7 @@ const getRevenueBreakdown = async (req, res) => {
     ]);
 
     // Revenue by City/State
-    const byLocation = await VendorBill.aggregate([
+    const byLocation = await WorkerBill.aggregate([
       {
         $match: {
           ...billDateFilter,

@@ -19,7 +19,7 @@ const createBookingValidation = [
   body('serviceId').isMongoId().withMessage('Valid service ID is required'),
   body('vendorId').optional().custom((value) => {
     if (value && !/^[0-9a-fA-F]{24}$/.test(value)) {
-      throw new Error('Valid vendor ID is required');
+      throw new Error('Valid worker ID is required');
     }
     return true;
   }),

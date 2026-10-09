@@ -1,7 +1,7 @@
 /**
  * Maintenance Mode Middleware
  *
- * When the isUnderMaintenance flag is on, user- and vendor-facing API routes
+ * When the isUnderMaintenance flag is on, user- and worker-facing API routes
  * return 503 so the apps can show their maintenance screen. Admin routes, auth
  * and the health check stay open, otherwise an admin could not sign in to turn
  * maintenance back off.

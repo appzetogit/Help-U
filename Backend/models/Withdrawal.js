@@ -3,7 +3,7 @@ const mongoose = require('mongoose');
 const withdrawalSchema = new mongoose.Schema({
   vendorId: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'Vendor',
+    ref: 'Worker',
     required: true
   },
   amount: {
@@ -63,7 +63,7 @@ const withdrawalSchema = new mongoose.Schema({
     default: 0
   },
   netAmount: {
-    type: Number, // Amount actually transferred to vendor (amount - tdsAmount - platformFeeAmount)
+    type: Number, // Amount actually transferred to worker (amount - tdsAmount - platformFeeAmount)
     default: 0
   }
 }, {

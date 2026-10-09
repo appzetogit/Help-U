@@ -1,6 +1,6 @@
 const { verifyAccessToken } = require('../utils/tokenService');
 const User = require('../models/User');
-const Vendor = require('../models/Vendor');
+const Worker = require('../models/Worker');
 const Admin = require('../models/Admin');
 const { USER_ROLES } = require('../utils/constants');
 
@@ -48,8 +48,8 @@ const authenticate = async (req, res, next) => {
           return res.status(401).json({ success: false, message: 'Account logged in on another device. Please login again.' });
         }
         break;
-      case USER_ROLES.VENDOR:
-        user = await Vendor.findById(decoded.userId).select('-password').lean();
+      case USER_ROLES.WORKER:
+        user = await Worker.findById(decoded.userId).select('-password').lean();
         if (user && user.approvalStatus !== 'approved') {
           return res.status(403).json({
             success: false,

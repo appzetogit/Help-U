@@ -203,7 +203,7 @@ async function removeInvalidTokens(tokens) {
   try {
     console.log(`[FCM Cleanup] Removing ${tokens.length} invalid tokens...`);
     const User = require('../models/User');
-    const Vendor = require('../models/Vendor');
+    const Worker = require('../models/Worker');
 
     const updateQuery = {
       $pull: {
@@ -215,7 +215,7 @@ async function removeInvalidTokens(tokens) {
     // We run updates in parallel for all collections as a token might belong to any
     await Promise.all([
       User.updateMany({ $or: [{ fcmTokens: { $in: tokens } }, { fcmTokenMobile: { $in: tokens } }] }, updateQuery),
-      Vendor.updateMany({ $or: [{ fcmTokens: { $in: tokens } }, { fcmTokenMobile: { $in: tokens } }] }, updateQuery)
+      Worker.updateMany({ $or: [{ fcmTokens: { $in: tokens } }, { fcmTokenMobile: { $in: tokens } }] }, updateQuery)
     ]);
 
     console.log('[FCM Cleanup] ✅ Invalid tokens removed from database');
@@ -270,35 +270,35 @@ async function sendNotificationToUser(userId, payload, includeMobile = true) {
 }
 
 /**
- * Send notification to a specific vendor
- * @param {string} vendorId - Vendor's MongoDB _id
+ * Send notification to a specific worker
+ * @param {string} vendorId - Worker's MongoDB _id
  * @param {Object} payload - Notification payload
  * @param {boolean} includeMobile - Include mobile tokens (default: true)
  */
-async function sendNotificationToVendor(vendorId, payload, includeMobile = true) {
+async function sendNotificationToWorker(vendorId, payload, includeMobile = true) {
   try {
-    const Vendor = require('../models/Vendor');
-    const vendor = await Vendor.findById(vendorId);
+    const Worker = require('../models/Worker');
+    const worker = await Worker.findById(vendorId);
 
-    if (!vendor) {
-      console.log(`[FCM] ❌ Vendor not found for notification: ${vendorId}`);
+    if (!worker) {
+      console.log(`[FCM] ❌ Worker not found for notification: ${vendorId}`);
       return;
     }
 
     let tokens = [];
-    if (vendor.fcmTokens && vendor.fcmTokens.length > 0) {
-      tokens = [...tokens, ...vendor.fcmTokens];
+    if (worker.fcmTokens && worker.fcmTokens.length > 0) {
+      tokens = [...tokens, ...worker.fcmTokens];
     }
-    if (includeMobile && vendor.fcmTokenMobile && vendor.fcmTokenMobile.length > 0) {
-      tokens = [...tokens, ...vendor.fcmTokenMobile];
+    if (includeMobile && worker.fcmTokenMobile && worker.fcmTokenMobile.length > 0) {
+      tokens = [...tokens, ...worker.fcmTokenMobile];
     }
 
     if (tokens.length === 0) {
-      console.log(`[FCM] ⚠️ No FCM tokens found for vendor: ${vendorId}`);
+      console.log(`[FCM] ⚠️ No FCM tokens found for worker: ${vendorId}`);
       return;
     }
 
-    console.log(`[FCM] 📤 Sending notification to vendor ${vendor.businessName || vendor.name} (${vendorId}) on ${tokens.length} devices`);
+    console.log(`[FCM] 📤 Sending notification to worker ${worker.businessName || worker.name} (${vendorId}) on ${tokens.length} devices`);
 
     const finalPayload = {
       ...payload,
@@ -307,7 +307,7 @@ async function sendNotificationToVendor(vendorId, payload, includeMobile = true)
 
     await sendPushNotification(tokens, finalPayload);
   } catch (error) {
-    console.error(`[FCM] ❌ Error sending notification to vendor ${vendorId}:`, error);
+    console.error(`[FCM] ❌ Error sending notification to worker ${vendorId}:`, error);
   }
 }
 
@@ -361,6 +361,6 @@ async function sendNotificationToAdmin(adminId, payload, includeMobile = true) {
 module.exports = {
   sendPushNotification,
   sendNotificationToUser,
-  sendNotificationToVendor,
+  sendNotificationToWorker,
   sendNotificationToAdmin
 };
