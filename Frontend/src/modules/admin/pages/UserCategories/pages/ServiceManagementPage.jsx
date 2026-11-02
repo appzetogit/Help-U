@@ -108,6 +108,8 @@ const ServiceManagementPage = ({ selectedCity: propCity }) => {
   // ─── MODAL STATES ─────────────────────────────────────────────────────
   const [isWizardOpen, setIsWizardOpen] = useState(false);
   const [editingService, setEditingService] = useState(null);
+  // A new service can start with a category / sub-category already chosen (from the category rows, or the filters)
+  const [wizardPreset, setWizardPreset] = useState({ categoryId: "", subCategoryId: "" });
 
   const [depModal, setDepModal] = useState({
     isOpen: false,
@@ -211,10 +213,21 @@ const ServiceManagementPage = ({ selectedCity: propCity }) => {
   }, [propCity]);
 
   // Jump from a category row to what is inside it, with the target tab already filtered.
+  const openCreateService = (preset = {}) => {
+    setEditingService(null);
+    setWizardPreset({ categoryId: preset.categoryId || "", subCategoryId: preset.subCategoryId || "" });
+    setIsWizardOpen(true);
+  };
+
   const openFromCategory = (kind, category) => {
     const id = String(category.id || category._id);
     const rawParent = category.parentId;
     const parentId = rawParent ? String(typeof rawParent === "object" ? rawParent._id || rawParent.id : rawParent) : null;
+
+    if (kind === "addService") {
+      openCreateService({ categoryId: parentId || id, subCategoryId: parentId ? id : "" });
+      return;
+    }
 
     if (kind === "services") {
       const topId = parentId || id;
@@ -752,10 +765,10 @@ const ServiceManagementPage = ({ selectedCity: propCity }) => {
 
           <button
             type="button"
-            onClick={() => {
-              setEditingService(null);
-              setIsWizardOpen(true);
-            }}
+            onClick={() => openCreateService({
+              categoryId: selectedCategory !== "all" ? selectedCategory : "",
+              subCategoryId: selectedSubCategory !== "all" ? selectedSubCategory : ""
+            })}
             className="px-4 py-2.5 bg-[#2874F0] hover:bg-blue-600 text-white rounded-xl text-xs font-bold shadow-md shadow-blue-500/20 flex items-center gap-2 transition-all hover:scale-[1.02] active:scale-[0.98]"
           >
             <FiPlus className="w-4 h-4" />
@@ -800,7 +813,8 @@ const ServiceManagementPage = ({ selectedCity: propCity }) => {
           { id: "categories", label: "Categories", count: categories.length, Icon: FiLayers },
           { id: "subcategories", label: "Sub-categories", count: allSubCategories.length, Icon: FiGrid },
           { id: "brands", label: "Sections and brands", count: brands.length, Icon: FiTag },
-          { id: "services", label: "Services", count: services.length, Icon: FiBox },
+          // The same total as the cards above (this city, archived left out) - not the count after the filters below
+          { id: "services", label: "Services", count: healthData.totalServices ?? services.length, Icon: FiBox },
           { id: "draft-archive", label: "Draft and archive", Icon: FiArchive },
           { id: "audit-log", label: "Audit log", Icon: FiActivity },
         ].map(({ id, label, count, Icon: TabIcon }) => (
@@ -1149,6 +1163,17 @@ const ServiceManagementPage = ({ selectedCity: propCity }) => {
                     <p className="text-xs text-gray-400 mt-1">
                       Try clearing your search query or reset your category/status filters.
                     </p>
+                    <button
+                      type="button"
+                      onClick={() => openCreateService({
+                        categoryId: selectedCategory !== "all" ? selectedCategory : "",
+                        subCategoryId: selectedSubCategory !== "all" ? selectedSubCategory : ""
+                      })}
+                      className="mt-3 mr-2 px-4 py-2 bg-[#2874F0] hover:bg-blue-600 text-white rounded-lg text-xs font-bold inline-flex items-center gap-1.5"
+                    >
+                      <FiPlus className="w-3.5 h-3.5" />
+                      {selectedCategory !== "all" ? "Add a service in this category" : "Add a service"}
+                    </button>
                     <button
                       type="button"
                       onClick={() => {
@@ -1747,6 +1772,8 @@ const ServiceManagementPage = ({ selectedCity: propCity }) => {
           setEditingService(null);
         }}
         service={editingService}
+        presetCategoryId={wizardPreset.categoryId}
+        presetSubCategoryId={wizardPreset.subCategoryId}
         categories={categories}
         brands={brands}
         cities={cities}
@@ -1754,6 +1781,8 @@ const ServiceManagementPage = ({ selectedCity: propCity }) => {
         onSaved={() => {
           fetchServices();
           loadHealth();
+          // the Categories / Sub-categories tabs refresh their "what is inside" counts
+          window.dispatchEvent(new Event("adminUserAppCatalogUpdated"));
         }}
       />
 

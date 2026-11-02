@@ -409,6 +409,17 @@ const buildApp = () => {
       assert.deepStrictEqual(sub.body.services.map((s) => s.title), ['Fan Repair']);
     });
 
+    await it('archived categories stay out of the lists unless asked for', async () => {
+      const gone = await Category.create({ title: 'Archived Thing', slug: 'archived-thing-ct', status: 'deleted' });
+      const plain = (await request(server).get('/api/admin/categories?parentId=all').set(auth)).body.categories.map((c) => c.title);
+      assert.ok(!plain.includes('Archived Thing'), 'an archived category leaked into the normal list');
+      const archived = (await request(server).get('/api/admin/categories?parentId=all&status=deleted').set(auth)).body.categories.map((c) => c.title);
+      assert.ok(archived.includes('Archived Thing'));
+      const everything = (await request(server).get('/api/admin/categories?parentId=all&includeDeleted=true').set(auth)).body.categories.map((c) => c.title);
+      assert.ok(everything.includes('Archived Thing') && everything.includes('Electrician'));
+      await Category.deleteOne({ _id: gone._id });
+    });
+
     await it('archived services are not counted', async () => {
       const before = find(await withCounts(`&cityId=${indore._id}`), 'Electrician').counts.services.total;
       const svc = await UserService.findOne({ title: 'Indore Extra 3' });

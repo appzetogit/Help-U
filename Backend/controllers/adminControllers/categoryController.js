@@ -274,10 +274,14 @@ const getCategoryWorkers = async (req, res) => {
  */
 const getAllCategories = async (req, res) => {
   try {
-    const { status, showOnHome, isPopular, cityId, parentId } = req.query;
+    const { status, showOnHome, isPopular, cityId, parentId, includeDeleted } = req.query;
 
     const query = { ...parentIdFilter(parentId) };
+    // Archived ("deleted") categories only show when asked for (status=deleted, or includeDeleted=true for the
+    // archive tab and for resolving the name of a brand's archived category). Everywhere else - lists, pickers,
+    // the add-service wizard - they are out of the way, as archived services already are.
     if (status) query.status = status;
+    else if (includeDeleted !== 'true') query.status = { $ne: 'deleted' };
     if (showOnHome !== undefined) query.showOnHome = showOnHome === 'true';
     // A sub-category follows its parent's cities (see utils/cityScope.js)
     const cityFilter = await categoryCityFilter(cityId);

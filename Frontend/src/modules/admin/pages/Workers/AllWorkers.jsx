@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { FiCheck, FiX, FiEye, FiSearch, FiFilter, FiDownload, FiLoader, FiPower, FiTrash2 } from 'react-icons/fi';
 import { toast } from 'react-hot-toast';
@@ -21,6 +21,9 @@ const AllWorkers = () => {
   }, [urlParams]);
 
   const [selectedWorker, setSelectedWorker] = useState(null);
+  // ?worker=<id> (from a category's "workers" list) opens that worker's details straight away, once
+  const workerParam = urlParams.get('worker');
+  const openedForParam = useRef(null);
   // What the admin currently calls each signup field, so stored answers show a title and not a key
   const [fieldLabels, setFieldLabels] = useState({});
   useEffect(() => {
@@ -39,10 +42,29 @@ const AllWorkers = () => {
     loadWorkers();
   }, []);
 
+  useEffect(() => {
+    if (!workerParam || workers.length === 0 || openedForParam.current === workerParam) return;
+    const target = workers.find((w) => String(w.id) === String(workerParam));
+    if (target) {
+      openedForParam.current = workerParam;
+      setSelectedWorker(target);
+      setIsViewModalOpen(true);
+    }
+  }, [workerParam, workers]);
+
   const loadWorkers = async () => {
     try {
       setLoading(true);
-      const response = await adminWorkerService.getAllWorkers();
+      // The API pages its answer (20 by default): fetch every page, otherwise only the 20 newest workers show
+      let response = await adminWorkerService.getAllWorkers({ page: 1, limit: 200 });
+      if (response.success) {
+        const pages = response.pagination?.pages || 1;
+        for (let pageNo = 2; pageNo <= Math.min(pages, 25); pageNo += 1) {
+          const more = await adminWorkerService.getAllWorkers({ page: pageNo, limit: 200 });
+          if (!more.success) break;
+          response = { ...response, data: [...response.data, ...more.data] };
+        }
+      }
       if (response.success) {
         // Transform backend data to frontend format
         const transformedWorkers = response.data.map(worker => ({

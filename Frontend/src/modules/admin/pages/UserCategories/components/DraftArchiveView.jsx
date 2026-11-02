@@ -57,7 +57,7 @@ const DraftArchiveView = ({ onRefreshMain }) => {
       // Fetch all items across entities
       const [svcRes, catRes, brandRes] = await Promise.all([
         serviceService.getAll({}),
-        categoryService.getAll({}),
+        categoryService.getAll({ includeDeleted: true }), // the archive tab lists archived categories
         brandService.getAll({}),
       ]);
 

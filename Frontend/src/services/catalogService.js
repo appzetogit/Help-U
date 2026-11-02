@@ -34,6 +34,7 @@ export const categoryService = {
     if (params.cityId) queryParams.append('cityId', params.cityId);
     if (params.parentId !== undefined && params.parentId !== null) queryParams.append('parentId', params.parentId);
     if (params.withCounts) queryParams.append('withCounts', 'true');
+    if (params.includeDeleted) queryParams.append('includeDeleted', 'true');
     if (params.search) queryParams.append('search', params.search);
 
     const response = await api.get(`/admin/categories${queryParams.toString() ? `?${queryParams.toString()}` : ''}`);

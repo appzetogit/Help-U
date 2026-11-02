@@ -601,7 +601,7 @@ const CategoriesListView = ({ level = "all", selectedCity, onRefreshHealth, onOp
                       </td>
 
                       {/* What is inside. Each badge opens what it counts (counts come from the server, so they match the other tabs) */}
-                      <td className="py-2.5 px-4">
+                      <td className="py-2.5 px-4 min-w-[300px]">
                         {category.counts ? (
                           <div className="flex flex-wrap items-center gap-1">
                             {level !== "sub" && category.counts.subCategories.total > 0 && (
@@ -638,6 +638,14 @@ const CategoriesListView = ({ level = "all", selectedCity, onRefreshHealth, onOp
                               title="See the professionals who can take bookings in this category"
                             >
                               {category.counts.workers === 0 ? "No workers" : `${category.counts.workers} worker${category.counts.workers === 1 ? "" : "s"}`} ›
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => onOpen?.("addService", category)}
+                              className="px-2 py-0.5 rounded text-[10px] font-bold border border-dashed border-blue-300 text-blue-700 hover:bg-blue-50 transition-colors"
+                              title={`Add a service in ${category.title}`}
+                            >
+                              + Add service
                             </button>
                           </div>
                         ) : (
@@ -724,7 +732,7 @@ const CategoriesListView = ({ level = "all", selectedCity, onRefreshHealth, onOp
               {workersModal.workers.map((w) => (
                 <a
                   key={w.id}
-                  href={`/admin/workers?search=${encodeURIComponent(w.phone || w.name)}`}
+                  href={`/admin/workers/all?worker=${encodeURIComponent(w.id)}`}
                   className="flex items-center justify-between gap-3 py-2.5 hover:bg-gray-50 px-1 rounded"
                 >
                   <div className="min-w-0">

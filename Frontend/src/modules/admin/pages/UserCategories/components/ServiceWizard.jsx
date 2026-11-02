@@ -121,6 +121,9 @@ export const ServiceWizard = ({
   brands: propBrands = [],
   cities: propCities = [],
   selectedCity = "",
+  // Open a NEW service with this category (and sub-category) already chosen
+  presetCategoryId = "",
+  presetSubCategoryId = "",
   onSaved
 }) => {
   const [currentStep, setCurrentStep] = useState(1);
@@ -327,12 +330,18 @@ export const ServiceWizard = ({
         setWorkersMapped(service.workersMapped);
       }
     } else {
-      setFormData(INITIAL_SERVICE_STATE);
-      setInitialSnapshot(JSON.stringify(INITIAL_SERVICE_STATE));
+      const fresh = presetCategoryId
+        ? { ...INITIAL_SERVICE_STATE, categoryId: presetCategoryId, subCategoryId: presetSubCategoryId || null }
+        : INITIAL_SERVICE_STATE;
+      setFormData(fresh);
+      setInitialSnapshot(JSON.stringify(fresh));
       setIsDirty(false);
-      setCurrentStep(1);
+      // Started from a category (or sub-category) row: that answer is already known, so open at the first step
+      // that still needs one instead of asking for it again. The path stays visible, with "Change".
+      setCurrentStep(presetSubCategoryId ? 3 : presetCategoryId ? 2 : 1);
       setWorkersMapped(null);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, service]);
 
   // Load sub-categories whenever selected category changes
@@ -1192,6 +1201,33 @@ export const ServiceWizard = ({
           {/* ========================================================================= */}
           {/* STEP 1: CATEGORY SELECTION                                               */}
           {/* ========================================================================= */}
+          {/* The path chosen so far, so later steps never feel like starting over */}
+          {currentStep > 1 && formData.categoryId && (
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-blue-100 bg-blue-50/60 px-3.5 py-2 text-xs">
+              <span className="text-blue-900">
+                <span className="font-semibold text-blue-700">Adding to:</span>{" "}
+                <span className="font-bold">{activeCategory?.title || "Category"}</span>
+                {formData.subCategoryId && (
+                  <>
+                    {" "}<span className="text-blue-400">›</span>{" "}
+                    <span className="font-bold">
+                      {formData.subCategoryObj?.title
+                        || subCategories.find((sc) => String(sc.id || sc._id) === String(formData.subCategoryId))?.title
+                        || "Sub-category"}
+                    </span>
+                  </>
+                )}
+              </span>
+              <button
+                type="button"
+                onClick={() => setCurrentStep(1)}
+                className="font-bold text-blue-700 hover:underline"
+              >
+                Change
+              </button>
+            </div>
+          )}
+
           {currentStep === 1 && (
             <div className="space-y-5 animate-in fade-in duration-200">
               {/* Step 1 Admin Guide */}
@@ -1243,6 +1279,7 @@ export const ServiceWizard = ({
               {/* Categories Grid */}
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
                 {categories
+                  .filter((cat) => cat.status !== "deleted" || String(formData.categoryId) === String(cat.id || cat._id))
                   .filter((cat) => {
                     if (!categorySearch.trim()) return true;
                     const q = categorySearch.toLowerCase();

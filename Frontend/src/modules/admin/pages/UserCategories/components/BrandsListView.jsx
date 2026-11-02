@@ -60,7 +60,7 @@ const BrandsListView = ({ selectedCity, onRefreshHealth, initialCategory = "" })
       const [brandRes, catRes, allRes] = await Promise.all([
         brandService.getAll(params),
         categoryService.getAll(params),
-        categoryService.getAll({ parentId: "all" }).catch(() => null),
+        categoryService.getAll({ parentId: "all", includeDeleted: true }).catch(() => null),
       ]);
 
       if (allRes?.success) setAllCats(allRes.categories || []);

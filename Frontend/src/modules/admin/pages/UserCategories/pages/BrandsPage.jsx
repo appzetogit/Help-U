@@ -89,7 +89,7 @@ const BrandsPage = ({ catalog, setCatalog, selectedCity }) => {
       const [servicesRes, categoriesRes, namesRes] = await Promise.all([
         brandService.getAll(params),
         categoryService.getAll(selectedCity ? { cityId: selectedCity } : {}),
-        categoryService.getAll({ parentId: 'all' }).catch(() => null)
+        categoryService.getAll({ parentId: 'all', includeDeleted: true }).catch(() => null)
       ]);
       if (namesRes?.success) setAllCategoryNames(namesRes.categories || []);
 

@@ -44,7 +44,7 @@ const Workers = () => {
         transition={{ duration: 0.3 }}
       >
         <Routes>
-          <Route path="/" element={<Navigate to="all" replace />} />
+          <Route path="/" element={<Navigate to={{ pathname: 'all', search: location.search }} replace />} />
           <Route path="all" element={<AllWorkers />} />
           <Route path="bookings" element={<WorkerBookings />} />
           <Route path="referrals" element={<WorkerReferrals />} />
