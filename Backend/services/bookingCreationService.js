@@ -294,9 +294,14 @@ const placeBooking = async (userId, payload, options = {}) => {
   }
 
   // ── Zone Matching ──
+  // The customer's coordinates decide the zone. A zoneId sent by the app is only a hint for when
+  // the address has no usable coordinates; it must never override where the address really is.
   const Zone = require('../models/Zone');
   let matchedZone = null;
-  if (bookingLocation && typeof bookingLocation.lat === 'number' && typeof bookingLocation.lng === 'number') {
+  const hasCoordinates = !!bookingLocation
+    && Number.isFinite(bookingLocation.lat) && Number.isFinite(bookingLocation.lng);
+
+  if (hasCoordinates) {
     try {
       matchedZone = await Zone.findZoneByCoordinates(bookingLocation.lng, bookingLocation.lat);
       if (matchedZone) {
@@ -305,16 +310,34 @@ const placeBooking = async (userId, payload, options = {}) => {
     } catch (zoneErr) {
       console.warn('[CreateBooking] Zone resolution error (non-fatal):', zoneErr.message);
     }
-  }
-
-  if (!matchedZone && payload.zoneId) {
+  } else if (payload.zoneId) {
     try {
       matchedZone = await Zone.findById(payload.zoneId);
+      if (matchedZone && matchedZone.status !== 'active') matchedZone = null;
       if (matchedZone) {
         console.log(`[CreateBooking] Matched Zone by provided zoneId: "${matchedZone.name}"`);
       }
     } catch (zoneErr) {
       console.warn('[CreateBooking] Zone ID lookup error:', zoneErr.message);
+    }
+  }
+
+  // Once the admin has set up zones, only addresses inside one can be booked. With no active zone
+  // there is nothing to enforce. Recurring visits are created by the system for a plan the customer
+  // already placed, so they are not re-checked here.
+  if (!matchedZone && hasCoordinates && !recurringContext) {
+    let zonesConfigured = false;
+    try {
+      zonesConfigured = Boolean(await Zone.exists({ status: 'active' }));
+    } catch (zoneErr) {
+      console.warn('[CreateBooking] Zone check failed (not enforced):', zoneErr.message);
+    }
+    if (zonesConfigured) {
+      const { getOutOfZonePage } = require('../utils/outOfZonePage');
+      return fail(400, 'This location is outside our service area.', {
+        code: 'OUT_OF_ZONE',
+        outOfZonePage: await getOutOfZonePage()
+      });
     }
   }
 
@@ -736,11 +759,15 @@ const placeBooking = async (userId, payload, options = {}) => {
   }
 
   const wave1Workers = rankedWorkers.slice(0, isScheduledBooking ? rankedWorkers.length : firstWaveSize);
+  const sendToAdmin = rankedWorkers.length === 0 && config.isAdminAssignmentEnabled !== false;
 
   const body = {
     success: true,
     message: 'Booking created successfully. We are finding workers for you.',
     noWorkersFound: rankedWorkers.length === 0,
+    // Nobody could be alerted automatically, so the booking waits for an admin to pick a
+    // professional instead of being cancelled.
+    sentToAdmin: sendToAdmin,
     // Live search details for the checkout "searching" popup; later waves
     // arrive as 'booking_search_progress' socket events.
     search: {
@@ -785,7 +812,9 @@ const placeBooking = async (userId, payload, options = {}) => {
     isPlusAdded,
     rankedWorkers,
     wave1Workers,
-    fromRecurring: !!recurringContext
+    fromRecurring: !!recurringContext,
+    sendToAdmin,
+    noWorkerReason: matchedZone ? 'no_worker_in_zone' : 'no_worker_nearby'
   });
 
   return { statusCode: 201, body, afterResponse, booking };
@@ -796,7 +825,8 @@ const placeBooking = async (userId, payload, options = {}) => {
  * Runs after the HTTP response; failures are logged, never thrown.
  */
 const dispatchNewBooking = async ({
-  bookingId, userId, serviceId, vendorId, isPlusAdded, rankedWorkers, wave1Workers, fromRecurring
+  bookingId, userId, serviceId, vendorId, isPlusAdded, rankedWorkers, wave1Workers, fromRecurring,
+  sendToAdmin = false, noWorkerReason = 'no_worker_nearby'
 }) => {
   try {
     const userForBackground = await User.findById(userId);
@@ -833,12 +863,18 @@ const dispatchNewBooking = async ({
     bookingForBackground.waveStartedAt = new Date();
     bookingForBackground.notifiedVendors = wave1Workers.map((v) => v._id);
 
-    if (wave1Workers.length === 0) {
+    if (wave1Workers.length === 0 && !sendToAdmin) {
       console.warn('[CreateBooking] NO WORKERS FOUND nearby! Push notifications will not be sent.');
       bookingForBackground.status = BOOKING_STATUS.NO_WORKERS;
       bookingForBackground.$locals.timelineNote = 'No professionals available nearby';
     }
     await bookingForBackground.save();
+
+    // Nobody to alert: hand the booking to the admin to assign by hand (see adminAssignmentService)
+    if (wave1Workers.length === 0 && sendToAdmin) {
+      console.warn(`[CreateBooking] No eligible professional (${noWorkerReason}); sending to the admin queue.`);
+      await require('./adminAssignmentService').queueForAdmin(bookingForBackground._id, { reason: noWorkerReason });
+    }
 
     if (wave1Workers.length > 0) {
       const bookingRequests = wave1Workers.map((worker) => ({

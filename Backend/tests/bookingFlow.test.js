@@ -186,8 +186,8 @@ const checkoutPayload = (serviceId, overrides = {}) => ({
 
     console.log('\n[Checkout: no professional nearby]');
     // No worker exists yet, so the search finds nobody. The booking is still
-    // accepted (201, noWorkersFound) and then auto-cancelled in the background.
-    await it('accepts a booking with coordinates outside any zone and reports noWorkersFound', async () => {
+    // accepted (201, noWorkersFound) and then waits in the admin queue for a manual assignment.
+    await it('accepts a booking with coordinates when no zones are set up and reports noWorkersFound', async () => {
       const payload = checkoutPayload(service._id);
       payload.address.lat = 22.7196;
       payload.address.lng = 75.8577;
@@ -204,11 +204,13 @@ const checkoutPayload = (serviceId, overrides = {}) => ({
       assert.strictEqual(res.body.noWorkersFound, true);
     });
 
-    await it('auto-cancels a booking when no professional is available', async () => {
+    await it('sends a booking nobody can take to the admin queue instead of cancelling it', async () => {
       await wait(500); // dispatch runs after the response
       const bookings = await Booking.find({ userId: user._id });
       assert.strictEqual(bookings.length, 2);
-      assert.ok(bookings.every((b) => b.status === 'cancelled'), bookings.map((b) => b.status).join(','));
+      assert.ok(bookings.every((b) => b.status === 'searching' && b.awaitingAdmin === true),
+        bookings.map((b) => `${b.status}/${b.awaitingAdmin}`).join(','));
+      assert.ok(bookings.every((b) => b.adminQueueReason === 'no_worker_nearby'));
     });
 
     console.log('\n[Checkout: professional nearby]');

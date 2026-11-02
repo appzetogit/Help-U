@@ -321,6 +321,24 @@ const BookingConfig = () => {
               <NumberInput value={config.maxReassignments} onChange={set('maxReassignments')} min={0} max={10} disabled={!config.autoReassignOnWorkerCancel} />
             </Field>
           </div>
+
+          <div className="mt-6 pt-4 border-t border-gray-100">
+            <p className="text-xs font-semibold text-gray-700">Admin assignment queue</p>
+            <p className="text-[11px] text-gray-500 mt-0.5 mb-3">
+              When nobody in the customer's zone can take a booking, it waits here for you to pick a professional by hand
+              (Bookings → Needs assignment) instead of being cancelled. The professional you pick still accepts or declines.
+            </p>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <ToggleRow label="Send unassignable bookings to the admin" description="Off: a booking nobody can take is cancelled and refunded, as before." checked={config.isAdminAssignmentEnabled} onChange={set('isAdminAssignmentEnabled')} />
+              <ToggleRow label="Also when the search ends with no acceptance" description="Professionals were alerted but none accepted in time: hand it to the admin instead of cancelling." checked={config.escalateToAdminOnTimeout} onChange={set('escalateToAdminOnTimeout')} />
+              <Field label="Admin has (minutes) to assign" hint="After this the booking is cancelled and refunded. A visit booked for later never waits past its own time slot.">
+                <NumberInput value={config.adminAssignmentWindowMins} onChange={set('adminAssignmentWindowMins')} min={5} max={1440} suffix="min" disabled={!config.isAdminAssignmentEnabled} />
+              </Field>
+              <Field label="Chosen professional has (minutes) to answer" hint="If they do not accept in this time, the booking returns to the queue.">
+                <NumberInput value={config.adminAssignedResponseMins} onChange={set('adminAssignedResponseMins')} min={1} max={240} suffix="min" disabled={!config.isAdminAssignmentEnabled} />
+              </Field>
+            </div>
+          </div>
         </Card>
 
         {/* Commission */}

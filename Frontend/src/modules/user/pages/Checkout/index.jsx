@@ -40,7 +40,7 @@ const Checkout = () => {
   const category = location.state?.category || null;
   const plan = location.state?.plan || null;
   const { fetchCart: fetchCartGlobal, clearCart: clearCartGlobal, removeCategoryItems: removeCategoryGlobal } = useCart();
-  const { zoneId, isOutOfZone, detectZone } = useZone() || {};
+  const { zoneId, isOutOfZone, detectZone, markOutOfZone } = useZone() || {};
 
   const [cartItems, setCartItems] = useState([]);
   const [showAddressModal, setShowAddressModal] = useState(false);
@@ -631,8 +631,9 @@ const Checkout = () => {
       setSearchInfo(bookingResponse.search || null);
       toast.dismiss();
 
-      // Clear cart immediately as search starts (consumes items) - ONLY if workers found
-      if (!bookingResponse.noWorkersFound) {
+      // Clear cart immediately as search starts (consumes items) - ONLY if the booking is being
+      // handled: workers were alerted, or it is waiting for the admin to assign one
+      if (!bookingResponse.noWorkersFound || bookingResponse.sentToAdmin) {
         try {
           if (category) {
             await removeCategoryGlobal(category);
@@ -645,9 +646,16 @@ const Checkout = () => {
         }
       }
 
-      // No one nearby: cancel the empty booking and show the "no professional"
-      // screen. The cart was kept above, so "Search again" can rebook.
-      if (bookingResponse.noWorkersFound) {
+      // Nobody could be alerted automatically, but the booking is not lost: our team picks a
+      // professional by hand. Take the customer to the booking, where they will see it get assigned.
+      if (bookingResponse.sentToAdmin) {
+        setSearchingWorkers(false);
+        setShowWorkerModal(false);
+        toast.success("Booking placed! Our team is arranging a professional and will notify you shortly.", { duration: 5000 });
+        navigate(`/user/booking/${booking?._id || booking?.id}`, { replace: true });
+      } else if (bookingResponse.noWorkersFound) {
+        // No one nearby (and no admin queue): cancel the empty booking and show the "no professional"
+        // screen. The cart was kept above, so "Search again" can rebook.
         const bookingId = booking?._id || booking?.id;
         setSearchingWorkers(false);
         setCurrentStep('failed');
@@ -675,6 +683,11 @@ const Checkout = () => {
       toast.dismiss();
       console.error('Search workers error:', error);
       toast.error(error.response?.data?.message || 'Failed to search for workers. Please try again.');
+      // The server says this address is outside every zone (the app's own check can lag behind)
+      if (error.response?.data?.code === 'OUT_OF_ZONE' && markOutOfZone) {
+        markOutOfZone(error.response.data.outOfZonePage);
+        setShowAddressModal(true);
+      }
       setCurrentStep('details');
       setSearchingWorkers(false);
       setShowWorkerModal(false);

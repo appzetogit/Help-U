@@ -28,6 +28,7 @@ import zoneService from "../../services/zoneService";
 import { cityService } from "../../services/cityService";
 import { categoryService } from "../../../../services/catalogService";
 import ModalLock from '../../../../components/common/ModalLock';
+import OutOfZonePageModal from './OutOfZonePageModal';
 
 const LIBRARIES = ["places", "geometry"];
 
@@ -90,6 +91,7 @@ const ZonesPage = () => {
   });
 
   const [zones, setZones] = useState([]);
+  const [showOutOfZoneEditor, setShowOutOfZoneEditor] = useState(false);
   const [cities, setCities] = useState([]);
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -660,6 +662,16 @@ const ZonesPage = () => {
               <span>City</span>
             </button>
           </div>
+
+          <button
+            type="button"
+            onClick={() => setShowOutOfZoneEditor(true)}
+            title="Edit the page customers see outside every zone"
+            className="px-2.5 py-1.5 text-xs font-semibold text-amber-700 hover:bg-amber-50 rounded-lg border border-amber-200 transition-colors flex items-center gap-1 shadow-sm"
+          >
+            <FiMap className="w-3.5 h-3.5" />
+            <span>Out-of-zone page</span>
+          </button>
 
           <button
             onClick={fetchZones}
@@ -1462,6 +1474,8 @@ const ZonesPage = () => {
           </div>
         </div>
       )}
+
+      {showOutOfZoneEditor && <OutOfZonePageModal onClose={() => setShowOutOfZoneEditor(false)} />}
     </div>
   );
 };

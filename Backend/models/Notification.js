@@ -72,6 +72,8 @@ const notificationSchema = new mongoose.Schema({
       'advance_payment_requested',
       'customer_added_services', // customer added repair services after inspection
       'booking_reassigned',
+      'booking_needs_assignment', // Admin: a booking has no professional and needs a manual assignment
+      'booking_awaiting_admin',   // User: our team is arranging a professional
       'chat_message',
       'dispute_raised',
       'dispute_updated',

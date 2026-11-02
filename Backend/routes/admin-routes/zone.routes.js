@@ -10,7 +10,9 @@ const {
   updateZone,
   deleteZone,
   findZoneByPoint,
-  toggleZoneStatus
+  toggleZoneStatus,
+  getAdminOutOfZonePage,
+  updateOutOfZonePage
 } = require('../../controllers/adminControllers/zoneController');
 
 const createZoneValidation = [
@@ -55,6 +57,10 @@ const updateZoneValidation = [
 
 // Point-in-polygon lookup helper (register before :id routes)
 router.get('/zones/lookup', findZoneByPoint);
+
+// Out-of-zone page content (before the :id routes)
+router.get('/zones/out-of-zone-page', authenticate, isAdmin, getAdminOutOfZonePage);
+router.put('/zones/out-of-zone-page', authenticate, isAdmin, updateOutOfZonePage);
 
 // CRUD
 router.get('/zones', authenticate, isAdmin, getAllZones);

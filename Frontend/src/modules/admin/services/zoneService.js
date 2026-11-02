@@ -35,6 +35,17 @@ const zoneService = {
     return response.data;
   },
 
+  // What customers see when their location is outside every active zone
+  getOutOfZonePage: async () => {
+    const response = await api.get('/admin/zones/out-of-zone-page');
+    return response.data;
+  },
+
+  updateOutOfZonePage: async (data) => {
+    const response = await api.put('/admin/zones/out-of-zone-page', data);
+    return response.data;
+  },
+
   findByPoint: async (lng, lat) => {
     const response = await api.get(`/admin/zones/lookup?lng=${lng}&lat=${lat}`);
     return response.data;

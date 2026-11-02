@@ -94,18 +94,24 @@ class BookingScheduler {
       const waveDurationMs = (config.waveDuration || 60) * 1000;
 
       // --- CIRCUIT BREAKER: Fast query to detect if any work is needed ---
+      const adminHandled = await this.processAdminQueue(config).catch((err) => {
+        console.error('[BookingScheduler] Admin queue error:', err);
+        return 0;
+      });
+
       const activeBookings = await Booking.find(
         {
           status: { $in: [BOOKING_STATUS.SEARCHING, BOOKING_STATUS.CONFIRMED] },
           vendorId: null,
+          awaitingAdmin: { $ne: true },
           waveStartedAt: { $ne: null },
           potentialVendors: { $exists: true, $not: { $size: 0 } }
         },
-        '_id currentWave waveStartedAt potentialVendors notifiedVendors excludedVendors bookingNumber createdAt userId expiresAt isEmergency bookingType paymentStatus finalAmount advancePayment couponId'
+        '_id currentWave waveStartedAt potentialVendors notifiedVendors excludedVendors bookingNumber createdAt userId expiresAt isEmergency bookingType paymentStatus finalAmount advancePayment couponId awaitingAdmin scheduledDate timeSlot scheduledTime'
       ).lean();
 
       if (activeBookings.length === 0) {
-        return false; // Idle — caller will use longer interval
+        return adminHandled > 0; // Idle — caller will use longer interval
       }
 
       const now = Date.now();
@@ -128,65 +134,8 @@ class BookingScheduler {
             // expiresAt (not createdAt) so a booking put back to searching
             // after a worker cancelled gets a fresh search window.
             if (now > expiresAt) {
-              console.log(`[BookingScheduler] ${booking.bookingNumber}: Search timed out. Cancelling.`);
-
-              await Booking.findOneAndUpdate(
-                { _id: booking._id, status: { $in: [BOOKING_STATUS.SEARCHING, BOOKING_STATUS.CONFIRMED] }, vendorId: null },
-                {
-                  $set: {
-                    status: BOOKING_STATUS.CANCELLED,
-                    waveStartedAt: null,
-                    cancelledAt: new Date(),
-                    cancelledBy: 'system',
-                    cancellationReason: 'No worker accepted within time limit'
-                  }
-                },
-                { actor: 'system' }
-              );
-
-              // Process automatic refund to user wallet if customer paid upfront or advance
-              const isPaid = [PAYMENT_STATUS.SUCCESS, 'paid'].includes(booking.paymentStatus);
-              const advancePaid = booking.advancePayment?.status === 'paid' ? Number(booking.advancePayment?.paidAmount || 0) : 0;
-              const totalToRefund = (isPaid ? Number(booking.finalAmount || 0) : 0) + advancePaid;
-
-              if (totalToRefund > 0) {
-                const User = require('../models/User');
-                const Transaction = require('../models/Transaction');
-                await User.findByIdAndUpdate(booking.userId, { $inc: { 'wallet.balance': totalToRefund } }).catch(() => null);
-                await Transaction.create({
-                  userId: booking.userId,
-                  bookingId: booking._id,
-                  type: 'refund',
-                  amount: totalToRefund,
-                  status: 'completed',
-                  paymentMethod: 'wallet',
-                  description: `Automatic refund for booking ${booking.bookingNumber} (no professional accepted within search window)`
-                }).catch(() => null);
-
-                await Booking.findByIdAndUpdate(booking._id, {
-                  $set: { paymentStatus: PAYMENT_STATUS.REFUNDED, refundedAmount: totalToRefund }
-                }).catch(() => null);
-              }
-
-              // Restore coupon usage if applicable
-              if (booking.couponId) {
-                const Coupon = require('../models/Coupon');
-                const CouponRedemption = require('../models/CouponRedemption');
-                await Coupon.findByIdAndUpdate(booking.couponId, { $inc: { usedCount: -1 } }).catch(() => null);
-                await CouponRedemption.deleteOne({ bookingId: booking._id }).catch(() => null);
-              }
-
-              if (this.io) {
-                this.io.to(`user_${booking.userId}`).emit('booking_search_failed', {
-                  bookingId: booking._id,
-                  message: 'No workers available at the moment. Please try again later.'
-                });
-
-                (booking.notifiedVendors || []).forEach((vId) => {
-                  this.io.to(`vendor_${vId}`).emit('removeWorkerBooking', { id: booking._id });
-                });
-              }
-
+              // Before giving up, hand the booking to an admin who can pick a professional by hand
+              await this.escalateOrCancel(booking, config);
               return;
             }
 
@@ -315,6 +264,155 @@ class BookingScheduler {
       console.error('[BookingScheduler] Error processing waves:', error);
       return false;
     }
+  }
+
+  /**
+   * The search window is over with nobody assigned. The booking goes to the admin queue when that
+   * is switched on (and the visit is not already in the past); otherwise it is cancelled and any
+   * payment refunded. Returns true once the booking has been dealt with.
+   */
+  async escalateOrCancel(booking, config) {
+    const canEscalate = config.isAdminAssignmentEnabled !== false
+      && config.escalateToAdminOnTimeout !== false
+      && !booking.awaitingAdmin;
+
+    if (canEscalate) {
+      let slotPassed = false;
+      if (booking.bookingType === 'scheduled' && !booking.isEmergency) {
+        const { slotStartMs } = require('./workerAvailabilityService');
+        const slotStart = slotStartMs(booking);
+        slotPassed = Number.isFinite(slotStart) && slotStart < Date.now();
+      }
+      if (!slotPassed) {
+        const queued = await require('./adminAssignmentService')
+          .queueForAdmin(booking._id, { reason: 'no_worker_accepted' });
+        if (queued) {
+          console.log(`[BookingScheduler] ${booking.bookingNumber}: Search timed out. Sent to the admin queue.`);
+          if (this.io) {
+            (booking.notifiedVendors || []).forEach((vId) => {
+              this.io.to(`vendor_${vId}`).emit('removeWorkerBooking', { id: booking._id });
+            });
+          }
+          return true;
+        }
+      }
+    }
+
+    await this.cancelExpiredBooking(booking);
+    return true;
+  }
+
+  /**
+   * Cancels a booking nobody took in time, refunds what was paid and releases the coupon.
+   */
+  async cancelExpiredBooking(booking) {
+    console.log(`[BookingScheduler] ${booking.bookingNumber}: Search timed out. Cancelling.`);
+
+    const cancelled = await Booking.findOneAndUpdate(
+      { _id: booking._id, status: { $in: [BOOKING_STATUS.SEARCHING, BOOKING_STATUS.CONFIRMED] }, vendorId: null },
+      {
+        $set: {
+          status: BOOKING_STATUS.CANCELLED,
+          awaitingAdmin: false,
+          waveStartedAt: null,
+          cancelledAt: new Date(),
+          cancelledBy: 'system',
+          cancellationReason: 'No worker accepted within time limit'
+        }
+      },
+      { actor: 'system' }
+    );
+    // Taken (or cancelled) in the meantime: nothing to refund
+    if (!cancelled) return;
+
+    // Process automatic refund to user wallet if customer paid upfront or advance
+    const isPaid = [PAYMENT_STATUS.SUCCESS, 'paid'].includes(booking.paymentStatus);
+    const advancePaid = booking.advancePayment?.status === 'paid' ? Number(booking.advancePayment?.paidAmount || 0) : 0;
+    const totalToRefund = (isPaid ? Number(booking.finalAmount || 0) : 0) + advancePaid;
+
+    if (totalToRefund > 0) {
+      const User = require('../models/User');
+      const Transaction = require('../models/Transaction');
+      await User.findByIdAndUpdate(booking.userId, { $inc: { 'wallet.balance': totalToRefund } }).catch(() => null);
+      await Transaction.create({
+        userId: booking.userId,
+        bookingId: booking._id,
+        type: 'refund',
+        amount: totalToRefund,
+        status: 'completed',
+        paymentMethod: 'wallet',
+        description: `Automatic refund for booking ${booking.bookingNumber} (no professional accepted within search window)`
+      }).catch(() => null);
+
+      await Booking.findByIdAndUpdate(booking._id, {
+        $set: { paymentStatus: PAYMENT_STATUS.REFUNDED, refundedAmount: totalToRefund }
+      }).catch(() => null);
+    }
+
+    // Restore coupon usage if applicable
+    if (booking.couponId) {
+      const Coupon = require('../models/Coupon');
+      const CouponRedemption = require('../models/CouponRedemption');
+      await Coupon.findByIdAndUpdate(booking.couponId, { $inc: { usedCount: -1 } }).catch(() => null);
+      await CouponRedemption.deleteOne({ bookingId: booking._id }).catch(() => null);
+    }
+
+    if (this.io) {
+      this.io.to(`user_${booking.userId}`).emit('booking_search_failed', {
+        bookingId: booking._id,
+        message: 'No workers available at the moment. Please try again later.'
+      });
+
+      (booking.notifiedVendors || []).forEach((vId) => {
+        this.io.to(`vendor_${vId}`).emit('removeWorkerBooking', { id: booking._id });
+      });
+    }
+  }
+
+  /**
+   * Bookings an admin is handling: still in the queue, or sent to a professional who has not
+   * answered. When their window runs out, a queued booking is cancelled (and refunded); an
+   * unanswered pick goes back to the queue for the admin to choose someone else.
+   * @returns {number} how many bookings it dealt with
+   */
+  async processAdminQueue(config) {
+    const adminAssignment = require('./adminAssignmentService');
+    const BookingRequest = require('../models/BookingRequest');
+
+    const overdue = await Booking.find(
+      {
+        status: { $in: [BOOKING_STATUS.SEARCHING, BOOKING_STATUS.CONFIRMED] },
+        vendorId: null,
+        expiresAt: { $lt: new Date() },
+        $or: [{ awaitingAdmin: true }, { adminAssignedAt: { $ne: null } }]
+      },
+      '_id bookingNumber userId expiresAt isEmergency bookingType paymentStatus finalAmount advancePayment couponId awaitingAdmin adminAssignedAt notifiedVendors'
+    ).limit(50).lean();
+
+    for (const booking of overdue) {
+      try {
+        if (booking.awaitingAdmin) {
+          console.log(`[BookingScheduler] ${booking.bookingNumber}: Admin queue timed out. Cancelling.`);
+          await this.cancelExpiredBooking(booking);
+          continue;
+        }
+
+        // The professional the admin picked never answered
+        const pickedId = (booking.notifiedVendors || [])[0];
+        if (pickedId) {
+          await BookingRequest.updateOne(
+            { bookingId: booking._id, vendorId: pickedId, status: { $in: ['PENDING', 'VIEWED'] } },
+            { status: 'EXPIRED', respondedAt: new Date() }
+          ).catch(() => null);
+          if (this.io) this.io.to(`vendor_${pickedId}`).emit('removeWorkerBooking', { id: booking._id });
+        }
+        const requeued = await adminAssignment.requeueAfterDecline(booking._id, pickedId);
+        if (!requeued) await this.cancelExpiredBooking(booking);
+      } catch (err) {
+        console.error(`[BookingScheduler] Admin queue error for ${booking._id}:`, err);
+      }
+    }
+    return overdue.length;
   }
 
   async notifyWorkers(booking, workers) {

@@ -14,7 +14,6 @@ import { useGoogleMapsConfig } from '../../../../hooks/useGoogleMapsConfig';
 import { toast } from 'react-hot-toast';
 import { registerFCMToken } from '../../../../services/pushNotificationService';
 import { motion } from 'framer-motion';
-import { HiLocationMarker } from 'react-icons/hi';
 import api from '../../../../services/api';
 
 // Lazy load heavy components for better initial load performance
@@ -32,6 +31,7 @@ import SearchOverlay from './components/SearchOverlay';
 import VoiceSearchSheet from './components/VoiceSearchSheet';
 import useVoiceSearch from '../../../../hooks/useVoiceSearch';
 import HomeSkeleton from './components/HomeSkeleton';
+import OutOfZoneScreen from '../../../../components/common/OutOfZoneScreen';
 import AddressSelectionModal from '../Checkout/components/AddressSelectionModal';
 import { userAuthService } from '../../../../services/authService';
 import ScrapPromotionCard from './components/ScrapPromotionCard';
@@ -635,27 +635,10 @@ const Home = () => {
         </motion.div>
 
         <main className="flex flex-col gap-4 sm:gap-5 max-w-screen-xl mx-auto w-full pb-6 overflow-x-clip min-w-0">
-          {/* Out of Zone Notice */}
-          {isOutOfZone && (
-            <div className="mx-4 sm:mx-5 px-3.5 py-2.5 bg-gradient-to-r from-amber-50/95 to-orange-50/80 border border-amber-200/90 rounded-2xl flex items-center justify-between gap-3 shadow-[0_2px_8px_rgba(245,158,11,0.06)]">
-              <div className="flex items-center gap-2.5 min-w-0">
-                <div className="w-8 h-8 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
-                  <HiLocationMarker className="w-4.5 h-4.5 text-amber-600" />
-                </div>
-                <div className="min-w-0">
-                  <p className="text-[12.5px] font-bold text-amber-950 leading-tight">Outside Service Area</p>
-                  <p className="text-[11px] text-amber-800/90 leading-tight truncate mt-0.5">Some services may be unavailable at your current location.</p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setIsAddressModalOpen(true)}
-                className="px-3 py-1.5 bg-[#EA580C] hover:bg-[#C2410C] active:scale-95 text-white rounded-xl text-[11px] font-bold whitespace-nowrap transition-all shadow-xs shrink-0"
-              >
-                Change Location
-              </button>
-            </div>
-          )}
+          {/* Outside every zone: the admin-edited "not in your area" page replaces the services */}
+          {isOutOfZone ? (
+            <OutOfZoneScreen embedded onChangeLocation={() => setIsAddressModalOpen(true)} />
+          ) : (
             <>
               {/* Hero Section - Promo Carousel */}
               {homeContent?.isPromosVisible !== false && (homeContent?.promos || []).length > 0 && (
@@ -967,6 +950,7 @@ const Home = () => {
                 </Suspense>
               </motion.div>
             </>
+          )}
         </main>
       </motion.div>
 

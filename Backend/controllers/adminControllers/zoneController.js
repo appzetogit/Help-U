@@ -1,4 +1,6 @@
 const Zone = require('../../models/Zone');
+const Settings = require('../../models/Settings');
+const { getOutOfZonePage, sanitizeOutOfZonePage } = require('../../utils/outOfZonePage');
 const { validationResult } = require('express-validator');
 
 const Worker = require('../../models/Worker');
@@ -203,7 +205,9 @@ const findZoneByPoint = async (req, res) => {
       // Tell the client whether zone gating applies at all: with no active zones defined,
       // "no zone" just means zones are not set up, not that the user is out of area.
       const zonesConfigured = Boolean(await Zone.exists({ status: 'active' }));
-      return res.status(200).json({ success: true, zone: null, zonesConfigured, message: 'No active zone found for these coordinates' });
+      // The out-of-zone page rides along so the app can show it without a second request
+      const outOfZonePage = zonesConfigured ? await getOutOfZonePage() : null;
+      return res.status(200).json({ success: true, zone: null, zonesConfigured, outOfZonePage, message: 'No active zone found for these coordinates' });
     }
 
     res.status(200).json({ success: true, zone: toZoneResponse(zone) });
@@ -232,7 +236,63 @@ const toggleZoneStatus = async (req, res) => {
   }
 };
 
+/** GET /api/public/zones/out-of-zone-page - what the customer sees outside every zone */
+const getPublicOutOfZonePage = async (req, res) => {
+  try {
+    const [outOfZonePage, settings] = await Promise.all([
+      getOutOfZonePage(),
+      Settings.findOne({ type: 'global' }).select('supportPhone supportEmail supportWhatsapp').lean()
+    ]);
+    res.status(200).json({
+      success: true,
+      outOfZonePage,
+      support: {
+        phone: settings?.supportPhone || '',
+        email: settings?.supportEmail || '',
+        whatsapp: settings?.supportWhatsapp || ''
+      }
+    });
+  } catch (error) {
+    console.error('Get out-of-zone page error:', error);
+    res.status(500).json({ success: false, message: 'Failed to load the page' });
+  }
+};
+
+/** GET /api/admin/zones/out-of-zone-page */
+const getAdminOutOfZonePage = async (req, res) => {
+  try {
+    res.status(200).json({ success: true, outOfZonePage: await getOutOfZonePage() });
+  } catch (error) {
+    console.error('Get out-of-zone page (admin) error:', error);
+    res.status(500).json({ success: false, message: 'Failed to load the page' });
+  }
+};
+
+/** PUT /api/admin/zones/out-of-zone-page */
+const updateOutOfZonePage = async (req, res) => {
+  try {
+    const { updates, errors } = sanitizeOutOfZonePage(req.body || {});
+    if (errors.length > 0) {
+      return res.status(400).json({ success: false, message: errors[0], errors });
+    }
+
+    const $set = {};
+    for (const [key, value] of Object.entries(updates)) $set[`outOfZonePage.${key}`] = value;
+    if (Object.keys($set).length > 0) {
+      await Settings.findOneAndUpdate({ type: 'global' }, { $set }, { upsert: true, new: true, setDefaultsOnInsert: true });
+    }
+
+    res.status(200).json({ success: true, message: 'Out-of-zone page saved', outOfZonePage: await getOutOfZonePage() });
+  } catch (error) {
+    console.error('Update out-of-zone page error:', error);
+    res.status(500).json({ success: false, message: 'Failed to save the page' });
+  }
+};
+
 module.exports = {
+  getPublicOutOfZonePage,
+  getAdminOutOfZonePage,
+  updateOutOfZonePage,
   getAllZones,
   getZoneById,
   createZone,

@@ -4,6 +4,9 @@ const { body } = require('express-validator');
 const { authenticate } = require('../../middleware/authMiddleware');
 const { isAdmin, requirePermission } = require('../../middleware/roleMiddleware');
 const {
+  getUnassignedBookings,
+  getAssignableWorkers,
+  assignBooking,
   getAllBookings,
   getBookingById,
   cancelBooking,
@@ -23,7 +26,10 @@ router.use('/bookings', authenticate, isAdmin, requirePermission('bookings'));
 // Routes
 router.get('/bookings', getAllBookings);
 router.get('/bookings/analytics', getBookingAnalytics);
+router.get('/bookings/unassigned', getUnassignedBookings);
 router.get('/bookings/:id', getBookingById);
+router.get('/bookings/:id/assignable-workers', getAssignableWorkers);
+router.post('/bookings/:id/assign', assignBooking);
 router.post('/bookings/:id/cancel', cancelBookingValidation, cancelBooking);
 
 module.exports = router;

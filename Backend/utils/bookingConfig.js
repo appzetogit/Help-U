@@ -77,6 +77,11 @@ const CONFIG_SCHEMA = {
   autoReassignOnReject: [true, 'boolean'],
   autoReassignOnWorkerCancel: [true, 'boolean'],
   maxReassignments: [3, 'number', 0, 10],
+  // Bookings nobody can take wait for an admin to assign a professional instead of being cancelled
+  isAdminAssignmentEnabled: [true, 'boolean'],
+  escalateToAdminOnTimeout: [true, 'boolean'],
+  adminAssignmentWindowMins: [60, 'number', 5, 1440],
+  adminAssignedResponseMins: [15, 'number', 1, 240],
 
   defaultCommissionType: ['percentage', 'enum', ['percentage', 'fixed']],
   defaultFixedCommission: [0, 'number', 0, 100000],

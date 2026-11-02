@@ -841,19 +841,29 @@ const BookingDetails = () => {
                     <FiSearch className="w-6 h-6 text-amber-500 animate-pulse" />
                   </div>
                   <div>
-                    <h3 className="text-lg font-black text-gray-900 leading-tight">Finding Your Expert</h3>
-                    <p className="text-[10px] font-bold text-amber-600 uppercase tracking-widest">Broadcast in Progress</p>
+                    <h3 className="text-lg font-black text-gray-900 leading-tight">
+                      {booking.awaitingAdmin ? 'We are arranging your expert' : 'Finding Your Expert'}
+                    </h3>
+                    <p className="text-[10px] font-bold text-amber-600 uppercase tracking-widest">
+                      {booking.awaitingAdmin ? 'Handled by our team' : 'Broadcast in Progress'}
+                    </p>
                   </div>
                 </div>
 
                 <p className="text-sm text-gray-600 mb-4 leading-relaxed font-medium">
-                  We've sent your request to all verified experts in your area. You'll be notified automatically as soon as someone accepts.
+                  {booking.awaitingAdmin
+                    ? "Your booking is safe. Our team is choosing the best professional for you and will confirm shortly. You'll be notified as soon as one is assigned."
+                    : "We've sent your request to all verified experts in your area. You'll be notified automatically as soon as someone accepts."}
                 </p>
 
                 <div className="flex flex-col gap-2">
                   <div className="flex items-center gap-2 text-xs text-gray-400 bg-gray-50 rounded-xl p-3 border border-gray-100">
                     <span className="w-1.5 h-1.5 bg-amber-400 rounded-full animate-ping"></span>
-                    <span>Waiting for response from 12+ nearby partners...</span>
+                    <span>
+                      {booking.awaitingAdmin
+                        ? 'Waiting for our team to assign a professional...'
+                        : 'Waiting for response from 12+ nearby partners...'}
+                    </span>
                   </div>
                 </div>
               </div>

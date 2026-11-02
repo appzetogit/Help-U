@@ -52,6 +52,13 @@ const bookingSchema = new mongoose.Schema({
     // Ranking score (0-100) when the 'smart' assignment strategy is used.
     score: { type: Number, default: null }
   }],
+  // Admin assignment queue: no professional could be found automatically, so an admin picks one.
+  awaitingAdmin: { type: Boolean, default: false, index: true },
+  adminQueuedAt: { type: Date, default: null },
+  // no_worker_in_zone | no_worker_nearby | no_worker_accepted | worker_declined
+  adminQueueReason: { type: String, default: null },
+  adminAssignedAt: { type: Date, default: null },
+  adminAssignedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Admin', default: null },
   // Workers who must not be alerted again for this booking: they rejected it,
   // were offline when their wave came round, or cancelled after accepting.
   excludedVendors: [{

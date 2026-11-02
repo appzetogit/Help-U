@@ -443,6 +443,39 @@ const settingsSchema = new mongoose.Schema({
   maxReassignments: { type: Number, default: 3, min: 0, max: 10 },
 
   // ==========================================
+  // ADMIN ASSIGNMENT QUEUE
+  // A booking nobody in the zone can take (no professional with the skill, or nobody accepted)
+  // waits for an admin to pick a professional by hand instead of being cancelled.
+  // ==========================================
+  isAdminAssignmentEnabled: { type: Boolean, default: true },
+  // Also hand a booking to the admin when the automatic search ends with no acceptance.
+  escalateToAdminOnTimeout: { type: Boolean, default: true },
+  // How long an unassigned booking waits for the admin before it is cancelled and refunded.
+  adminAssignmentWindowMins: { type: Number, default: 60, min: 5, max: 1440 },
+  // How long the professional picked by the admin has to accept before it returns to the admin.
+  adminAssignedResponseMins: { type: Number, default: 15, min: 1, max: 240 },
+
+  // ==========================================
+  // OUT-OF-ZONE PAGE
+  // What a customer sees when their location is outside every active zone (edited from Zones).
+  // ==========================================
+  outOfZonePage: {
+    title: { type: String, default: "We're not in your area yet" },
+    message: {
+      type: String,
+      default: "Our services are currently not available at this location. We're expanding quickly - check back soon or choose a different address."
+    },
+    imageUrl: { type: String, default: '' },
+    primaryButtonText: { type: String, default: 'Change Location / Address' },
+    showRetryButton: { type: Boolean, default: true },
+    retryButtonText: { type: String, default: 'Retry Location Detection' },
+    footerText: { type: String, default: 'Make sure location services are enabled on your device.' },
+    showSupportContact: { type: Boolean, default: true },
+    accentColor: { type: String, default: '#2563eb' },
+    backgroundColor: { type: String, default: '#f9fafb' }
+  },
+
+  // ==========================================
   // TIME-SLOT WINDOW (Phase 1)
   // Powers the dynamic time-slot API that replaces the hard-coded 09:00..20:00
   // grid in Checkout. Defaults match today's frontend behaviour exactly

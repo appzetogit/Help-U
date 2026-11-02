@@ -2,6 +2,8 @@ const Booking = require('../../models/Booking');
 const { validationResult } = require('express-validator');
 const { BOOKING_STATUS, PAYMENT_STATUS } = require('../../utils/constants');
 const escapeRegex = require('../../utils/escapeRegex');
+const adminAssignment = require('../../services/adminAssignmentService');
+const { OPEN_STATUSES } = adminAssignment;
 
 /**
  * Get all bookings with filters and search
@@ -13,6 +15,7 @@ const getAllBookings = async (req, res) => {
       paymentStatus,
       userId,
       vendorId,
+      awaitingAdmin,
       startDate,
       endDate,
       search,
@@ -27,6 +30,12 @@ const getAllBookings = async (req, res) => {
     if (paymentStatus) query.paymentStatus = new RegExp(`^${escapeRegex(paymentStatus)}$`, 'i');
     if (userId) query.userId = userId;
     if (vendorId) query.vendorId = vendorId;
+    // The admin assignment queue: open bookings nobody could take automatically
+    if (awaitingAdmin === 'true' || awaitingAdmin === true) {
+      query.awaitingAdmin = true;
+      query.vendorId = null;
+      query.status = { $in: OPEN_STATUSES };
+    }
 
     if (startDate || endDate) {
       query.scheduledDate = {};
@@ -198,6 +207,7 @@ const cancelBooking = async (req, res) => {
 
     // Update booking
     booking.status = BOOKING_STATUS.CANCELLED;
+    booking.awaitingAdmin = false;
     booking.cancelledAt = new Date();
     booking.cancelledBy = 'admin';
     booking.$locals.actor = 'admin';
@@ -238,6 +248,85 @@ const cancelBooking = async (req, res) => {
       success: false,
       message: 'Failed to cancel booking. Please try again.'
     });
+  }
+};
+
+/**
+ * Bookings waiting for an admin to pick a professional, oldest first.
+ * GET /api/admin/bookings/unassigned
+ */
+const getUnassignedBookings = async (req, res) => {
+  try {
+    const { page = 1, limit = 20 } = req.query;
+    const query = { awaitingAdmin: true, vendorId: null, status: { $in: OPEN_STATUSES } };
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+
+    const [bookings, total] = await Promise.all([
+      Booking.find(query)
+        .select('-workPhotos -potentialVendors')
+        .populate('userId', 'name phone email')
+        .populate('serviceId', 'title iconUrl')
+        .populate('categoryId', 'title slug')
+        .populate('zoneId', 'name')
+        .sort({ adminQueuedAt: 1, createdAt: 1 })
+        .skip(skip)
+        .limit(parseInt(limit)),
+      Booking.countDocuments(query)
+    ]);
+
+    res.status(200).json({
+      success: true,
+      data: bookings,
+      pagination: { page: parseInt(page), limit: parseInt(limit), total, pages: Math.ceil(total / parseInt(limit)) }
+    });
+  } catch (error) {
+    console.error('Get unassigned bookings error:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch bookings. Please try again.' });
+  }
+};
+
+/**
+ * Professionals the admin can pick for one booking.
+ * GET /api/admin/bookings/:id/assignable-workers?search=
+ */
+const getAssignableWorkers = async (req, res) => {
+  try {
+    const data = await adminAssignment.listAssignableWorkers(req.params.id, { search: req.query.search });
+    res.status(200).json({ success: true, ...data });
+  } catch (error) {
+    if (error instanceof adminAssignment.AssignmentError) {
+      return res.status(error.statusCode).json({ success: false, message: error.message });
+    }
+    console.error('Get assignable workers error:', error);
+    res.status(500).json({ success: false, message: 'Failed to load professionals. Please try again.' });
+  }
+};
+
+/**
+ * Send the booking to a professional chosen by the admin; they accept or decline as usual.
+ * POST /api/admin/bookings/:id/assign   { workerId, note? }
+ */
+const assignBooking = async (req, res) => {
+  try {
+    const { workerId, note } = req.body || {};
+    if (!workerId || !/^[0-9a-fA-F]{24}$/.test(String(workerId))) {
+      return res.status(400).json({ success: false, message: 'Choose a professional to assign' });
+    }
+
+    const result = await adminAssignment.assignWorker(req.params.id, workerId, req.user?.id || req.user?._id, { note });
+
+    res.status(200).json({
+      success: true,
+      message: `Request sent to ${result.worker.businessName || result.worker.name}. The booking is confirmed once they accept.`,
+      data: result.booking,
+      worker: result.worker
+    });
+  } catch (error) {
+    if (error instanceof adminAssignment.AssignmentError) {
+      return res.status(error.statusCode).json({ success: false, message: error.message });
+    }
+    console.error('Assign booking error:', error);
+    res.status(500).json({ success: false, message: 'Failed to assign the booking. Please try again.' });
   }
 };
 
@@ -355,6 +444,9 @@ const getBookingAnalytics = async (req, res) => {
 };
 
 module.exports = {
+  getUnassignedBookings,
+  getAssignableWorkers,
+  assignBooking,
   getAllBookings,
   getBookingById,
   cancelBooking,

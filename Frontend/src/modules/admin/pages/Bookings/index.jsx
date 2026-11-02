@@ -8,6 +8,7 @@ import {
 import { toast } from 'react-hot-toast';
 import { adminBookingService } from '../../../../services/adminBookingService';
 import { getDashboardStats } from '../../../../services/adminDashboardService';
+import AssignmentQueue from './AssignmentQueue';
 
 const BookingStatsCard = ({ title, count, icon: Icon, colorClass, bgClass }) => (
   <div className={`p-3 rounded-xl border border-gray-100 shadow-sm flex items-center justify-between ${bgClass}`}>
@@ -25,6 +26,22 @@ const BookingStatsCard = ({ title, count, icon: Icon, colorClass, bgClass }) => 
 const Bookings = () => {
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  // 'all' bookings, or the queue of bookings waiting for the admin to pick a professional
+  const [view, setView] = useState(() => (new URLSearchParams(window.location.search).get('view') === 'queue' ? 'queue' : 'all'));
+  const [queueCount, setQueueCount] = useState(0);
+  useEffect(() => {
+    let alive = true;
+    const loadCount = async () => {
+      try {
+        const res = await adminBookingService.getUnassignedBookings({ limit: 1 });
+        if (alive && res.success) setQueueCount(res.pagination?.total || 0);
+      } catch (_) { /* the badge is a nicety */ }
+    };
+    loadCount();
+    const t = setInterval(loadCount, 30000);
+    return () => { alive = false; clearInterval(t); };
+  }, []);
 
   // Filters
   const [search, setSearch] = useState(() => new URLSearchParams(window.location.search).get('search') || '');
@@ -135,6 +152,33 @@ const Bookings = () => {
 
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-4">
+      {/* All bookings / the assignment queue */}
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={() => setView('all')}
+          className={`px-4 py-2 rounded-lg text-xs font-bold border transition-colors ${view === 'all' ? 'bg-gray-900 text-white border-gray-900' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}
+        >
+          All bookings
+        </button>
+        <button
+          type="button"
+          onClick={() => setView('queue')}
+          className={`px-4 py-2 rounded-lg text-xs font-bold border transition-colors flex items-center gap-2 ${view === 'queue' ? 'bg-amber-500 text-white border-amber-500' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}
+        >
+          Needs assignment
+          {queueCount > 0 && (
+            <span className={`min-w-[18px] h-[18px] px-1 rounded-full text-[10px] flex items-center justify-center ${view === 'queue' ? 'bg-white text-amber-600' : 'bg-red-500 text-white'}`}>
+              {queueCount}
+            </span>
+          )}
+        </button>
+      </div>
+
+      {view === 'queue' ? (
+        <AssignmentQueue onCountChange={setQueueCount} />
+      ) : (
+      <>
       {/* Stats Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         <BookingStatsCard title="Awaiting" count={stats.pending} icon={FiClock} bgClass="bg-yellow-50" colorClass="text-yellow-600" />
@@ -299,6 +343,8 @@ const Bookings = () => {
           </div>
         )}
       </div>
+      </>
+      )}
     </motion.div>
   );
 };

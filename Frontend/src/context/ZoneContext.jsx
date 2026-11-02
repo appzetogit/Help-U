@@ -11,6 +11,9 @@ export const ZoneProvider = ({ children }) => {
   const [zoneError, setZoneError] = useState(null);
   const [isOutOfZone, setIsOutOfZone] = useState(false);
   const [userCoords, setUserCoords] = useState(null);
+  // Admin-edited content of the "outside our service area" page, and who to contact
+  const [outOfZonePage, setOutOfZonePage] = useState(null);
+  const [outOfZoneSupport, setOutOfZoneSupport] = useState(null);
   const lastLookupRef = useRef(null);
 
   const detectZone = useCallback(async (lat, lng) => {
@@ -35,7 +38,18 @@ export const ZoneProvider = ({ children }) => {
         } else {
           setCurrentZone(null);
           // Only out of area when zones actually exist; no zones configured = no gating
-          setIsOutOfZone(res.data.zonesConfigured !== false);
+          const outOfArea = res.data.zonesConfigured !== false;
+          setIsOutOfZone(outOfArea);
+          if (outOfArea) {
+            if (res.data.outOfZonePage) setOutOfZonePage(res.data.outOfZonePage);
+            // Support contact details come with the page endpoint
+            api.get('/public/zones/out-of-zone-page').then((r) => {
+              if (r.data?.success) {
+                setOutOfZonePage(r.data.outOfZonePage);
+                setOutOfZoneSupport(r.data.support || null);
+              }
+            }).catch(() => {});
+          }
           try { localStorage.removeItem('detectedZoneId'); } catch {}
         }
       }
@@ -91,6 +105,13 @@ export const ZoneProvider = ({ children }) => {
     zoneLoading,
     zoneError,
     isOutOfZone,
+    outOfZonePage,
+    outOfZoneSupport,
+    // The backend refused a booking as outside every zone (the app's own check can lag behind)
+    markOutOfZone: (page) => {
+      setIsOutOfZone(true);
+      if (page) setOutOfZonePage(page);
+    },
     userCoords,
     detectZone,
     detectFromBrowser,

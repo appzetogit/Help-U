@@ -76,9 +76,12 @@ const handleWorkerCancellation = async (bookingId, workerId, reason = '') => {
   booking.notifiedVendors = [];
   const candidates = remainingCandidates(booking);
 
+  // With nobody left on the ranked list the booking goes to the admin queue (when switched on)
+  // so an admin can pick another professional, rather than being cancelled on the customer.
+  const adminCanTakeOver = candidates.length === 0 && config.isAdminAssignmentEnabled !== false;
   const canReassign = config.autoReassignOnWorkerCancel
     && (booking.reassignmentCount || 0) < config.maxReassignments
-    && candidates.length > 0;
+    && (candidates.length > 0 || adminCanTakeOver);
 
   // Dropping a job late costs the professional the admin's penalty, taken from their earnings
   // (which may go negative; settlements already handle that).
@@ -141,6 +144,10 @@ const handleWorkerCancellation = async (bookingId, workerId, reason = '') => {
     booking.$locals.skipStatusEntry = true;
     booking.$locals.actor = 'worker';
     await booking.save();
+
+    if (adminCanTakeOver && candidates.length === 0) {
+      await require('./adminAssignmentService').queueForAdmin(booking._id, { reason: 'worker_declined' });
+    }
 
     emit(`user_${booking.userId}`, 'booking_updated', {
       bookingId: booking._id,

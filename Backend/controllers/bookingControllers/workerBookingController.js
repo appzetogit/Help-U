@@ -265,6 +265,8 @@ const acceptBooking = async (req, res) => {
         _id: id,
         status: { $in: [BOOKING_STATUS.REQUESTED, BOOKING_STATUS.SEARCHING, BOOKING_STATUS.CONFIRMED] },
         vendorId: null, // Crucial: Ensures another request didn't just take it
+        // A booking waiting in the admin queue has no alerted workers; only the admin can hand it out
+        awaitingAdmin: { $ne: true },
         // A worker who rejected or dropped this booking cannot take it back.
         excludedVendors: { $ne: vendorId },
         // ...and only a worker the booking was sent to can take it (an older booking with no
@@ -465,6 +467,22 @@ const rejectBooking = async (req, res) => {
       }
     );
 
+    // The admin picked this professional by hand and they said no: the booking goes back to the
+    // admin queue so someone else can be chosen (it has no later waves to fall back on).
+    const isAdminPick = booking.adminAssignedAt && !booking.vendorId
+      && (booking.notifiedVendors || []).some((v) => v.toString() === vendorId.toString());
+    if (isAdminPick) {
+      const requeued = await require('../../services/adminAssignmentService').requeueAfterDecline(booking._id, vendorId);
+      if (requeued) {
+        return res.status(200).json({
+          success: true,
+          message: 'Booking rejected successfully',
+          data: { bookingId: id }
+        });
+      }
+      // Queue switched off: fall through to the normal "nobody left" handling below
+    }
+
     // Remove worker from notifiedVendors (they've responded) and exclude them
     // from later waves. potentialVendors is left intact: the scheduler picks
     // each wave from it by skipping notified and excluded workers, so removing
@@ -494,6 +512,20 @@ const rejectBooking = async (req, res) => {
     }
 
     if (pendingRequests === 0 && remainingPotential === 0) {
+      // Everyone nearby has said no: an admin can still pick someone by hand
+      const adminAssignment = require('../../services/adminAssignmentService');
+      if (await adminAssignment.isQueueEnabled()) {
+        await booking.save(); // keeps this professional excluded
+        const queued = await adminAssignment.queueForAdmin(booking._id, { reason: 'no_worker_accepted' });
+        if (queued) {
+          return res.status(200).json({
+            success: true,
+            message: 'Booking rejected successfully',
+            data: { bookingId: id }
+          });
+        }
+      }
+
       // No workers left - mark booking as rejected/failed
       booking.status = BOOKING_STATUS.REJECTED;
       booking.cancelledAt = new Date();
