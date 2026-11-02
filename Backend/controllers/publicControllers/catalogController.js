@@ -11,6 +11,7 @@ const { getRedis, isRedisConnected } = require('../../services/redisService');
 const { getServiceRatings, combineRatings, toDisplayRating } = require('../../services/serviceRatingService');
 const { resolveFieldsForCategories } = require('../../utils/detailFields');
 const { expandZoneCategories } = require('../../utils/zoneCategories');
+const { cityScopeQuery } = require('../../utils/cityScope');
 
 /**
  * Helper to resolve zone from query (zoneId, lat, lng, cityId)
@@ -497,7 +498,8 @@ const advancedCatalogSearch = async (req, res) => {
     // 1. Matched Categories (top-level only — sub-categories are discovery
     // surfaces inside a parent catalog, not standalone search results).
     const catQuery = { status: 'active', parentId: null, publishStatus: { $ne: 'draft' } };
-    if (cityId) catQuery.cityIds = cityId;
+    // Categories open to every city (empty cityIds) are in every city's search too
+    if (cityId) catQuery.$and = [cityScopeQuery(cityId)];
     catQuery.$or = [
       { title: { $regex: queryTerm, $options: 'i' } },
       { slug: { $regex: queryTerm, $options: 'i' } }
@@ -923,7 +925,7 @@ const getCategoriesEta = async (req, res) => {
     const { WORKER_STATUS } = require('../../utils/constants');
 
     const categoryQuery = { status: 'active', publishStatus: { $ne: 'draft' } };
-    if (cityId) categoryQuery.cityIds = cityId;
+    if (cityId) Object.assign(categoryQuery, cityScopeQuery(cityId));
     // Top-level only — sub-categories inherit their parent's ETA badge
     // through the catalog modal; they don't own their own badge on the grid.
     categoryQuery.parentId = null;

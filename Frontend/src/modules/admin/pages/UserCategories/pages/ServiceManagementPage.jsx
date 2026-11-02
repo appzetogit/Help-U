@@ -115,10 +115,11 @@ const ServiceManagementPage = ({ selectedCity: propCity }) => {
   const [pageSize] = useState(20);
 
   // ─── LOAD HEALTH METRICS ──────────────────────────────────────────────
+  // The cards follow the selected city so they agree with the list under them.
   const loadHealth = useCallback(async () => {
     try {
       setLoadingHealth(true);
-      const res = await catalogHealthService.getHealth();
+      const res = await catalogHealthService.getHealth({ cityId: selectedCity || undefined });
       if (res?.success) {
         setHealthData(res);
       }
@@ -127,26 +128,15 @@ const ServiceManagementPage = ({ selectedCity: propCity }) => {
     } finally {
       setLoadingHealth(false);
     }
-  }, []);
+  }, [selectedCity]);
 
   // ─── LOAD CITIES & BASE METADATA ──────────────────────────────────────
   useEffect(() => {
     const initMeta = async () => {
       try {
-        const [cityRes, catRes, brandRes] = await Promise.all([
-          cityService.getAll(),
-          categoryService.getAll({}),
-          brandService.getAll({}),
-        ]);
-
+        const cityRes = await cityService.getAll();
         if (cityRes?.success) {
           setCities((cityRes.cities || []).filter((c) => c.isActive));
-        }
-        if (catRes?.success) {
-          setCategories(catRes.categories || []);
-        }
-        if (brandRes?.success) {
-          setBrands(brandRes.brands || []);
         }
       } catch (err) {
         console.error("Meta load error:", err);
@@ -154,6 +144,29 @@ const ServiceManagementPage = ({ selectedCity: propCity }) => {
     };
 
     initMeta();
+  }, []);
+
+  // Categories and brands in the filters (and the tab counts) follow the selected city
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const cityParams = selectedCity ? { cityId: selectedCity } : {};
+        const [catRes, brandRes] = await Promise.all([
+          categoryService.getAll(cityParams),
+          brandService.getAll(cityParams),
+        ]);
+        if (!alive) return;
+        if (catRes?.success) setCategories(catRes.categories || []);
+        if (brandRes?.success) setBrands(brandRes.brands || []);
+      } catch (err) {
+        console.error("Meta load error:", err);
+      }
+    })();
+    return () => { alive = false; };
+  }, [selectedCity]);
+
+  useEffect(() => {
     loadHealth();
   }, [loadHealth]);
 
@@ -161,7 +174,7 @@ const ServiceManagementPage = ({ selectedCity: propCity }) => {
   useEffect(() => {
     const handleCategoryUpdate = async () => {
       try {
-        const catRes = await categoryService.getAll({ parentId: null });
+        const catRes = await categoryService.getAll({ parentId: null, ...(selectedCity ? { cityId: selectedCity } : {}) });
         if (catRes?.success) {
           setCategories(catRes.categories || []);
         }
@@ -176,14 +189,16 @@ const ServiceManagementPage = ({ selectedCity: propCity }) => {
       window.removeEventListener("categoryCreated", handleCategoryUpdate);
       window.removeEventListener("adminUserAppCatalogUpdated", handleCategoryUpdate);
     };
-  }, []);
+  }, [selectedCity]);
 
-  // Keep propCity synced
+  // Follow the header's city whenever the HEADER changes it (including its first, asynchronous
+  // value). A pick made in this page's own City filter stays until the header changes again. This
+  // used to compare against the page's own city on every render, which snapped the filter straight
+  // back, so "All Cities" or any other city could never be chosen here.
   useEffect(() => {
-    if (propCity && propCity !== selectedCity) {
-      setSelectedCity(propCity);
-    }
-  }, [propCity, selectedCity]);
+    setSelectedCity(propCity || "");
+    setPage(1);
+  }, [propCity]);
 
   // ─── DYNAMIC SUB-CATEGORIES ON CATEGORY CHANGE ────────────────────────
   useEffect(() => {
@@ -259,12 +274,29 @@ const ServiceManagementPage = ({ selectedCity: propCity }) => {
       if (selectedPublishStatus !== "all") params.publishStatus = selectedPublishStatus;
       if (selectedCategory !== "all") params.categoryId = selectedCategory;
 
-      const res = await serviceService.getWithStats(params);
-      if (res?.success) {
-        setServices(res.services || []);
-      } else {
+      // The API pages its answer (never more than 200 rows); the table filters and pages locally,
+      // so fetch every page. Without this only the first 50 services ever appeared.
+      const PAGE = 200;
+      const all = [];
+      let pageNo = 1;
+      let pages = 1;
+      let failedMessage = null;
+      do {
+        const res = await serviceService.getWithStats({ ...params, page: pageNo, limit: PAGE });
+        if (!res?.success) {
+          failedMessage = res?.message || "Failed to load services";
+          break;
+        }
+        all.push(...(res.services || []));
+        pages = res.pages || 1;
+        pageNo += 1;
+      } while (pageNo <= pages && pageNo <= 25);
+
+      if (failedMessage && all.length === 0) {
         setServices([]);
-        setServicesError(res?.message || "Failed to load services");
+        setServicesError(failedMessage);
+      } else {
+        setServices(all);
       }
     } catch (err) {
       console.error("Services fetch error:", err);
@@ -284,7 +316,8 @@ const ServiceManagementPage = ({ selectedCity: propCity }) => {
     const map = new Map();
     if (Array.isArray(healthData.needsAttention)) {
       healthData.needsAttention.forEach((item) => {
-        const id = String(item.id || item._id);
+        // The API names it serviceId
+        const id = String(item.serviceId || item.id || item._id);
         map.set(id, item.reasons || ["needs-attention"]);
       });
     }

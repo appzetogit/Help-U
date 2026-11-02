@@ -1,4 +1,5 @@
 const Brand = require('../../models/Brand');
+const { cityScopeQuery } = require('../../utils/cityScope');
 const Category = require('../../models/Category');
 const UserService = require('../../models/UserService');
 const Booking = require('../../models/Booking');
@@ -22,7 +23,8 @@ const getAllBrands = async (req, res) => {
     const query = {};
     if (status) query.status = status;
     if (categoryId) query.categoryIds = categoryId;
-    if (cityId) query.cityIds = cityId;
+    // Brands open to every city (empty cityIds) belong to each city, as in the customer app
+    if (cityId) Object.assign(query, cityScopeQuery(cityId));
 
     const brands = await Brand.find(query)
       // .populate('categoryIds', 'title slug')

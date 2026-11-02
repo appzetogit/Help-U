@@ -1,4 +1,5 @@
 const Category = require('../../models/Category');
+const { renameWorkerSkill } = require('../../utils/workerSkills');
 const Brand = require('../../models/Brand');
 const UserService = require('../../models/UserService');
 const Booking = require('../../models/Booking');
@@ -456,6 +457,11 @@ const updateCategory = async (req, res) => {
     if (fields.heroBanner !== undefined) category.markModified('heroBanner');
     if (fields.detailFields !== undefined) category.markModified('detailFields');
     await category.save();
+    // Professionals pick categories by title: keep them attached when the title changes
+    if (before.title !== category.title) {
+      await renameWorkerSkill(before.title, category.title)
+        .catch((err) => console.error('[Category] Could not carry the new title to professionals:', err.message));
+    }
     await invalidatePublicCatalogKeys();
     writeAudit({ adminId: req.user.id, action: 'update', entityType: 'category', entityId: category._id, before, after: category });
 

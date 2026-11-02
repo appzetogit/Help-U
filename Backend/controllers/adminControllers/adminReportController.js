@@ -492,7 +492,7 @@ exports.getAdvancedAnalytics = async (req, res) => {
       },
       {
         $lookup: {
-          from: 'workers',
+          from: Worker.collection.name, // stored in 'vendors'; 'workers' matched nothing, so names showed as "Partner"
           localField: 'vendorId',
           foreignField: '_id',
           as: 'worker'

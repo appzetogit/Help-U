@@ -6,12 +6,93 @@ const Cart = require('../../models/Cart');
 const Coupon = require('../../models/Coupon');
 const HomeContent = require('../../models/HomeContent');
 const { validationResult } = require('express-validator');
-const { SERVICE_STATUS } = require('../../utils/constants');
+const { SERVICE_STATUS, WORKER_STATUS } = require('../../utils/constants');
 const { buildServiceContent } = require('../../utils/serviceContent');
 const { validatePricingFields } = require('../../utils/servicePricing');
 const { invalidatePublicCatalogKeys } = require('../../utils/catalogCache');
 const { writeAudit } = require('../../utils/auditLog');
 const Worker = require('../../models/Worker');
+const { buildServiceCityMatch } = require('../../utils/cityScope');
+const { renameWorkerSkill } = require('../../utils/workerSkills');
+
+
+/**
+ * Pipeline stages that count the approved, active professionals who can take a service.
+ *
+ * Needs `$title` (the service) and `$category` already on the document. A professional lists
+ * skills by title (Worker.service / Worker.categories, a mix of services, categories and
+ * sub-categories), and booking dispatch matches them case-insensitively against the service,
+ * its category and the parent category, so this does exactly the same - otherwise the admin
+ * would show 0 for professionals who really do receive these bookings.
+ * Adds `workersMapped`.
+ */
+const workersMappedStages = () => ([
+  {
+    $lookup: {
+      from: 'categories',
+      localField: 'category.parentId',
+      foreignField: '_id',
+      as: 'parentCategory'
+    }
+  },
+  { $unwind: { path: '$parentCategory', preserveNullAndEmptyArrays: true } },
+  {
+    $addFields: {
+      _skillNames: {
+        $filter: {
+          input: [
+            { $toLower: { $trim: { input: { $toString: { $ifNull: ['$title', ''] } } } } },
+            { $toLower: { $trim: { input: { $toString: { $ifNull: ['$category.title', ''] } } } } },
+            { $toLower: { $trim: { input: { $toString: { $ifNull: ['$parentCategory.title', ''] } } } } }
+          ],
+          as: 'n',
+          cond: { $ne: ['$$n', ''] }
+        }
+      }
+    }
+  },
+  {
+    $lookup: {
+      // The Worker model is stored in the 'vendors' collection (kept from before the rename)
+      from: Worker.collection.name,
+      let: { names: '$_skillNames' },
+      pipeline: [
+        // Stored as lower-case 'approved' (WORKER_STATUS); an older upper-case value is tolerated
+        { $match: { isActive: true, approvalStatus: { $in: [WORKER_STATUS.APPROVED, 'APPROVED'] } } },
+        {
+          $match: {
+            $expr: {
+              $gt: [
+                {
+                  $size: {
+                    $setIntersection: [
+                      '$$names',
+                      {
+                        $map: {
+                          input: {
+                            $concatArrays: [
+                              { $cond: [{ $isArray: '$service' }, '$service', []] },
+                              { $cond: [{ $isArray: '$categories' }, '$categories', []] }
+                            ]
+                          },
+                          as: 's',
+                          in: { $toLower: { $trim: { input: { $toString: '$$s' } } } }
+                        }
+                      }
+                    ]
+                  }
+                },
+                0
+              ]
+            }
+          }
+        },
+        { $count: 'n' }
+      ],
+      as: 'workersStats'
+    }
+  }
+]);
 
 const PRICING_ENUM = ['fixed', 'hourly', 'starting_from', 'inspection_fee', 'quote_required'];
 
@@ -366,6 +447,11 @@ const updateService = async (req, res) => {
     }
 
     await service.save();
+    // Professionals pick services by title: keep them attached when the title changes
+    if (before.title !== service.title) {
+      await renameWorkerSkill(before.title, service.title)
+        .catch((err) => console.error('[Service] Could not carry the new title to professionals:', err.message));
+    }
     await invalidatePublicCatalogKeys();
     writeAudit({ adminId: req.user.id, action: 'update', entityType: 'service', entityId: service._id, before, after: service });
     res.status(200).json({ success: true, message: 'Service updated successfully', service, warnings });
@@ -610,7 +696,7 @@ const bulkMoveServices = async (req, res) => {
  */
 const listServicesWithStats = async (req, res) => {
   try {
-    const { status, brandId, categoryId, search, publishStatus } = req.query;
+    const { status, brandId, categoryId, search, publishStatus, cityId } = req.query;
     const page = Math.max(1, Number(req.query.page) || 1);
     const limit = Math.min(200, Math.max(1, Number(req.query.limit) || 50));
 
@@ -624,10 +710,15 @@ const listServicesWithStats = async (req, res) => {
       match.title = { $regex: safe, $options: 'i' };
     }
 
+    // City filter: same rule the customer app uses (a service is in a city when its category or
+    // brand lists it, or both are open to every city)
+    const cityMatch = await buildServiceCityMatch(cityId);
+    const finalMatch = cityMatch ? { $and: [match, cityMatch] } : match;
+
     const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
 
     const pipeline = [
-      { $match: match },
+      { $match: finalMatch },
       { $sort: { createdAt: -1 } },
       { $skip: (page - 1) * limit },
       { $limit: limit },
@@ -649,31 +740,7 @@ const listServicesWithStats = async (req, res) => {
         }
       },
       { $unwind: { path: '$brand', preserveNullAndEmptyArrays: true } },
-      {
-        // Count workers whose offered-categories list contains this
-        // service's category title. (Worker.service / Worker.categories are
-        // title-based, not id-based — see the model.)
-        $lookup: {
-          from: 'workers',
-          let: { catTitle: '$category.title' },
-          pipeline: [
-            {
-              $match: {
-                $expr: {
-                  $or: [
-                    { $in: ['$$catTitle', { $ifNull: ['$service', []] }] },
-                    { $in: ['$$catTitle', { $ifNull: ['$categories', []] }] }
-                  ]
-                },
-                isActive: true,
-                approvalStatus: 'APPROVED'
-              }
-            },
-            { $count: 'n' }
-          ],
-          as: 'workersStats'
-        }
-      },
+      ...workersMappedStages(),
       {
         $lookup: {
           from: 'bookings',
@@ -691,12 +758,12 @@ const listServicesWithStats = async (req, res) => {
           bookingsLast30Days: { $ifNull: [{ $arrayElemAt: ['$bookingStats.n', 0] }, 0] }
         }
       },
-      { $project: { workersStats: 0, bookingStats: 0 } }
+      { $project: { workersStats: 0, bookingStats: 0, parentCategory: 0, _skillNames: 0 } }
     ];
 
     const [services, total] = await Promise.all([
       Service.aggregate(pipeline),
-      Service.countDocuments(match)
+      Service.countDocuments(finalMatch)
     ]);
 
     res.status(200).json({
@@ -717,9 +784,13 @@ const listServicesWithStats = async (req, res) => {
  */
 const getCatalogHealth = async (req, res) => {
   try {
+    // Scoped to one city when asked, so the cards agree with the list under them
+    const cityMatch = await buildServiceCityMatch(req.query.cityId);
+    const baseMatch = { status: { $ne: SERVICE_STATUS.DELETED } };
+
     const pipeline = [
       // Only evaluate non-deleted services
-      { $match: { status: { $ne: SERVICE_STATUS.DELETED } } },
+      { $match: cityMatch ? { $and: [baseMatch, cityMatch] } : baseMatch },
       {
         $lookup: {
           from: 'brands',
@@ -740,34 +811,7 @@ const getCatalogHealth = async (req, res) => {
         }
       },
       { $unwind: { path: '$category', preserveNullAndEmptyArrays: true } },
-      {
-        // Join workers mapped by category title
-        $lookup: {
-          from: 'workers',
-          let: { catTitle: '$category.title' },
-          pipeline: [
-            {
-              $match: {
-                $expr: {
-                  $and: [
-                    { $ne: [{ $ifNull: ['$$catTitle', null] }, null] },
-                    {
-                      $or: [
-                        { $in: ['$$catTitle', { $ifNull: ['$service', []] }] },
-                        { $in: ['$$catTitle', { $ifNull: ['$categories', []] }] }
-                      ]
-                    }
-                  ]
-                },
-                isActive: true,
-                approvalStatus: 'APPROVED'
-              }
-            },
-            { $count: 'n' }
-          ],
-          as: 'workersStats'
-        }
-      },
+      ...workersMappedStages(),
       {
         $addFields: {
           workersMapped: { $ifNull: [{ $arrayElemAt: ['$workersStats.n', 0] }, 0] },

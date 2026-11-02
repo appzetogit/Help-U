@@ -272,6 +272,7 @@ export const serviceService = {
     if (params.categoryId) queryParams.append('categoryId', params.categoryId);
     if (params.search) queryParams.append('search', params.search);
     if (params.publishStatus) queryParams.append('publishStatus', params.publishStatus);
+    if (params.cityId) queryParams.append('cityId', params.cityId);
     if (params.page) queryParams.append('page', params.page);
     if (params.limit) queryParams.append('limit', params.limit);
 
@@ -370,8 +371,9 @@ export const serviceService = {
  * Catalog Health API
  */
 export const catalogHealthService = {
-  getHealth: async () => {
-    const response = await api.get('/admin/catalog/health');
+  // cityId scopes the cards to one city so they match the list underneath
+  getHealth: async (params = {}) => {
+    const response = await api.get('/admin/catalog/health', { params: params.cityId ? { cityId: params.cityId } : {} });
     return response.data;
   }
 };
