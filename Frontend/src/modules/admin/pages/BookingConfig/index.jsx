@@ -281,6 +281,16 @@ const BookingConfig = () => {
             Zones themselves (maps, surge, allowed services) are kept, just not used while "By distance" is on.
           </p>
           <DispatchModeCards value={config.dispatchMode || 'zone'} onChange={set('dispatchMode')} />
+          <div className="mt-3 rounded-lg border border-gray-100 bg-gray-50 px-3 py-2.5 text-[11px] text-gray-600 space-y-1">
+            <p className="font-bold text-gray-700">Where the distances are set (used when sending "By distance"):</p>
+            <p>
+              Normal search radius:{' '}
+              <a href="/admin/settings/financial" className="font-semibold text-sky-700 underline">Settings &rsaquo; Financial Info &rsaquo; Booking Timing &amp; Waves &rsaquo; Global Search Radius</a>
+            </p>
+            <p>Emergency search radius: <span className="font-semibold">Emergency Bookings</span> card on this page.</p>
+            <p>A professional's own travel radius: <span className="font-semibold">Partner Service Area</span> card on this page.</p>
+            <p className="text-gray-500">In "By zone" mode none of these are used.</p>
+          </div>
         </Card>
 
         <Card title="Worker Assignment" icon={FiTarget}>
