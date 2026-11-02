@@ -301,6 +301,22 @@ const DELHI = { lat: 28.6139, lng: 77.209 }; // outside every zone
       invalidateBookingConfigCache();
     });
 
+    await it('the Settings endpoint can no longer change them (one writer only)', async () => {
+      const { updateSettings } = require('../controllers/adminControllers/settingsController');
+      const before = await Settings.findOne({ type: 'global' }).lean();
+      const out = {};
+      const res = { status(c) { out.status = c; return this; }, json(b) { out.body = b; return this; } };
+      await updateSettings(
+        { body: { searchRadius: 99, maxSearchTime: 55, waveDuration: 500, supportEmail: 'help@example.com' }, app: { get: () => null } },
+        res, (e) => { out.error = e; }
+      );
+      assert.ok(!out.error, String(out.error));
+      const after = await Settings.findOne({ type: 'global' }).lean();
+      assert.deepStrictEqual([after.searchRadius, after.maxSearchTime, after.waveDuration],
+        [before.searchRadius, before.maxSearchTime, before.waveDuration], 'Settings endpoint still writes the moved fields');
+      assert.strictEqual(after.supportEmail, 'help@example.com', 'its other fields must still save');
+    });
+
     console.log('\n[Arrival-time badges follow the dispatch mode]');
     const eta = (at) => request(app).get(`/api/public/categories/eta?lat=${at.lat}&lng=${at.lng}`);
     await it('zone mode: a customer in the zone sees a badge from an in-zone professional, however far', async () => {

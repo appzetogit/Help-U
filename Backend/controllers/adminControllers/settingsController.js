@@ -65,8 +65,8 @@ exports.updateSettings = async (req, res, next) => {
       companyName, companyGSTIN, companyPAN, companyAddress, companyCity, companyState, companyPincode, companyPhone, companyEmail, invoicePrefix, sacCode,
       // Support Settings
       supportEmail, supportPhone, supportWhatsapp,
-      // Booking Timing
-      maxSearchTime, waveDuration, searchRadius,
+      // (Search radius, search time and wave timer are edited only in Booking Configuration, so they are
+      // deliberately not read from this request: one place sets them.)
       // Payment Control
       isOnlinePaymentEnabled,
       // Scrap Control
@@ -166,10 +166,6 @@ exports.updateSettings = async (req, res, next) => {
       if (supportPhone !== undefined) settings.supportPhone = supportPhone;
       if (supportWhatsapp !== undefined) settings.supportWhatsapp = supportWhatsapp;
 
-      // Booking Timing update
-      if (maxSearchTime !== undefined) settings.maxSearchTime = maxSearchTime;
-      if (waveDuration !== undefined) settings.waveDuration = waveDuration;
-      if (searchRadius !== undefined) settings.searchRadius = searchRadius;
       if (isOnlinePaymentEnabled !== undefined) settings.isOnlinePaymentEnabled = Boolean(isOnlinePaymentEnabled);
       if (isScrapEnabled !== undefined) settings.isScrapEnabled = Boolean(isScrapEnabled);
 
