@@ -61,6 +61,11 @@ const CONFIG_SCHEMA = {
   //   distance  zones are not used at all (no out-of-zone block, zone surge or zone category limits):
   //             professionals within the search radius of the address, nearest first.
   dispatchMode: ['zone', 'enum', ['zone', 'distance']],
+  // How a search runs (all edited under Booking Config -> Finding professionals). They are stored on the
+  // same Settings fields as before, so nothing that reads them changes.
+  searchRadius: [10, 'number', 1, 200],      // km around the address ('distance' mode only)
+  maxSearchTime: [5, 'number', 1, 60],       // minutes to find a professional before giving up
+  waveDuration: [60, 'number', 10, 600],     // seconds before the next batch of professionals is alerted
   assignmentStrategy: ['smart', 'enum', ['distance', 'smart']],
   assignmentDistanceWeight: [40, 'number', 0, 100],
   assignmentRatingWeight: [25, 'number', 0, 100],
@@ -161,10 +166,7 @@ const PASSTHROUGH_DEFAULTS = {
   serviceGstPercentage: 18,
   partsGstPercentage: 18,
   servicePayoutPercentage: 90,
-  partsPayoutPercentage: 100,
-  searchRadius: 10,
-  maxSearchTime: 5,
-  waveDuration: 60
+  partsPayoutPercentage: 100
 };
 
 const CACHE_TTL_MS = 10000;
@@ -224,6 +226,20 @@ const getBookingConfig = async () => {
  */
 const getPublicBookingConfig = async () => {
   const c = await getBookingConfig();
+
+  // A partner's own travel radius only matters when distance decides who gets a booking. In zone mode with
+  // at least one active zone, dispatch ignores it, so the partner app must not offer a control that does
+  // nothing. (Zone mode with no zone set up falls back to distance rules, so the radius still applies.)
+  let workerRadiusInUse = c.isWorkerServiceRadiusEnabled;
+  if (workerRadiusInUse && c.dispatchMode !== 'distance') {
+    try {
+      const Zone = require('../models/Zone');
+      if (await Zone.exists({ status: 'active' })) workerRadiusInUse = false;
+    } catch (_) {
+      // keep the admin's setting if zones cannot be checked
+    }
+  }
+
   return {
     isCustomerNotesEnabled: c.isCustomerNotesEnabled,
     customerNotesMaxLength: c.customerNotesMaxLength,
@@ -269,7 +285,7 @@ const getPublicBookingConfig = async () => {
     workerLateCancelPenaltyValue: c.workerLateCancelPenaltyValue,
     workerLateCancelPenaltyMax: c.workerLateCancelPenaltyMax,
     scrapAllowCashPayout: c.scrapAllowCashPayout,
-    isWorkerServiceRadiusEnabled: c.isWorkerServiceRadiusEnabled,
+    isWorkerServiceRadiusEnabled: workerRadiusInUse,
     workerServiceRadiusMinKm: c.workerServiceRadiusMinKm,
     workerServiceRadiusMaxKm: c.workerServiceRadiusMaxKm,
     isRescheduleEnabled: c.isRescheduleEnabled,

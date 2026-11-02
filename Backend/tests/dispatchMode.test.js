@@ -55,6 +55,7 @@ const buildApp = () => {
   app.use('/api/users', require('../routes/user-routes/cart.routes'));
   app.use('/api/users/bookings', require('../routes/user-routes/booking.routes'));
   app.use('/api/public/zones', require('../routes/public-routes/zone.routes'));
+  app.use('/api/public', require('../routes/public-routes/catalog.routes'));
   app.use('/api/admin', require('../routes/admin-routes/bookingFeatures.routes'));
   app.use('/api/admin', require('../routes/admin-routes/bookingManagement.routes'));
   return app;
@@ -106,7 +107,7 @@ const DELHI = { lat: 28.6139, lng: 77.209 }; // outside every zone
 
     const insertWorker = async (name, phone, at, extra = {}) => (await Worker.collection.insertOne({
       name, phone, email: `${phone}@x.com`,
-      approvalStatus: 'approved', isActive: true, isOnline: true,
+      approvalStatus: 'approved', isActive: true, isOnline: true, availability: 'AVAILABLE',
       service: ['Fan Repair'], categories: ['Electrician'],
       address: { city: 'Indore', lat: at.lat, lng: at.lng },
       location: { lat: at.lat, lng: at.lng },
@@ -253,6 +254,96 @@ const DELHI = { lat: 28.6139, lng: 77.209 }; // outside every zone
       assert.strictEqual(res.status, 200, JSON.stringify(res.body));
       assert.strictEqual(res.body.dispatchMode, 'distance');
       assert.ok(res.body.workers.every((w) => w.inZone === null));
+    });
+
+    // ------------------------------------------- moved settings, radius, badges
+    console.log('\n[Search settings live in Booking Config]');
+    await it('search radius, search time and wave timer are edited here, with ranges', async () => {
+      let res = await request(app).put('/api/admin/booking-config').set(adminAuth).send({ searchRadius: 12, maxSearchTime: 7, waveDuration: 45 });
+      assert.strictEqual(res.status, 200, JSON.stringify(res.body));
+      const cfg = (await request(app).get('/api/admin/booking-config').set(adminAuth)).body.config;
+      assert.deepStrictEqual([cfg.searchRadius, cfg.maxSearchTime, cfg.waveDuration], [12, 7, 45]);
+      // stored on the same Settings fields every reader already uses
+      const stored = await Settings.findOne({ type: 'global' }).lean();
+      assert.deepStrictEqual([stored.searchRadius, stored.maxSearchTime, stored.waveDuration], [12, 7, 45]);
+      for (const bad of [{ searchRadius: 0 }, { searchRadius: 500 }, { maxSearchTime: 0 }, { waveDuration: 5 }]) {
+        res = await request(app).put('/api/admin/booking-config').set(adminAuth).send(bad);
+        assert.strictEqual(res.status, 400, JSON.stringify(bad));
+      }
+      await Settings.updateOne({ type: 'global' }, { $set: { searchRadius: 10, maxSearchTime: 5, waveDuration: 60 } });
+      invalidateBookingConfigCache();
+    });
+
+    await it('the radius the admin sets is the one a distance-mode booking uses', async () => {
+      await setMode('distance');
+      const eightKmAway = { lat: DELHI.lat + 0.072, lng: DELHI.lng };
+      await Settings.updateOne({ type: 'global' }, { $set: { searchRadius: 5 } });
+      invalidateBookingConfigCache();
+      assert.strictEqual((await book(eightKmAway)).body.noWorkersFound, true, '8 km is outside a 5 km radius');
+      await Settings.updateOne({ type: 'global' }, { $set: { searchRadius: 12 } });
+      invalidateBookingConfigCache();
+      const wide = await book(eightKmAway);
+      assert.strictEqual(wide.body.noWorkersFound, false, '8 km is inside a 12 km radius');
+      assert.strictEqual(wide.body.search.radiusKm, 12);
+      await Settings.updateOne({ type: 'global' }, { $set: { searchRadius: 10 } });
+      invalidateBookingConfigCache();
+    });
+
+    await it('a radius of exactly 10 is no longer silently replaced by the global one', async () => {
+      const { findNearbyWorkers } = require('../services/locationService');
+      await Settings.updateOne({ type: 'global' }, { $set: { searchRadius: 5 } });
+      const eightKmAway = { lat: DELHI.lat + 0.072, lng: DELHI.lng };
+      const asked10 = await findNearbyWorkers(eightKmAway, 10, { service: ['Fan Repair'] });
+      assert.ok(asked10.some((w) => String(w._id) === String(nearOutside)), 'explicit 10 km was overridden by the global 5 km');
+      const asked5 = await findNearbyWorkers(eightKmAway, 5, { service: ['Fan Repair'] });
+      assert.ok(!asked5.some((w) => String(w._id) === String(nearOutside)));
+      await Settings.updateOne({ type: 'global' }, { $set: { searchRadius: 10 } });
+      invalidateBookingConfigCache();
+    });
+
+    console.log('\n[Arrival-time badges follow the dispatch mode]');
+    const eta = (at) => request(app).get(`/api/public/categories/eta?lat=${at.lat}&lng=${at.lng}`);
+    await it('zone mode: a customer in the zone sees a badge from an in-zone professional, however far', async () => {
+      await setMode('zone');
+      const res = await eta(CUSTOMER_SW);
+      assert.strictEqual(res.status, 200);
+      assert.ok(res.body.eta[String(category._id)], `no badge: ${JSON.stringify(res.body)}`);
+    });
+    await it('zone mode: a professional outside the zone is never promised (even if close)', async () => {
+      // Customer at the zone's edge; Delhi Pro is far away anyway, so move him next to the customer
+      await Worker.collection.updateOne({ _id: farInZone }, { $set: { isOnline: false } });
+      await Worker.collection.updateOne({ _id: nearOutside }, { $set: {
+        location: { lat: CUSTOMER_SW.lat, lng: CUSTOMER_SW.lng }, geoLocation: { type: 'Point', coordinates: [CUSTOMER_SW.lng, CUSTOMER_SW.lat - 0.001] } } });
+      // he is physically inside the polygon now, so he DOES count - move him just outside instead
+      await Worker.collection.updateOne({ _id: nearOutside }, { $set: { geoLocation: { type: 'Point', coordinates: [75.77, 22.64] } } });
+      const res = await eta(CUSTOMER_SW);
+      assert.strictEqual(res.body.eta[String(category._id)], undefined, 'badge promised a professional outside the zone');
+      await Worker.collection.updateOne({ _id: farInZone }, { $set: { isOnline: true } });
+      await Worker.collection.updateOne({ _id: nearOutside }, { $set: { geoLocation: { type: 'Point', coordinates: [DELHI.lng, DELHI.lat] }, location: { lat: DELHI.lat, lng: DELHI.lng } } });
+    });
+    await it('distance mode: only professionals within the radius count (the far in-zone one does not)', async () => {
+      await setMode('distance');
+      const res = await eta(CUSTOMER_SW);
+      assert.strictEqual(res.body.eta[String(category._id)], undefined);
+      const delhi = await eta(DELHI);
+      assert.ok(delhi.body.eta[String(category._id)], 'a nearby professional should give a badge');
+    });
+
+    console.log('\n[Partner app only offers a travel radius when it has an effect]');
+    await it('the public config hides the partner radius while a zone decides, shows it otherwise', async () => {
+      const { getPublicBookingConfig } = require('../utils/bookingConfig');
+      await Settings.updateOne({ type: 'global' }, { $set: { isWorkerServiceRadiusEnabled: true } });
+      await setMode('zone');
+      assert.strictEqual((await getPublicBookingConfig()).isWorkerServiceRadiusEnabled, false, 'zone mode + active zone: radius is ignored');
+      await setMode('distance');
+      assert.strictEqual((await getPublicBookingConfig()).isWorkerServiceRadiusEnabled, true);
+      await setMode('zone');
+      await Zone.updateOne({ _id: zone._id }, { status: 'inactive' });
+      assert.strictEqual((await getPublicBookingConfig()).isWorkerServiceRadiusEnabled, true, 'zone mode with no active zone uses distance rules');
+      await Zone.updateOne({ _id: zone._id }, { status: 'active' });
+      await Settings.updateOne({ type: 'global' }, { $set: { isWorkerServiceRadiusEnabled: false } });
+      assert.strictEqual((await getPublicBookingConfig()).isWorkerServiceRadiusEnabled, false, 'admin switch off stays off');
+      invalidateBookingConfigCache();
     });
 
     // ----------------------------------------------- switching back is immediate

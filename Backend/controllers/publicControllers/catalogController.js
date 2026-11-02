@@ -927,34 +927,50 @@ const getCategoriesEta = async (req, res) => {
       return res.status(200).json({ success: true, eta: {} });
     }
 
-    // Pull the global search radius once so admins can tune it
-    const globalSettings = await Settings.findOne({ type: 'global' }).select('searchRadius').lean();
-    const radiusKm = globalSettings?.searchRadius || 15;
-    const radiusMeters = radiusKm * 1000;
+    // The badge must promise exactly what dispatch would do (utils/dispatchMode.js):
+    //   zone mode, address inside a zone  -> online professionals in that zone, any distance
+    //   otherwise                         -> online professionals within the search radius
+    const eligibleConfig = await require('../../utils/bookingConfig').getBookingConfig().catch(() => null);
+    const etaZone = await resolveZone({ lat, lng, cityId });
+    const zoneDecides = !!etaZone;
+    const radiusKm = (eligibleConfig && eligibleConfig.searchRadius) || 10;
 
-    // Nearby online + available workers with real coordinates. Keep select tiny.
-    const nearby = await Worker.find({
+    const baseWorkerQuery = {
       approvalStatus: WORKER_STATUS.APPROVED,
       isActive: true,
       isOnline: true,
       availability: 'AVAILABLE',
-      'geoLocation.coordinates': { $ne: [0, 0] },
-      geoLocation: {
-        $near: {
-          $geometry: { type: 'Point', coordinates: [lng, lat] },
-          $maxDistance: radiusMeters
-        }
+      'geoLocation.coordinates': { $ne: [0, 0] }
+    };
+
+    // Nearby online + available workers with real coordinates. Keep select tiny.
+    const nearby = await Worker.find(zoneDecides
+      ? {
+        ...baseWorkerQuery,
+        $or: [
+          { zoneId: etaZone._id },
+          { zoneIds: etaZone._id },
+          { geoLocation: { $geoWithin: { $geometry: etaZone.coordinates } } }
+        ]
       }
-    })
+      : {
+        ...baseWorkerQuery,
+        geoLocation: {
+          $near: {
+            $geometry: { type: 'Point', coordinates: [lng, lat] },
+            $maxDistance: radiusKm * 1000
+          }
+        }
+      })
       .select('service categories geoLocation settings address')
       .limit(200)
       .lean();
 
     // Partner service area (admin switch): same rule as the real dispatch, so a badge never promises a partner
     // who would not actually be alerted. Partners are judged by their own radius from their home address.
+    // Not used when a zone decides: dispatch ignores a partner's own radius there too.
     let nearbyList = nearby;
-    const eligibleConfig = await require('../../utils/bookingConfig').getBookingConfig().catch(() => null);
-    if (eligibleConfig && eligibleConfig.isWorkerServiceRadiusEnabled) {
+    if (!zoneDecides && eligibleConfig && eligibleConfig.isWorkerServiceRadiusEnabled) {
       const serviceArea = require('../../utils/serviceArea');
       nearbyList = nearby.filter((w) => serviceArea.insideOwnArea(w, { lat, lng }, eligibleConfig) !== false);
       try {

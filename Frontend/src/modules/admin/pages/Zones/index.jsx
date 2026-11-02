@@ -29,7 +29,7 @@ import { cityService } from "../../services/cityService";
 import { categoryService } from "../../../../services/catalogService";
 import ModalLock from '../../../../components/common/ModalLock';
 import OutOfZonePageModal from './OutOfZonePageModal';
-import DispatchModeSwitch from '../../components/DispatchModeSwitch';
+import bookingFeaturesAdminService from '../../services/bookingFeaturesAdminService';
 
 const LIBRARIES = ["places", "geometry"];
 
@@ -94,6 +94,11 @@ const ZonesPage = () => {
   const [zones, setZones] = useState([]);
   const [showOutOfZoneEditor, setShowOutOfZoneEditor] = useState(false);
   const [dispatchMode, setDispatchMode] = useState('zone');
+  useEffect(() => {
+    bookingFeaturesAdminService.getConfig()
+      .then((res) => { if (res?.success) setDispatchMode(res.config.dispatchMode === 'distance' ? 'distance' : 'zone'); })
+      .catch(() => {});
+  }, []);
   const [cities, setCities] = useState([]);
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -693,15 +698,17 @@ const ZonesPage = () => {
         </div>
       </div>
 
-      {/* Which rule sends bookings: zones, or distance. Only one applies at a time. */}
-      <div className="bg-white border-b border-gray-200 px-5 py-2 flex flex-wrap items-center justify-between gap-2 shrink-0">
-        <p className="text-[11px] text-gray-600">
-          <span className="font-bold text-gray-800">Booking dispatch:</span>{' '}
+      {/* Which rule sends bookings is changed in ONE place: Booking Configuration. Shown here read-only. */}
+      <div className={`border-b px-5 py-2 flex flex-wrap items-center justify-between gap-2 shrink-0 ${dispatchMode === 'distance' ? 'bg-amber-50 border-amber-200' : 'bg-white border-gray-200'}`}>
+        <p className="text-[11px] text-gray-700">
+          <span className="font-bold text-gray-900">Booking dispatch: {dispatchMode === 'distance' ? 'by distance' : 'by zone'}.</span>{' '}
           {dispatchMode === 'distance'
-            ? 'by distance. Zones are saved but NOT used right now - nothing is blocked or limited by them.'
-            : 'by zone. Bookings go to professionals in the customer\'s zone; addresses outside every zone are refused.'}
+            ? 'Zones are saved but NOT used right now - nothing is blocked or limited by them.'
+            : 'Bookings go to professionals in the customer\'s zone; addresses outside every zone are refused.'}
         </p>
-        <DispatchModeSwitch compact onChanged={setDispatchMode} onLoaded={setDispatchMode} />
+        <a href="/admin/booking-config#dispatch" className="text-[11px] font-bold text-blue-700 underline">
+          Change in Booking Configuration
+        </a>
       </div>
 
       {/* Main Container: Left Zone List + Right Fullscreen Map */}

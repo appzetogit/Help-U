@@ -257,7 +257,7 @@ const _buildWorkerQuery = (filters = {}) => {
 /**
  * Find workers within specified radius of a location
  */
-const findNearbyByLiveLocation = async (centerLocation, radiusKm = 10, filters = {}) => {
+const findNearbyByLiveLocation = async (centerLocation, radiusKm = null, filters = {}) => {
   const Worker = require('../models/Worker');
   const Settings = require('../models/Settings');
   const { getNearbyWorkersFromCache, isRedisConnected } = require('./redisService');
@@ -271,10 +271,11 @@ const findNearbyByLiveLocation = async (centerLocation, radiusKm = 10, filters =
   }
 
   try {
-    // Fetch default radius from settings
-    if (radiusKm === 10) {
+    // Only when no radius was given is the admin's search radius used. (It used to replace ANY radius of
+    // exactly 10, so a deliberate emergency radius of 10 km was silently swapped for the normal one.)
+    if (radiusKm === null || radiusKm === undefined) {
       const globalSettings = await Settings.findOne({ type: 'global' }).select('searchRadius').lean();
-      if (globalSettings?.searchRadius) radiusKm = globalSettings.searchRadius;
+      radiusKm = globalSettings?.searchRadius || 10;
     }
 
     // Matching is purely by distance + service radius: the city name is not a
@@ -450,7 +451,7 @@ const findServiceAreaWorkers = async (center, config, filters = {}, excludeIds =
  * measured from his saved home address: left out when the customer is beyond it, and included when the customer
  * is inside it even though his current position is outside the platform radius. Everyone else is unchanged.
  */
-const findNearbyWorkers = async (centerLocation, radiusKm = 10, filters = {}, options = {}) => {
+const findNearbyWorkers = async (centerLocation, radiusKm = null, filters = {}, options = {}) => {
   const pool = await findNearbyByLiveLocation(centerLocation, radiusKm, filters);
   if (!centerLocation || typeof centerLocation.lat !== 'number' || typeof centerLocation.lng !== 'number') return pool;
 

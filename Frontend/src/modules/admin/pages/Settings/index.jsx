@@ -438,7 +438,9 @@ const AdminSettings = () => {
       // Not sent from here: the cancellation fee (Booking Configuration) and the scrap switch (saved the
       // moment it is toggled), so a stale copy loaded with this page can never overwrite a change made
       // elsewhere. The online-payments switch lives only on the Customization page.
-      const { cancellationPenalty, isScrapEnabled, ...financialPayload } = financialSettings; // eslint-disable-line no-unused-vars
+      // Fields edited elsewhere are never sent from here, so a stale copy of this page cannot overwrite them:
+      // cancellation fees and the search radius / search time / wave timer live in Booking Configuration.
+      const { cancellationPenalty, isScrapEnabled, searchRadius, maxSearchTime, waveDuration, ...financialPayload } = financialSettings; // eslint-disable-line no-unused-vars
       await updateSettings(financialPayload);
       toast.success('Financial settings updated');
     } catch (error) {
@@ -1036,26 +1038,11 @@ const AdminSettings = () => {
                     </div>
                     <div className="pt-4 border-t border-gray-100 md:col-span-2">
                       <h4 className="text-xs font-bold text-gray-700 uppercase mb-3">Booking Timing & Waves</h4>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                        <div>
-                          <label className="block text-xs font-semibold text-gray-500 uppercase mb-1.5">Max Global Search Time (Mins)</label>
-                          <input type="number" name="maxSearchTime" value={financialSettings.maxSearchTime} onChange={handleFinancialChange}
-                            className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg outline-none focus:border-green-500 transition-all" />
-                          <p className="text-[10px] text-gray-400 mt-1">Total time to find a worker before search is auto-cancelled</p>
-                        </div>
-                        <div>
-                          <label className="block text-xs font-semibold text-gray-500 uppercase mb-1.5">Wave Alert Threshold (Secs)</label>
-                          <input type="number" name="waveDuration" value={financialSettings.waveDuration} onChange={handleFinancialChange}
-                            className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg outline-none focus:border-green-500 transition-all" />
-                          <p className="text-[10px] text-gray-400 mt-1">Time waited before alerting the next batch of workers</p>
-                        </div>
-                        <div>
-                          <label className="block text-xs font-semibold text-gray-500 uppercase mb-1.5">Global Search Radius (Km)</label>
-                          <input type="number" name="searchRadius" value={financialSettings.searchRadius} onChange={handleFinancialChange}
-                            className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg outline-none focus:border-green-500 transition-all" />
-                          <p className="text-[10px] text-gray-400 mt-1">Default distance to hunt for workers around booking location</p>
-                        </div>
-                      </div>
+                      <p className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm text-gray-600">
+                        Search radius, search time limit and the wave timer are set in{' '}
+                        <a href="/admin/booking-config#dispatch" className="font-semibold text-sky-700 underline">Booking Configuration &rsaquo; Finding professionals</a>,
+                        together with the zone / distance switch, so everything that decides who gets a booking is in one place.
+                      </p>
                     </div>
                   </div>
                   <div className="flex justify-end pt-2">
