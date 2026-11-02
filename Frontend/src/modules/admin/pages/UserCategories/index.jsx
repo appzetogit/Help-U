@@ -12,10 +12,35 @@ import HomeSectionsManagerPage from "./pages/HomeSectionsManagerPage";
 import { cityService } from "../../services/cityService";
 import AdminErrorBoundary from "../../components/common/AdminErrorBoundary";
 
+const CITY_KEY = 'adminCatalogCity';
+
+const readAdmin = () => {
+  try {
+    return JSON.parse(sessionStorage.getItem('adminData') || localStorage.getItem('adminData') || '{}');
+  } catch {
+    return {};
+  }
+};
+
 const UserCategories = () => {
   const [catalog, setCatalog] = useState(() => ensureIds(loadCatalog()));
   const [cities, setCities] = useState([]);
-  const [selectedCity, setSelectedCity] = useState('');
+
+  // Who is looking decides the starting city:
+  //  - super admin: the city they used last time, otherwise "All Cities" (empty = no city filter)
+  //  - a city admin: their own city (the selector is hidden for them)
+  const admin = readAdmin();
+  const isAdminSuper = (admin.role || 'admin') === 'super_admin';
+  const ownCityId = String(admin.cityId?._id || admin.cityId || '');
+  const [selectedCity, setSelectedCity] = useState(() => {
+    if (!isAdminSuper) return ownCityId;
+    try { return localStorage.getItem(CITY_KEY) || ''; } catch { return ''; }
+  });
+
+  const changeCity = (cityId) => {
+    setSelectedCity(cityId);
+    try { localStorage.setItem(CITY_KEY, cityId); } catch { /* remembering is a nicety */ }
+  };
 
   useEffect(() => {
     const handler = () => setCatalog(ensureIds(loadCatalog()));
@@ -32,17 +57,14 @@ const UserCategories = () => {
           const loadedCities = (response.cities || []).filter(city => city.isActive);
           setCities(loadedCities);
 
-          // Auto-select default or first city if none selected
-          if (!selectedCity && loadedCities.length > 0) {
-            const defaultCity = loadedCities.find(c => c.isDefault);
-            // Handle potentially different ID formats
-            const cityId = defaultCity
-              ? (defaultCity._id || defaultCity.id)
-              : (loadedCities[0]._id || loadedCities[0].id);
-
-            if (cityId) {
-              setSelectedCity(cityId);
-            }
+          const ids = loadedCities.map((c) => String(c._id || c.id));
+          if (isAdminSuper) {
+            // A remembered city that was deleted or switched off falls back to "All Cities"
+            setSelectedCity((prev) => (prev && !ids.includes(String(prev)) ? '' : prev));
+          } else if (!ownCityId || !ids.includes(ownCityId)) {
+            // A city admin with no (valid) city of their own keeps the old behaviour: the default city
+            const fallback = loadedCities.find((c) => c.isDefault) || loadedCities[0];
+            if (fallback) setSelectedCity(fallback._id || fallback.id);
           }
         }
       } catch (error) {
@@ -51,17 +73,6 @@ const UserCategories = () => {
     };
     fetchCities();
   }, []);
-
-  // Get admin role to control UI visibility
-  const isAdminSuper = (() => {
-    try {
-      const storedData = sessionStorage.getItem('adminData') || localStorage.getItem('adminData');
-      const stored = JSON.parse(storedData || '{}');
-      return (stored.role || 'admin') === 'super_admin';
-    } catch (e) {
-      return false;
-    }
-  })();
 
   return (
     <div className="space-y-4">
@@ -76,7 +87,7 @@ const UserCategories = () => {
             <label className="text-sm font-medium text-slate-200">Selected City:</label>
             <select
               value={selectedCity}
-              onChange={(e) => setSelectedCity(e.target.value)}
+              onChange={(e) => changeCity(e.target.value)}
               className="px-4 py-2 bg-slate-700 text-white border border-slate-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-500 min-w-[200px]"
             >
               {/* Empty = no city filter: every page below already treats it as "all cities" */}

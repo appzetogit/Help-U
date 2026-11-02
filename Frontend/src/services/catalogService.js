@@ -33,6 +33,7 @@ export const categoryService = {
     if (params.isPopular !== undefined) queryParams.append('isPopular', params.isPopular);
     if (params.cityId) queryParams.append('cityId', params.cityId);
     if (params.parentId !== undefined && params.parentId !== null) queryParams.append('parentId', params.parentId);
+    if (params.withCounts) queryParams.append('withCounts', 'true');
     if (params.search) queryParams.append('search', params.search);
 
     const response = await api.get(`/admin/categories${queryParams.toString() ? `?${queryParams.toString()}` : ''}`);
@@ -46,6 +47,12 @@ export const categoryService = {
   },
 
   // Get category children (sub-categories)
+  // The professionals behind a category's "workers" count
+  getWorkers: async (id, cityId) => {
+    const response = await api.get(`/admin/categories/${id}/workers`, { params: cityId ? { cityId } : {} });
+    return response.data;
+  },
+
   getChildren: async (id) => {
     const response = await api.get(`/admin/categories/${id}/children`);
     return response.data;

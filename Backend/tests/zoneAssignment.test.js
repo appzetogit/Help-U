@@ -106,6 +106,8 @@ const insertWorker = async (fields) => (await Worker.collection.insertOne({
   const mongod = await MongoMemoryServer.create();
   await mongoose.connect(mongod.getUri());
   const app = buildApp();
+  // One server for the whole run: a fresh server on a random port per request can land on a port another program just took
+  const server = require('http').createServer(app).listen(0, '127.0.0.1');
 
   try {
     await Settings.create({ type: 'global' });
@@ -129,7 +131,7 @@ const insertWorker = async (fields) => (await Worker.collection.insertOne({
     // ---------------------------------------------------------------- zone gate
     console.log('\n[Zone gate]');
     await it('with no zones set up, any address can be booked', async () => {
-      const res = await request(app).post('/api/users/bookings').set(userAuth).send(checkoutPayload(service._id, OUTSIDE.lat, OUTSIDE.lng));
+      const res = await request(server).post('/api/users/bookings').set(userAuth).send(checkoutPayload(service._id, OUTSIDE.lat, OUTSIDE.lng));
       assert.strictEqual(res.status, 201, JSON.stringify(res.body));
     });
     await wait(400);
@@ -144,7 +146,7 @@ const insertWorker = async (fields) => (await Worker.collection.insertOne({
     await Zone.init();
 
     await it('the lookup says out of area and carries the admin-edited page', async () => {
-      const res = await request(app).get(`/api/public/zones/lookup?lat=${OUTSIDE.lat}&lng=${OUTSIDE.lng}`);
+      const res = await request(server).get(`/api/public/zones/lookup?lat=${OUTSIDE.lat}&lng=${OUTSIDE.lng}`);
       assert.strictEqual(res.status, 200);
       assert.strictEqual(res.body.zone, null);
       assert.strictEqual(res.body.zonesConfigured, true);
@@ -152,13 +154,13 @@ const insertWorker = async (fields) => (await Worker.collection.insertOne({
     });
 
     await it('the lookup finds the zone for an address inside it', async () => {
-      const res = await request(app).get(`/api/public/zones/lookup?lat=${INSIDE.lat}&lng=${INSIDE.lng}`);
+      const res = await request(server).get(`/api/public/zones/lookup?lat=${INSIDE.lat}&lng=${INSIDE.lng}`);
       assert.strictEqual(String(res.body.zone.id), String(zone._id));
       assert.strictEqual(res.body.outOfZonePage, undefined);
     });
 
     await it('refuses a booking outside every zone with OUT_OF_ZONE and the page content', async () => {
-      const res = await request(app).post('/api/users/bookings').set(userAuth).send(checkoutPayload(service._id, OUTSIDE.lat, OUTSIDE.lng));
+      const res = await request(server).post('/api/users/bookings').set(userAuth).send(checkoutPayload(service._id, OUTSIDE.lat, OUTSIDE.lng));
       assert.strictEqual(res.status, 400, JSON.stringify(res.body));
       assert.strictEqual(res.body.code, 'OUT_OF_ZONE');
       assert.ok(res.body.outOfZonePage && res.body.outOfZonePage.title);
@@ -166,7 +168,7 @@ const insertWorker = async (fields) => (await Worker.collection.insertOne({
     });
 
     await it('a zoneId sent by the app cannot override where the address really is', async () => {
-      const res = await request(app).post('/api/users/bookings').set(userAuth)
+      const res = await request(server).post('/api/users/bookings').set(userAuth)
         .send(checkoutPayload(service._id, OUTSIDE.lat, OUTSIDE.lng, { zoneId: String(zone._id) }));
       assert.strictEqual(res.status, 400, JSON.stringify(res.body));
       assert.strictEqual(res.body.code, 'OUT_OF_ZONE');
@@ -174,7 +176,7 @@ const insertWorker = async (fields) => (await Worker.collection.insertOne({
 
     await it('an inactive zone does not count as a service area', async () => {
       await Zone.updateOne({ _id: zone._id }, { status: 'inactive' });
-      const res = await request(app).get(`/api/public/zones/lookup?lat=${INSIDE.lat}&lng=${INSIDE.lng}`);
+      const res = await request(server).get(`/api/public/zones/lookup?lat=${INSIDE.lat}&lng=${INSIDE.lng}`);
       assert.strictEqual(res.body.zone, null);
       assert.strictEqual(res.body.zonesConfigured, false); // nothing active left: no gating at all
       await Zone.updateOne({ _id: zone._id }, { status: 'active' });
@@ -217,7 +219,7 @@ const insertWorker = async (fields) => (await Worker.collection.insertOne({
 
     let firstBooking;
     await it('an in-zone booking is alerted only to the in-zone professional with the skill', async () => {
-      const res = await request(app).post('/api/users/bookings').set(userAuth).send(checkoutPayload(service._id, INSIDE.lat, INSIDE.lng));
+      const res = await request(server).post('/api/users/bookings').set(userAuth).send(checkoutPayload(service._id, INSIDE.lat, INSIDE.lng));
       assert.strictEqual(res.status, 201, JSON.stringify(res.body));
       assert.strictEqual(res.body.noWorkersFound, false);
       assert.strictEqual(res.body.sentToAdmin, false);
@@ -239,7 +241,7 @@ const insertWorker = async (fields) => (await Worker.collection.insertOne({
 
     await it('the in-zone professional accepts and the booking is confirmed', async () => {
       const workerAuth = { Authorization: `Bearer ${generateAccessToken({ userId: String(inZoneWorker), role: 'WORKER' })}` };
-      const res = await request(app).post(`/api/workers/bookings/${firstBooking}/accept`).set(workerAuth);
+      const res = await request(server).post(`/api/workers/bookings/${firstBooking}/accept`).set(workerAuth);
       assert.strictEqual(res.status, 200, JSON.stringify(res.body));
       const b = await Booking.findById(firstBooking);
       assert.strictEqual(String(b.vendorId), String(inZoneWorker));
@@ -252,7 +254,7 @@ const insertWorker = async (fields) => (await Worker.collection.insertOne({
 
     let queued;
     await it('a booking with no in-zone professional is not cancelled: it waits for the admin', async () => {
-      const res = await request(app).post('/api/users/bookings').set(userAuth).send(checkoutPayload(service._id, INSIDE.lat, INSIDE.lng, { bookingType: 'instant' }));
+      const res = await request(server).post('/api/users/bookings').set(userAuth).send(checkoutPayload(service._id, INSIDE.lat, INSIDE.lng, { bookingType: 'instant' }));
       assert.strictEqual(res.status, 201, JSON.stringify(res.body));
       assert.strictEqual(res.body.noWorkersFound, true);
       assert.strictEqual(res.body.sentToAdmin, true);
@@ -267,25 +269,25 @@ const insertWorker = async (fields) => (await Worker.collection.insertOne({
 
     await it('a worker cannot grab a queued booking by id', async () => {
       const workerAuth = { Authorization: `Bearer ${generateAccessToken({ userId: String(outZoneWorker), role: 'WORKER' })}` };
-      const res = await request(app).post(`/api/workers/bookings/${queued}/accept`).set(workerAuth);
+      const res = await request(server).post(`/api/workers/bookings/${queued}/accept`).set(workerAuth);
       assert.notStrictEqual(res.status, 200);
       assert.strictEqual((await Booking.findById(queued)).vendorId, null);
     });
 
     await it('the admin sees it in the unassigned list', async () => {
-      const res = await request(app).get('/api/admin/bookings/unassigned').set(adminAuth);
+      const res = await request(server).get('/api/admin/bookings/unassigned').set(adminAuth);
       assert.strictEqual(res.status, 200, JSON.stringify(res.body));
       assert.strictEqual(res.body.pagination.total, 1);
       assert.strictEqual(String(res.body.data[0]._id), String(queued));
     });
 
     await it('the bookings list can be filtered to the queue too', async () => {
-      const res = await request(app).get('/api/admin/bookings?awaitingAdmin=true').set(adminAuth);
+      const res = await request(server).get('/api/admin/bookings?awaitingAdmin=true').set(adminAuth);
       assert.strictEqual(res.body.pagination.total, 1);
     });
 
     await it('the admin can list professionals with the skill, in-zone first, out-of-zone still choosable', async () => {
-      const res = await request(app).get(`/api/admin/bookings/${queued}/assignable-workers`).set(adminAuth);
+      const res = await request(server).get(`/api/admin/bookings/${queued}/assignable-workers`).set(adminAuth);
       assert.strictEqual(res.status, 200, JSON.stringify(res.body));
       const names = res.body.workers.map((w) => w.name);
       assert.ok(names.includes('Indore Electrician'));
@@ -298,7 +300,7 @@ const insertWorker = async (fields) => (await Worker.collection.insertOne({
     });
 
     await it('assigning sends a pending request to the chosen professional only', async () => {
-      const res = await request(app).post(`/api/admin/bookings/${queued}/assign`).set(adminAuth).send({ workerId: String(outZoneWorker), note: 'Closest available' });
+      const res = await request(server).post(`/api/admin/bookings/${queued}/assign`).set(adminAuth).send({ workerId: String(outZoneWorker), note: 'Closest available' });
       assert.strictEqual(res.status, 200, JSON.stringify(res.body));
       const b = await Booking.findById(queued);
       assert.strictEqual(b.awaitingAdmin, false);
@@ -312,16 +314,16 @@ const insertWorker = async (fields) => (await Worker.collection.insertOne({
     });
 
     await it('a booking already handed out cannot be assigned again', async () => {
-      const res = await request(app).post(`/api/admin/bookings/${queued}/assign`).set(adminAuth).send({ workerId: String(inZoneWorker) });
+      const res = await request(server).post(`/api/admin/bookings/${queued}/assign`).set(adminAuth).send({ workerId: String(inZoneWorker) });
       // Still open (waiting for the first professional), so the admin may re-pick; it must not 500
       assert.ok([200, 409].includes(res.status), `${res.status}`);
       // put it back with the Delhi professional for the next steps
-      await request(app).post(`/api/admin/bookings/${queued}/assign`).set(adminAuth).send({ workerId: String(outZoneWorker) });
+      await request(server).post(`/api/admin/bookings/${queued}/assign`).set(adminAuth).send({ workerId: String(outZoneWorker) });
     });
 
     await it('the assigned professional declining sends the booking back to the admin queue', async () => {
       const workerAuth = { Authorization: `Bearer ${generateAccessToken({ userId: String(outZoneWorker), role: 'WORKER' })}` };
-      const res = await request(app).post(`/api/workers/bookings/${queued}/reject`).set(workerAuth).send({ reason: 'Too far' });
+      const res = await request(server).post(`/api/workers/bookings/${queued}/reject`).set(workerAuth).send({ reason: 'Too far' });
       assert.strictEqual(res.status, 200, JSON.stringify(res.body));
       const b = await Booking.findById(queued);
       assert.strictEqual(b.status, 'searching', 'must not be marked rejected/cancelled');
@@ -332,12 +334,12 @@ const insertWorker = async (fields) => (await Worker.collection.insertOne({
 
     await it('the admin picks someone else, who accepts: the booking is confirmed with them', async () => {
       await Worker.collection.updateOne({ _id: inZoneWorker }, { $set: { isOnline: true } });
-      const assign = await request(app).post(`/api/admin/bookings/${queued}/assign`).set(adminAuth).send({ workerId: String(inZoneWorker) });
+      const assign = await request(server).post(`/api/admin/bookings/${queued}/assign`).set(adminAuth).send({ workerId: String(inZoneWorker) });
       assert.strictEqual(assign.status, 200, JSON.stringify(assign.body));
       // The first booking's job is still open for them: finish it so the instant rule does not block
       await Booking.updateOne({ _id: firstBooking }, { $set: { status: 'completed' } });
       const workerAuth = { Authorization: `Bearer ${generateAccessToken({ userId: String(inZoneWorker), role: 'WORKER' })}` };
-      const res = await request(app).post(`/api/workers/bookings/${queued}/accept`).set(workerAuth);
+      const res = await request(server).post(`/api/workers/bookings/${queued}/accept`).set(workerAuth);
       assert.strictEqual(res.status, 200, JSON.stringify(res.body));
       const b = await Booking.findById(queued);
       assert.strictEqual(String(b.vendorId), String(inZoneWorker));
@@ -345,15 +347,15 @@ const insertWorker = async (fields) => (await Worker.collection.insertOne({
     });
 
     await it('refuses to assign a booking that already has a professional', async () => {
-      const res = await request(app).post(`/api/admin/bookings/${queued}/assign`).set(adminAuth).send({ workerId: String(outZoneWorker) });
+      const res = await request(server).post(`/api/admin/bookings/${queued}/assign`).set(adminAuth).send({ workerId: String(outZoneWorker) });
       assert.strictEqual(res.status, 409, JSON.stringify(res.body));
     });
 
     await it('refuses to assign an unapproved professional', async () => {
       const pending = await insertWorker({ name: 'Pending Pro', phone: '9000000031', email: 'p@example.com', approvalStatus: 'pending' });
-      const b2 = await request(app).post('/api/users/bookings').set(userAuth).send(checkoutPayload(service._id, INSIDE.lat, INSIDE.lng));
+      const b2 = await request(server).post('/api/users/bookings').set(userAuth).send(checkoutPayload(service._id, INSIDE.lat, INSIDE.lng));
       await wait(400);
-      const res = await request(app).post(`/api/admin/bookings/${b2.body.data._id}/assign`).set(adminAuth).send({ workerId: String(pending) });
+      const res = await request(server).post(`/api/admin/bookings/${b2.body.data._id}/assign`).set(adminAuth).send({ workerId: String(pending) });
       assert.strictEqual(res.status, 400, JSON.stringify(res.body));
     });
 
@@ -364,7 +366,7 @@ const insertWorker = async (fields) => (await Worker.collection.insertOne({
 
     await it('a queued booking nobody assigns in time is cancelled and a paid one refunded', async () => {
       await Worker.collection.updateOne({ _id: inZoneWorker }, { $set: { isOnline: false } });
-      const res = await request(app).post('/api/users/bookings').set(userAuth).send(checkoutPayload(service._id, INSIDE.lat, INSIDE.lng, { bookingType: 'instant' }));
+      const res = await request(server).post('/api/users/bookings').set(userAuth).send(checkoutPayload(service._id, INSIDE.lat, INSIDE.lng, { bookingType: 'instant' }));
       const id = res.body.data._id;
       await wait(600);
       assert.strictEqual((await Booking.findById(id)).awaitingAdmin, true);
@@ -380,10 +382,10 @@ const insertWorker = async (fields) => (await Worker.collection.insertOne({
 
     await it('a professional the admin picked who never answers: back to the queue, not cancelled', async () => {
       await Worker.collection.updateOne({ _id: inZoneWorker }, { $set: { isOnline: false } });
-      const res = await request(app).post('/api/users/bookings').set(userAuth).send(checkoutPayload(service._id, INSIDE.lat, INSIDE.lng, { bookingType: 'instant' }));
+      const res = await request(server).post('/api/users/bookings').set(userAuth).send(checkoutPayload(service._id, INSIDE.lat, INSIDE.lng, { bookingType: 'instant' }));
       const id = res.body.data._id;
       await wait(600);
-      await request(app).post(`/api/admin/bookings/${id}/assign`).set(adminAuth).send({ workerId: String(outZoneWorker) });
+      await request(server).post(`/api/admin/bookings/${id}/assign`).set(adminAuth).send({ workerId: String(outZoneWorker) });
       await Booking.updateOne({ _id: id }, { $set: { expiresAt: new Date(Date.now() - 1000) } });
       const { getBookingConfig } = require('../utils/bookingConfig');
       await scheduler.processAdminQueue(await getBookingConfig());
@@ -399,7 +401,7 @@ const insertWorker = async (fields) => (await Worker.collection.insertOne({
       // The professional is free again (their earlier instant job is done) and online
       await Booking.updateMany({ vendorId: inZoneWorker }, { $set: { status: 'completed' } });
       await Worker.collection.updateOne({ _id: inZoneWorker }, { $set: { isOnline: true } });
-      const res = await request(app).post('/api/users/bookings').set(userAuth).send(checkoutPayload(service._id, INSIDE.lat, INSIDE.lng, { bookingType: 'instant' }));
+      const res = await request(server).post('/api/users/bookings').set(userAuth).send(checkoutPayload(service._id, INSIDE.lat, INSIDE.lng, { bookingType: 'instant' }));
       const id = res.body.data._id;
       await wait(600);
       assert.strictEqual((await Booking.findById(id)).awaitingAdmin, false);
@@ -415,7 +417,7 @@ const insertWorker = async (fields) => (await Worker.collection.insertOne({
       await Settings.updateOne({ type: 'global' }, { $set: { isAdminAssignmentEnabled: false } });
       invalidateBookingConfigCache();
       await Worker.collection.updateOne({ _id: inZoneWorker }, { $set: { isOnline: false } });
-      const res = await request(app).post('/api/users/bookings').set(userAuth).send(checkoutPayload(service._id, INSIDE.lat, INSIDE.lng, { bookingType: 'instant' }));
+      const res = await request(server).post('/api/users/bookings').set(userAuth).send(checkoutPayload(service._id, INSIDE.lat, INSIDE.lng, { bookingType: 'instant' }));
       assert.strictEqual(res.body.sentToAdmin, false);
       await wait(600);
       const b = await Booking.findById(res.body.data._id);
@@ -428,13 +430,13 @@ const insertWorker = async (fields) => (await Worker.collection.insertOne({
     // -------------------------------------------------------- out-of-zone page
     console.log('\n[Out-of-zone page (admin-managed)]');
     await it('the public page returns defaults until the admin edits it', async () => {
-      const res = await request(app).get('/api/public/zones/out-of-zone-page');
+      const res = await request(server).get('/api/public/zones/out-of-zone-page');
       assert.strictEqual(res.status, 200);
       assert.strictEqual(res.body.outOfZonePage.showRetryButton, true);
     });
 
     await it('the admin edits the page and the customer sees the change', async () => {
-      const put = await request(app).put('/api/admin/zones/out-of-zone-page').set(adminAuth).send({
+      const put = await request(server).put('/api/admin/zones/out-of-zone-page').set(adminAuth).send({
         title: 'Coming soon to your city',
         message: 'We only serve Indore for now.',
         primaryButtonText: 'Pick another address',
@@ -443,25 +445,25 @@ const insertWorker = async (fields) => (await Worker.collection.insertOne({
         imageUrl: 'https://example.com/map.png'
       });
       assert.strictEqual(put.status, 200, JSON.stringify(put.body));
-      const pub = await request(app).get('/api/public/zones/out-of-zone-page');
+      const pub = await request(server).get('/api/public/zones/out-of-zone-page');
       assert.strictEqual(pub.body.outOfZonePage.title, 'Coming soon to your city');
       assert.strictEqual(pub.body.outOfZonePage.showRetryButton, false);
       assert.strictEqual(pub.body.outOfZonePage.accentColor, '#16a34a');
-      const lookup = await request(app).get(`/api/public/zones/lookup?lat=${OUTSIDE.lat}&lng=${OUTSIDE.lng}`);
+      const lookup = await request(server).get(`/api/public/zones/lookup?lat=${OUTSIDE.lat}&lng=${OUTSIDE.lng}`);
       assert.strictEqual(lookup.body.outOfZonePage.title, 'Coming soon to your city');
-      const refused = await request(app).post('/api/users/bookings').set(userAuth).send(checkoutPayload(service._id, OUTSIDE.lat, OUTSIDE.lng));
+      const refused = await request(server).post('/api/users/bookings').set(userAuth).send(checkoutPayload(service._id, OUTSIDE.lat, OUTSIDE.lng));
       assert.strictEqual(refused.body.outOfZonePage.message, 'We only serve Indore for now.');
     });
 
     await it('rejects bad input (script link, bad colour, empty title)', async () => {
       for (const bad of [{ imageUrl: 'javascript:alert(1)' }, { accentColor: 'blue' }, { title: '   ' }]) {
-        const res = await request(app).put('/api/admin/zones/out-of-zone-page').set(adminAuth).send(bad);
+        const res = await request(server).put('/api/admin/zones/out-of-zone-page').set(adminAuth).send(bad);
         assert.strictEqual(res.status, 400, JSON.stringify(bad));
       }
     });
 
     await it('only an admin can edit the page', async () => {
-      const res = await request(app).put('/api/admin/zones/out-of-zone-page').set(userAuth).send({ title: 'Hacked' });
+      const res = await request(server).put('/api/admin/zones/out-of-zone-page').set(userAuth).send({ title: 'Hacked' });
       assert.ok([401, 403].includes(res.status), `${res.status}`);
     });
 

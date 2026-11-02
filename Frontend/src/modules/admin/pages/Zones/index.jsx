@@ -29,6 +29,7 @@ import { cityService } from "../../services/cityService";
 import { categoryService } from "../../../../services/catalogService";
 import ModalLock from '../../../../components/common/ModalLock';
 import OutOfZonePageModal from './OutOfZonePageModal';
+import StateCityFields from '../../components/StateCityFields';
 import bookingFeaturesAdminService from '../../services/bookingFeaturesAdminService';
 
 const LIBRARIES = ["places", "geometry"];
@@ -250,45 +251,46 @@ const ZonesPage = () => {
     fetchZones();
   }, [fetchZones]);
 
-  // Center map on selected city
-  useEffect(() => {
-    if (!selectedCityId || !isLoaded || !window.google?.maps?.Geocoder) return;
-    const city = (cities || []).find((c) => (c.id || c._id) === selectedCityId);
-    if (city) {
-      const geocoder = new window.google.maps.Geocoder();
-      geocoder.geocode({ address: `${city.name}, ${city.state || ""}, ${city.country || "India"}` }, (results, status) => {
+  // Centre the map on a city: its stored position (set when the city was added), or - for a city that has
+  // none yet - a one-off lookup by name.
+  const centerOnCity = useCallback((city) => {
+    if (!city) return;
+    const moveTo = (pos) => {
+      setMapCenter(pos);
+      if (mapRef.current) {
+        mapRef.current.panTo(pos);
+        mapRef.current.setZoom(12);
+      }
+    };
+    const lat = Number(city.location?.lat);
+    const lng = Number(city.location?.lng);
+    if (Number.isFinite(lat) && Number.isFinite(lng) && !(lat === 0 && lng === 0)) {
+      moveTo({ lat, lng });
+      return;
+    }
+    if (!isLoaded || !window.google?.maps?.Geocoder) return;
+    new window.google.maps.Geocoder().geocode(
+      { address: `${city.name}, ${city.state || ""}, ${city.country || "India"}` },
+      (results, status) => {
         if (status === "OK" && results && results[0]) {
           const loc = results[0].geometry.location;
-          const pos = { lat: loc.lat(), lng: loc.lng() };
-          setMapCenter(pos);
-          if (mapRef.current) {
-            mapRef.current.panTo(pos);
-            mapRef.current.setZoom(12);
-          }
+          moveTo({ lat: loc.lat(), lng: loc.lng() });
         }
-      });
-    }
-  }, [selectedCityId, cities, isLoaded]);
+      }
+    );
+  }, [isLoaded]);
+
+  // Center map on selected city
+  useEffect(() => {
+    if (!selectedCityId || !isLoaded) return;
+    centerOnCity((cities || []).find((c) => (c.id || c._id) === selectedCityId));
+  }, [selectedCityId, cities, isLoaded, centerOnCity]);
 
   // Center on city when selected in form
   const handleFormCityChange = (cityId) => {
     setForm((p) => ({ ...p, cityId }));
-    if (!cityId || !isLoaded || !window.google?.maps?.Geocoder) return;
-    const city = (cities || []).find((c) => (c.id || c._id) === cityId);
-    if (city) {
-      const geocoder = new window.google.maps.Geocoder();
-      geocoder.geocode({ address: `${city.name}, ${city.state || ""}, ${city.country || "India"}` }, (results, status) => {
-        if (status === "OK" && results && results[0]) {
-          const loc = results[0].geometry.location;
-          const pos = { lat: loc.lat(), lng: loc.lng() };
-          setMapCenter(pos);
-          if (mapRef.current) {
-            mapRef.current.panTo(pos);
-            mapRef.current.setZoom(12);
-          }
-        }
-      });
-    }
+    if (!cityId) return;
+    centerOnCity((cities || []).find((c) => (c.id || c._id) === cityId));
   };
 
   // Convert GeoJSON [lng, lat] to Google Maps {lat, lng} for static polygon display
@@ -1428,7 +1430,7 @@ const ZonesPage = () => {
                 </div>
                 <div>
                   <h3 className="text-sm font-bold text-gray-900">Add Operating City</h3>
-                  <p className="text-[11px] text-gray-500">e.g. Indore, Ratlam, Ujjain, Bhopal</p>
+                  <p className="text-[11px] text-gray-500">Choose the state, then the city</p>
                 </div>
               </div>
               <button
@@ -1441,33 +1443,14 @@ const ZonesPage = () => {
             </div>
 
             <form onSubmit={handleQuickAddCity} className="mt-4 space-y-3.5">
-              <div>
-                <label className="block text-[11px] font-bold text-gray-700 uppercase tracking-wider mb-1">
-                  City Name <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. Indore, Ratlam, Ujjain"
-                  value={newCityForm.name}
-                  onChange={(e) => setNewCityForm((p) => ({ ...p, name: e.target.value }))}
-                  required
-                  autoFocus
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none font-medium"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-bold text-gray-700 uppercase tracking-wider mb-1">
-                  State
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. Madhya Pradesh"
-                  value={newCityForm.state}
-                  onChange={(e) => setNewCityForm((p) => ({ ...p, state: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none font-medium"
-                />
-              </div>
+              {/* State first, then the city for that state (a typed name is still possible under "Other") */}
+              <StateCityFields
+                variant="compact"
+                state={newCityForm.state}
+                city={newCityForm.name}
+                existingCities={cities}
+                onChange={({ state, city }) => setNewCityForm({ name: city, state })}
+              />
 
               <div className="p-2.5 bg-blue-50/70 rounded-xl border border-blue-100 text-[11px] text-blue-900 leading-relaxed">
                 📍 <strong>Tip:</strong> After adding a city, it will be automatically selected and Google Maps will center on it so you can draw your zone.

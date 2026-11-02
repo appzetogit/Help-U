@@ -83,6 +83,8 @@ const DELHI = { lat: 28.6139, lng: 77.209 }; // outside every zone
   const mongod = await MongoMemoryServer.create();
   await mongoose.connect(mongod.getUri());
   const app = buildApp();
+  // One server for the whole run: a fresh server on a random port per request can land on a port another program just took
+  const server = require('http').createServer(app).listen(0, '127.0.0.1');
 
   try {
     await Settings.create({ type: 'global' });
@@ -124,7 +126,7 @@ const DELHI = { lat: 28.6139, lng: 77.209 }; // outside every zone
       invalidateBookingConfigCache();
     };
     const book = async (at, overrides) => {
-      const res = await request(app).post('/api/users/bookings').set(userAuth).send(payload(service._id, at.lat, at.lng, overrides));
+      const res = await request(server).post('/api/users/bookings').set(userAuth).send(payload(service._id, at.lat, at.lng, overrides));
       await wait(450);
       return res;
     };
@@ -133,19 +135,19 @@ const DELHI = { lat: 28.6139, lng: 77.209 }; // outside every zone
     // -------------------------------------------------------------- admin toggle
     console.log('\n[Admin toggle]');
     await it('defaults to zone mode', async () => {
-      const res = await request(app).get('/api/admin/booking-config').set(adminAuth);
+      const res = await request(server).get('/api/admin/booking-config').set(adminAuth);
       assert.strictEqual(res.status, 200, JSON.stringify(res.body));
       assert.strictEqual(res.body.config.dispatchMode, 'zone');
     });
     await it('the admin can switch to distance and back, and a bad value is refused', async () => {
-      let res = await request(app).put('/api/admin/booking-config').set(adminAuth).send({ dispatchMode: 'distance' });
+      let res = await request(server).put('/api/admin/booking-config').set(adminAuth).send({ dispatchMode: 'distance' });
       assert.strictEqual(res.status, 200, JSON.stringify(res.body));
-      assert.strictEqual((await request(app).get('/api/admin/booking-config').set(adminAuth)).body.config.dispatchMode, 'distance');
-      res = await request(app).put('/api/admin/booking-config').set(adminAuth).send({ dispatchMode: 'both' });
+      assert.strictEqual((await request(server).get('/api/admin/booking-config').set(adminAuth)).body.config.dispatchMode, 'distance');
+      res = await request(server).put('/api/admin/booking-config').set(adminAuth).send({ dispatchMode: 'both' });
       assert.strictEqual(res.status, 400, JSON.stringify(res.body));
-      res = await request(app).put('/api/admin/booking-config').set(adminAuth).send({ dispatchMode: 'zone' });
+      res = await request(server).put('/api/admin/booking-config').set(adminAuth).send({ dispatchMode: 'zone' });
       assert.strictEqual(res.status, 200);
-      assert.strictEqual((await request(app).get('/api/admin/booking-config').set(adminAuth)).body.config.dispatchMode, 'zone');
+      assert.strictEqual((await request(server).get('/api/admin/booking-config').set(adminAuth)).body.config.dispatchMode, 'zone');
     });
 
     // ------------------------------------------------------------------ ZONE
@@ -172,16 +174,16 @@ const DELHI = { lat: 28.6139, lng: 77.209 }; // outside every zone
     });
 
     await it('an address outside every zone is refused', async () => {
-      const res = await request(app).post('/api/users/bookings').set(userAuth).send(payload(service._id, DELHI.lat, DELHI.lng));
+      const res = await request(server).post('/api/users/bookings').set(userAuth).send(payload(service._id, DELHI.lat, DELHI.lng));
       assert.strictEqual(res.status, 400);
       assert.strictEqual(res.body.code, 'OUT_OF_ZONE');
     });
 
     await it('the lookup reports out-of-area outside the zone, and the zone inside it', async () => {
-      const out = await request(app).get(`/api/public/zones/lookup?lat=${DELHI.lat}&lng=${DELHI.lng}`);
+      const out = await request(server).get(`/api/public/zones/lookup?lat=${DELHI.lat}&lng=${DELHI.lng}`);
       assert.strictEqual(out.body.zonesConfigured, true);
       assert.strictEqual(out.body.zone, null);
-      const inn = await request(app).get(`/api/public/zones/lookup?lat=${CUSTOMER_SW.lat}&lng=${CUSTOMER_SW.lng}`);
+      const inn = await request(server).get(`/api/public/zones/lookup?lat=${CUSTOMER_SW.lat}&lng=${CUSTOMER_SW.lng}`);
       assert.strictEqual(String(inn.body.zone.id), String(zone._id));
     });
 
@@ -222,11 +224,11 @@ const DELHI = { lat: 28.6139, lng: 77.209 }; // outside every zone
     });
 
     await it('the lookup never reports out-of-area, so the apps block nothing', async () => {
-      const out = await request(app).get(`/api/public/zones/lookup?lat=${DELHI.lat}&lng=${DELHI.lng}`);
+      const out = await request(server).get(`/api/public/zones/lookup?lat=${DELHI.lat}&lng=${DELHI.lng}`);
       assert.strictEqual(out.body.zone, null);
       assert.strictEqual(out.body.zonesConfigured, false);
       assert.strictEqual(out.body.dispatchMode, 'distance');
-      const inn = await request(app).get(`/api/public/zones/lookup?lat=${CUSTOMER_SW.lat}&lng=${CUSTOMER_SW.lng}`);
+      const inn = await request(server).get(`/api/public/zones/lookup?lat=${CUSTOMER_SW.lat}&lng=${CUSTOMER_SW.lng}`);
       assert.strictEqual(inn.body.zone, null);
     });
 
@@ -250,7 +252,7 @@ const DELHI = { lat: 28.6139, lng: 77.209 }; // outside every zone
     await it('the admin assign list shows no zone badges and orders by distance', async () => {
       const b = await Booking.findOne({}).sort({ createdAt: -1 });
       await Booking.updateOne({ _id: b._id }, { $set: { awaitingAdmin: true, status: 'searching', vendorId: null } });
-      const res = await request(app).get(`/api/admin/bookings/${b._id}/assignable-workers`).set(adminAuth);
+      const res = await request(server).get(`/api/admin/bookings/${b._id}/assignable-workers`).set(adminAuth);
       assert.strictEqual(res.status, 200, JSON.stringify(res.body));
       assert.strictEqual(res.body.dispatchMode, 'distance');
       assert.ok(res.body.workers.every((w) => w.inZone === null));
@@ -259,15 +261,15 @@ const DELHI = { lat: 28.6139, lng: 77.209 }; // outside every zone
     // ------------------------------------------- moved settings, radius, badges
     console.log('\n[Search settings live in Booking Config]');
     await it('search radius, search time and wave timer are edited here, with ranges', async () => {
-      let res = await request(app).put('/api/admin/booking-config').set(adminAuth).send({ searchRadius: 12, maxSearchTime: 7, waveDuration: 45 });
+      let res = await request(server).put('/api/admin/booking-config').set(adminAuth).send({ searchRadius: 12, maxSearchTime: 7, waveDuration: 45 });
       assert.strictEqual(res.status, 200, JSON.stringify(res.body));
-      const cfg = (await request(app).get('/api/admin/booking-config').set(adminAuth)).body.config;
+      const cfg = (await request(server).get('/api/admin/booking-config').set(adminAuth)).body.config;
       assert.deepStrictEqual([cfg.searchRadius, cfg.maxSearchTime, cfg.waveDuration], [12, 7, 45]);
       // stored on the same Settings fields every reader already uses
       const stored = await Settings.findOne({ type: 'global' }).lean();
       assert.deepStrictEqual([stored.searchRadius, stored.maxSearchTime, stored.waveDuration], [12, 7, 45]);
       for (const bad of [{ searchRadius: 0 }, { searchRadius: 500 }, { maxSearchTime: 0 }, { waveDuration: 5 }]) {
-        res = await request(app).put('/api/admin/booking-config').set(adminAuth).send(bad);
+        res = await request(server).put('/api/admin/booking-config').set(adminAuth).send(bad);
         assert.strictEqual(res.status, 400, JSON.stringify(bad));
       }
       await Settings.updateOne({ type: 'global' }, { $set: { searchRadius: 10, maxSearchTime: 5, waveDuration: 60 } });
@@ -318,7 +320,7 @@ const DELHI = { lat: 28.6139, lng: 77.209 }; // outside every zone
     });
 
     console.log('\n[Arrival-time badges follow the dispatch mode]');
-    const eta = (at) => request(app).get(`/api/public/categories/eta?lat=${at.lat}&lng=${at.lng}`);
+    const eta = (at) => request(server).get(`/api/public/categories/eta?lat=${at.lat}&lng=${at.lng}`);
     await it('zone mode: a customer in the zone sees a badge from an in-zone professional, however far', async () => {
       await setMode('zone');
       const res = await eta(CUSTOMER_SW);
@@ -366,7 +368,7 @@ const DELHI = { lat: 28.6139, lng: 77.209 }; // outside every zone
     console.log('\n[Switching back]');
     await it('back to zone mode the zone rules apply again straight away', async () => {
       await setMode('zone');
-      const refused = await request(app).post('/api/users/bookings').set(userAuth).send(payload(service._id, DELHI.lat, DELHI.lng));
+      const refused = await request(server).post('/api/users/bookings').set(userAuth).send(payload(service._id, DELHI.lat, DELHI.lng));
       assert.strictEqual(refused.body.code, 'OUT_OF_ZONE');
       const ok = await book(CUSTOMER_SW);
       assert.deepStrictEqual(await alerted(ok), [String(farInZone)]);

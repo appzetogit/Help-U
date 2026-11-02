@@ -134,6 +134,133 @@ const buildDependencyReport = async (categoryId) => {
   };
 };
 
+/**
+ * What is inside each category, for the admin list (no per-row queries: everything is loaded once).
+ *
+ *   subCategories  children, { total, active }                       (top-level categories only)
+ *   brands         sections / brands attached to it                   (a top-level one includes its sub-categories')
+ *   services       non-archived services, { total, active }           (same: includes the sub-categories')
+ *   workers        approved, active professionals who can take work in it: they list the category, a
+ *                  sub-category or a service in it - or, for a sub-category, its parent (listing a category
+ *                  covers everything under it). Same title matching dispatch uses.
+ *
+ * With a city, brands and services are limited to that city (so the numbers match the Services tab).
+ */
+const buildCategoryCounts = async (categories, cityId, { withWorkerIds = false } = {}) => {
+  const { buildServiceCityMatch, cityScopeQuery } = require('../../utils/cityScope');
+  const Worker = require('../../models/Worker');
+  const { WORKER_STATUS } = require('../../utils/constants');
+  const norm = (t) => String(t || '').trim().toLowerCase();
+
+  const all = await Category.find({}).select('title parentId status').lean();
+  const byId = new Map(all.map((c) => [String(c._id), c]));
+  const childrenOf = new Map();
+  all.forEach((c) => {
+    if (!c.parentId) return;
+    const key = String(c.parentId);
+    if (!childrenOf.has(key)) childrenOf.set(key, []);
+    childrenOf.get(key).push(c);
+  });
+
+  const cityMatch = await buildServiceCityMatch(cityId);
+  const serviceQuery = { status: { $ne: 'deleted' }, ...(cityMatch ? { $and: [cityMatch] } : {}) };
+  const brandQuery = { status: { $ne: 'deleted' }, ...(cityId && cityScopeQuery ? cityScopeQuery(cityId) : {}) };
+
+  const [services, brands, workers] = await Promise.all([
+    UserService.find(serviceQuery).select('title categoryId brandId status').lean(),
+    Brand.find(brandQuery).select('categoryIds categoryId').lean(),
+    Worker.find({ isActive: true, approvalStatus: { $in: [WORKER_STATUS.APPROVED, 'APPROVED'] } }).select('service categories').lean()
+  ]);
+
+  const servicesByCat = new Map();
+  services.forEach((svc) => {
+    const key = String(svc.categoryId);
+    if (!servicesByCat.has(key)) servicesByCat.set(key, []);
+    servicesByCat.get(key).push(svc);
+  });
+  const brandsByCat = new Map();
+  brands.forEach((b) => {
+    const ids = new Set([...(b.categoryIds || []), b.categoryId].filter(Boolean).map(String));
+    ids.forEach((id) => {
+      if (!brandsByCat.has(id)) brandsByCat.set(id, new Set());
+      brandsByCat.get(id).add(String(b._id));
+    });
+  });
+  const workersByTitle = new Map();
+  workers.forEach((w) => {
+    const skills = [...(Array.isArray(w.service) ? w.service : []), ...(Array.isArray(w.categories) ? w.categories : [])];
+    skills.forEach((skill) => {
+      const t = norm(skill);
+      if (!t) return;
+      if (!workersByTitle.has(t)) workersByTitle.set(t, new Set());
+      workersByTitle.get(t).add(String(w._id));
+    });
+  });
+
+  return categories.map((cat) => {
+    const id = String(cat._id || cat.id);
+    const doc = byId.get(id);
+    const kids = childrenOf.get(id) || [];
+    const scope = [id, ...kids.map((k) => String(k._id))]; // a top-level category counts its sub-categories' items too
+
+    const svcs = scope.flatMap((cid) => servicesByCat.get(cid) || []);
+    const brandSet = new Set(scope.flatMap((cid) => [...(brandsByCat.get(cid) || [])]));
+
+    const titles = new Set([norm(doc?.title), ...kids.map((k) => norm(k.title)), ...svcs.map((x) => norm(x.title))]);
+    if (doc?.parentId) titles.add(norm(byId.get(String(doc.parentId))?.title)); // listing the parent covers this one
+    titles.delete('');
+    const workerSet = new Set();
+    titles.forEach((t) => (workersByTitle.get(t) || []).forEach((wid) => workerSet.add(wid)));
+
+    return {
+      id,
+      counts: {
+        subCategories: { total: kids.length, active: kids.filter((k) => k.status === 'active').length },
+        brands: brandSet.size,
+        services: { total: svcs.length, active: svcs.filter((x) => x.status === 'active').length },
+        workers: workerSet.size
+      },
+      ...(withWorkerIds ? { workerIds: [...workerSet] } : {})
+    };
+  });
+};
+
+/**
+ * The professionals behind a category's "workers" count (same matching, same city scope).
+ * GET /api/admin/categories/:id/workers?cityId=
+ */
+const getCategoryWorkers = async (req, res) => {
+  try {
+    const category = await Category.findById(req.params.id).select('_id title parentId').lean();
+    if (!category) return res.status(404).json({ success: false, message: 'Category not found' });
+
+    const [entry] = await buildCategoryCounts([category], req.query.cityId, { withWorkerIds: true });
+    const Worker = require('../../models/Worker');
+    const workers = await Worker.find({ _id: { $in: entry.workerIds } })
+      .select('name businessName phone address.city isOnline service categories')
+      .sort({ name: 1 })
+      .limit(500)
+      .lean();
+
+    res.status(200).json({
+      success: true,
+      category: { id: String(category._id), title: category.title },
+      total: entry.workerIds.length,
+      workers: workers.map((w) => ({
+        id: String(w._id),
+        name: w.name,
+        businessName: w.businessName || '',
+        phone: w.phone || '',
+        city: w.address?.city || '',
+        isOnline: !!w.isOnline
+      }))
+    });
+  } catch (error) {
+    console.error('Get category workers error:', error);
+    res.status(500).json({ success: false, message: 'Failed to load the workers.' });
+  }
+};
+
 // ============================================================================
 // LIST / READ
 // ============================================================================
@@ -161,10 +288,17 @@ const getAllCategories = async (req, res) => {
       .sort({ homeOrder: 1, createdAt: -1 })
       .lean();
 
+    let responseCategories = categories.map(toCategoryResponse);
+    if (req.query.withCounts === 'true') {
+      const counts = await buildCategoryCounts(categories, cityId);
+      const byId = new Map(counts.map((c) => [c.id, c.counts]));
+      responseCategories = responseCategories.map((c) => ({ ...c, counts: byId.get(String(c.id || c._id)) || null }));
+    }
+
     res.status(200).json({
       success: true,
       count: categories.length,
-      categories: categories.map(toCategoryResponse)
+      categories: responseCategories
     });
   } catch (error) {
     console.error('Get all categories error:', error);
@@ -643,6 +777,7 @@ module.exports = {
   getCategoryById,
   checkSlugAvailability,
   getCategoryDependencies,
+  getCategoryWorkers,
   createCategory,
   updateCategory,
   deleteCategory,

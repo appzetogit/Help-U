@@ -23,6 +23,10 @@ const BrandsPage = ({ catalog, setCatalog, selectedCity }) => {
   // Connect to catalog state
   const services = catalog.services || []; // These are actually BRANDS
   const categories = catalog.categories || [];
+  // Every category and sub-category (all cities), only to show a brand's category NAMES. The pickers and the
+  // filter keep using the city's top-level list above. Without this, a brand attached to a sub-category (or to a
+  // category of another city) showed as "Unknown (xxxx)".
+  const [allCategoryNames, setAllCategoryNames] = useState([]);
 
   const [editingId, setEditingId] = useState(null);
 
@@ -82,10 +86,12 @@ const BrandsPage = ({ catalog, setCatalog, selectedCity }) => {
 
       // Brands AND the categories offered for them follow the selected city, so this page lists the
       // same categories as the Categories tab (it used to load every city's categories here).
-      const [servicesRes, categoriesRes] = await Promise.all([
+      const [servicesRes, categoriesRes, namesRes] = await Promise.all([
         brandService.getAll(params),
-        categoryService.getAll(selectedCity ? { cityId: selectedCity } : {})
+        categoryService.getAll(selectedCity ? { cityId: selectedCity } : {}),
+        categoryService.getAll({ parentId: 'all' }).catch(() => null)
       ]);
+      if (namesRes?.success) setAllCategoryNames(namesRes.categories || []);
 
       let mappedBrands = [];
       let mappedCategories = [];
@@ -417,7 +423,8 @@ const BrandsPage = ({ catalog, setCatalog, selectedCity }) => {
                           ) : (s.categoryIds && s.categoryIds.length > 0) ? (
                             s.categoryIds.map((catId, cIdx) => {
                               const cleanCatId = String(catId).trim();
-                              const cat = categories.find(c => String(c.id).trim() === cleanCatId);
+                              const cat = allCategoryNames.find(c => String(c.id || c._id).trim() === cleanCatId)
+                                || categories.find(c => String(c.id).trim() === cleanCatId);
                               const catKey = catId ? `cat-${catId}-${cIdx}` : `cat-${cIdx}`;
                               if (cat) {
                                 return (

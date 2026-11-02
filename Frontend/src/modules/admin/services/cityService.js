@@ -39,6 +39,12 @@ export const cityService = {
     return response.data;
   },
 
+  // Find the city on the map (stores its position)
+  locate: async (id) => {
+    const response = await api.post(`${BASE_URL}/${id}/locate`);
+    return response.data;
+  },
+
   // Toggle status
   toggleStatus: async (id) => {
     const response = await api.patch(`${BASE_URL}/${id}/status`);

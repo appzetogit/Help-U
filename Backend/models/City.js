@@ -35,6 +35,13 @@ const citySchema = new mongoose.Schema({
     default: true,
     index: true
   },
+  // Where the city is, so maps can centre on it. Filled in automatically (geocoded from the name and state)
+  // when a city is added or renamed, or by the admin's "Locate" action. null until known.
+  location: {
+    lat: { type: Number, default: null, min: -90, max: 90 },
+    lng: { type: Number, default: null, min: -180, max: 180 },
+    source: { type: String, enum: ['geocoded', 'manual', null], default: null }
+  },
   // Default city flag - only one city should have this as true
   isDefault: {
     type: Boolean,

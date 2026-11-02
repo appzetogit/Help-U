@@ -705,7 +705,14 @@ const listServicesWithStats = async (req, res) => {
     // the list and the cards count the same thing. They live under Draft and archive.
     match.status = status || { $ne: SERVICE_STATUS.DELETED };
     if (brandId) match.brandId = new (require('mongoose').Types.ObjectId)(brandId);
-    if (categoryId) match.categoryId = new (require('mongoose').Types.ObjectId)(categoryId);
+    if (categoryId) {
+      // A top-level category also covers the services in its sub-categories (as in the customer app, and in
+      // the counts on the Categories tab). Without this the sub-category filter had nothing to filter.
+      const mongoose = require('mongoose');
+      const root = new mongoose.Types.ObjectId(categoryId);
+      const children = await Category.find({ parentId: root }).select('_id').lean();
+      match.categoryId = children.length > 0 ? { $in: [root, ...children.map((c) => c._id)] } : root;
+    }
     if (publishStatus) match.publishStatus = publishStatus;
     if (search) {
       const safe = String(search).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');

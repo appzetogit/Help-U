@@ -6,7 +6,8 @@ const {
   createCity,
   updateCity,
   deleteCity,
-  toggleCityStatus
+  toggleCityStatus,
+  locateCity
 } = require('../../controllers/cityController');
 const { authenticate } = require('../../middleware/authMiddleware');
 const { isAdmin, requirePermission } = require('../../middleware/roleMiddleware');
@@ -34,5 +35,6 @@ router.post('/cities', requirePermission('cities'), createCity);
 router.put('/cities/:id', requirePermission('cities'), updateCity);
 router.delete('/cities/:id', requirePermission('cities'), deleteCity);
 router.patch('/cities/:id/status', requirePermission('cities'), toggleCityStatus);
+router.post('/cities/:id/locate', requirePermission('cities'), locateCity);
 
 module.exports = router;

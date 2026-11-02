@@ -77,6 +77,8 @@ const checkoutPayload = (serviceId, overrides = {}) => ({
   await mongoose.connect(mongod.getUri());
 
   const app = buildApp();
+  // One server for the whole run: a fresh server on a random port per request can land on a port another program just took
+  const server = require('http').createServer(app).listen(0, '127.0.0.1');
 
   try {
     const user = await User.create({ name: 'Flow Tester', phone: '9000000001' });
@@ -101,14 +103,14 @@ const checkoutPayload = (serviceId, overrides = {}) => ({
 
     console.log('\n[Auth]');
     await it('rejects checkout without a token', async () => {
-      const res = await request(app).post('/api/users/bookings').send(checkoutPayload(service._id));
+      const res = await request(server).post('/api/users/bookings').send(checkoutPayload(service._id));
       assert.strictEqual(res.status, 401);
     });
 
     console.log('\n[Cart]');
     let cartItemId;
     await it('adds a service to the cart', async () => {
-      const res = await request(app).post('/api/users/cart').set(auth).send({
+      const res = await request(server).post('/api/users/cart').set(auth).send({
         serviceId: String(service._id),
         title: 'Fan Repair',
         category: 'Electrician',
@@ -123,7 +125,7 @@ const checkoutPayload = (serviceId, overrides = {}) => ({
     });
 
     await it('adding the same service again merges into one line with quantity 2', async () => {
-      const res = await request(app).post('/api/users/cart').set(auth).send({
+      const res = await request(server).post('/api/users/cart').set(auth).send({
         serviceId: String(service._id),
         title: 'Fan Repair',
         category: 'Electrician',
@@ -137,13 +139,13 @@ const checkoutPayload = (serviceId, overrides = {}) => ({
     });
 
     await it('updating quantity recalculates the line price', async () => {
-      const res = await request(app).put(`/api/users/cart/${cartItemId}`).set(auth).send({ serviceCount: 3 });
+      const res = await request(server).put(`/api/users/cart/${cartItemId}`).set(auth).send({ serviceCount: 3 });
       assert.strictEqual(res.status, 200);
       assert.strictEqual(res.body.data[0].price, 1200);
     });
 
     await it('rejects adding a service id that does not exist', async () => {
-      const res = await request(app).post('/api/users/cart').set(auth).send({
+      const res = await request(server).post('/api/users/cart').set(auth).send({
         serviceId: String(new mongoose.Types.ObjectId()),
         title: 'Ghost',
         category: 'Electrician',
@@ -154,32 +156,32 @@ const checkoutPayload = (serviceId, overrides = {}) => ({
 
     console.log('\n[Checkout validation]');
     await it('rejects a malformed service id', async () => {
-      const res = await request(app).post('/api/users/bookings').set(auth).send(checkoutPayload('not-an-id'));
+      const res = await request(server).post('/api/users/bookings').set(auth).send(checkoutPayload('not-an-id'));
       assert.strictEqual(res.status, 400);
     });
 
     await it('rejects an address missing pincode', async () => {
       const payload = checkoutPayload(service._id);
       delete payload.address.pincode;
-      const res = await request(app).post('/api/users/bookings').set(auth).send(payload);
+      const res = await request(server).post('/api/users/bookings').set(auth).send(payload);
       assert.strictEqual(res.status, 400);
     });
 
     await it('rejects a missing time slot', async () => {
       const payload = checkoutPayload(service._id);
       delete payload.timeSlot;
-      const res = await request(app).post('/api/users/bookings').set(auth).send(payload);
+      const res = await request(server).post('/api/users/bookings').set(auth).send(payload);
       assert.strictEqual(res.status, 400);
     });
 
     await it('returns 404 for an unknown service', async () => {
-      const res = await request(app).post('/api/users/bookings').set(auth)
+      const res = await request(server).post('/api/users/bookings').set(auth)
         .send(checkoutPayload(new mongoose.Types.ObjectId()));
       assert.strictEqual(res.status, 404, JSON.stringify(res.body));
     });
 
     await it('refuses to book an inactive service', async () => {
-      const res = await request(app).post('/api/users/bookings').set(auth).send(checkoutPayload(inactive._id));
+      const res = await request(server).post('/api/users/bookings').set(auth).send(checkoutPayload(inactive._id));
       assert.strictEqual(res.status, 400, JSON.stringify(res.body));
       assert.strictEqual(res.body.code, 'SERVICE_UNAVAILABLE');
     });
@@ -191,7 +193,7 @@ const checkoutPayload = (serviceId, overrides = {}) => ({
       const payload = checkoutPayload(service._id);
       payload.address.lat = 22.7196;
       payload.address.lng = 75.8577;
-      const res = await request(app).post('/api/users/bookings').set(auth).send(payload);
+      const res = await request(server).post('/api/users/bookings').set(auth).send(payload);
       assert.strictEqual(res.status, 201, `${res.status} ${JSON.stringify(res.body)}`);
       assert.strictEqual(res.body.success, true);
       assert.ok(res.body.data.bookingNumber);
@@ -199,7 +201,7 @@ const checkoutPayload = (serviceId, overrides = {}) => ({
     });
 
     await it('accepts a booking for an address without coordinates (city fallback)', async () => {
-      const res = await request(app).post('/api/users/bookings').set(auth).send(checkoutPayload(service._id));
+      const res = await request(server).post('/api/users/bookings').set(auth).send(checkoutPayload(service._id));
       assert.strictEqual(res.status, 201, `${res.status} ${JSON.stringify(res.body)}`);
       assert.strictEqual(res.body.noWorkersFound, true);
     });
@@ -226,6 +228,10 @@ const checkoutPayload = (serviceId, overrides = {}) => ({
       categories: ['Electrician'],
       address: { city: 'Indore', lat: 22.72, lng: 75.86 },
       location: { lat: 22.72, lng: 75.86 },
+      // Real partners have a stored map position (saved from their address / live location). Without it the
+      // distance search can only find them while MongoDB has not yet finished building its geo index, which
+      // made this test pass or fail depending on timing.
+      geoLocation: { type: 'Point', coordinates: [75.86, 22.72] },
       wallet: { dues: 0, cashLimit: 1000 }
     })).insertedId;
 
@@ -234,7 +240,7 @@ const checkoutPayload = (serviceId, overrides = {}) => ({
       const payload = checkoutPayload(service._id);
       payload.address.lat = 22.7196;
       payload.address.lng = 75.8577;
-      const res = await request(app).post('/api/users/bookings').set(auth).send(payload);
+      const res = await request(server).post('/api/users/bookings').set(auth).send(payload);
       assert.strictEqual(res.status, 201, `${res.status} ${JSON.stringify(res.body)}`);
       assert.strictEqual(res.body.noWorkersFound, false);
       assert.strictEqual(res.body.search.notifiedCount, 1);
@@ -258,19 +264,19 @@ const checkoutPayload = (serviceId, overrides = {}) => ({
 
     console.log('\n[Manage booking]');
     await it('lists the booking', async () => {
-      const res = await request(app).get('/api/users/bookings').set(auth);
+      const res = await request(server).get('/api/users/bookings').set(auth);
       assert.strictEqual(res.status, 200);
       assert.ok(res.body.data.length >= 1);
     });
 
     await it('returns booking details', async () => {
-      const res = await request(app).get(`/api/users/bookings/${bookingId}`).set(auth);
+      const res = await request(server).get(`/api/users/bookings/${bookingId}`).set(auth);
       assert.strictEqual(res.status, 200, JSON.stringify(res.body));
       assert.strictEqual(String(res.body.data._id), String(bookingId));
     });
 
     await it('reschedules the booking', async () => {
-      const res = await request(app).put(`/api/users/bookings/${bookingId}/reschedule`).set(auth).send({
+      const res = await request(server).put(`/api/users/bookings/${bookingId}/reschedule`).set(auth).send({
         scheduledDate: new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString(),
         scheduledTime: '2:00 PM - 4:00 PM',
         timeSlot: { start: '14:00', end: '16:00' }
@@ -279,7 +285,7 @@ const checkoutPayload = (serviceId, overrides = {}) => ({
     });
 
     await it('cancels the booking', async () => {
-      const res = await request(app).post(`/api/users/bookings/${bookingId}/cancel`).set(auth)
+      const res = await request(server).post(`/api/users/bookings/${bookingId}/cancel`).set(auth)
         .send({ cancellationReason: 'Changed my mind' });
       assert.strictEqual(res.status, 200, JSON.stringify(res.body));
       const b = await Booking.findById(bookingId);
@@ -287,12 +293,12 @@ const checkoutPayload = (serviceId, overrides = {}) => ({
     });
 
     await it('refuses to cancel twice', async () => {
-      const res = await request(app).post(`/api/users/bookings/${bookingId}/cancel`).set(auth).send({});
+      const res = await request(server).post(`/api/users/bookings/${bookingId}/cancel`).set(auth).send({});
       assert.strictEqual(res.status, 400);
     });
 
     await it('refuses to reschedule a cancelled booking', async () => {
-      const res = await request(app).put(`/api/users/bookings/${bookingId}/reschedule`).set(auth).send({
+      const res = await request(server).put(`/api/users/bookings/${bookingId}/reschedule`).set(auth).send({
         scheduledDate: tomorrow(),
         scheduledTime: '10:00 AM - 12:00 PM',
         timeSlot: { start: '10:00', end: '12:00' }

@@ -24,12 +24,12 @@ import IconUploadWithPreview from "../../../components/IconUploadWithPreview";
 
 // level: "root" = top-level categories only, "sub" = sub-categories only (each has its own tab),
 // anything else = both (the old combined view).
-const CategoriesListView = ({ level = "all", selectedCity, onRefreshHealth }) => {
+const CategoriesListView = ({ level = "all", selectedCity, onRefreshHealth, onOpen, initialParent = "" }) => {
   const noun = level === "sub" ? "Sub-category" : "Category";
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [filterParent, setFilterParent] = useState("all"); // "all", "root", or parentId
+  const [filterParent, setFilterParent] = useState(initialParent || "all"); // "all", "root", or parentId
 
   // Create / Edit Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -54,6 +54,20 @@ const CategoriesListView = ({ level = "all", selectedCity, onRefreshHealth }) =>
   });
   const [saving, setSaving] = useState(false);
 
+  // "N workers" badge: who they are
+  const [workersModal, setWorkersModal] = useState({ isOpen: false, category: null, loading: false, workers: [], total: 0 });
+  const openWorkers = async (category) => {
+    setWorkersModal({ isOpen: true, category, loading: true, workers: [], total: 0 });
+    try {
+      const res = await categoryService.getWorkers(category.id || category._id, selectedCity || undefined);
+      setWorkersModal({ isOpen: true, category, loading: false, workers: res?.workers || [], total: res?.total || 0 });
+    } catch (err) {
+      console.error("Category workers error:", err);
+      toast.error("Could not load the workers");
+      setWorkersModal({ isOpen: false, category: null, loading: false, workers: [], total: 0 });
+    }
+  };
+
   // Dependency Modal State
   const [depModal, setDepModal] = useState({
     isOpen: false,
@@ -65,7 +79,8 @@ const CategoriesListView = ({ level = "all", selectedCity, onRefreshHealth }) =>
   const fetchCategories = useCallback(async () => {
     try {
       setLoading(true);
-      const params = { parentId: 'all' };
+      // withCounts: what is inside each category (sub-categories, brands, services, workers)
+      const params = { parentId: 'all', withCounts: true };
       if (selectedCity) params.cityId = selectedCity;
       const res = await categoryService.getAll(params);
       if (res?.success) {
@@ -499,6 +514,7 @@ const CategoriesListView = ({ level = "all", selectedCity, onRefreshHealth }) =>
                   <th className="py-3 px-3 w-14 text-center">Order</th>
                   <th className="py-3 px-4">Category</th>
                   <th className="py-3 px-4">Parent</th>
+                  <th className="py-3 px-4">What is inside</th>
                   <th className="py-3 px-3 text-center">Appliance Flow (Brands)</th>
                   <th className="py-3 px-3 text-center">Home Page</th>
                   <th className="py-3 px-4 text-center">Status</th>
@@ -584,6 +600,51 @@ const CategoriesListView = ({ level = "all", selectedCity, onRefreshHealth }) =>
                         )}
                       </td>
 
+                      {/* What is inside. Each badge opens what it counts (counts come from the server, so they match the other tabs) */}
+                      <td className="py-2.5 px-4">
+                        {category.counts ? (
+                          <div className="flex flex-wrap items-center gap-1">
+                            {level !== "sub" && category.counts.subCategories.total > 0 && (
+                              <button
+                                type="button"
+                                onClick={() => onOpen?.("subcategories", category)}
+                                className="px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 text-[10px] font-bold border border-indigo-100 hover:bg-indigo-100 hover:border-indigo-300 transition-colors"
+                                title="Open its sub-categories"
+                              >
+                                {category.counts.subCategories.total} sub-categor{category.counts.subCategories.total === 1 ? "y" : "ies"} ›
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => onOpen?.("brands", category)}
+                              className="px-2 py-0.5 rounded bg-sky-50 text-sky-700 text-[10px] font-bold border border-sky-100 hover:bg-sky-100 hover:border-sky-300 transition-colors"
+                              title="Open its sections / brands"
+                            >
+                              {category.counts.brands} brand{category.counts.brands === 1 ? "" : "s"} ›
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => onOpen?.("services", category)}
+                              className={`px-2 py-0.5 rounded text-[10px] font-bold border transition-colors ${category.counts.services.total === 0 ? "bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100" : "bg-emerald-50 text-emerald-700 border-emerald-100 hover:bg-emerald-100 hover:border-emerald-300"}`}
+                              title={`Open its services (${category.counts.services.active} active of ${category.counts.services.total}${level === "sub" ? "" : ", including its sub-categories"})`}
+                            >
+                              {category.counts.services.total} service{category.counts.services.total === 1 ? "" : "s"}
+                              {category.counts.services.total !== category.counts.services.active ? ` (${category.counts.services.active} active)` : ""} ›
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => openWorkers(category)}
+                              className={`px-2 py-0.5 rounded text-[10px] font-bold border transition-colors ${category.counts.workers === 0 ? "bg-red-50 text-red-700 border-red-200 hover:bg-red-100" : "bg-violet-50 text-violet-700 border-violet-100 hover:bg-violet-100 hover:border-violet-300"}`}
+                              title="See the professionals who can take bookings in this category"
+                            >
+                              {category.counts.workers === 0 ? "No workers" : `${category.counts.workers} worker${category.counts.workers === 1 ? "" : "s"}`} ›
+                            </button>
+                          </div>
+                        ) : (
+                          <span className="text-gray-300 text-xs">-</span>
+                        )}
+                      </td>
+
                       {/* hasBrands flag */}
                       <td className="py-2.5 px-3 text-center whitespace-nowrap">
                         {category.hasBrands ? (
@@ -643,6 +704,48 @@ const CategoriesListView = ({ level = "all", selectedCity, onRefreshHealth }) =>
           </div>
         )}
       </div>
+
+      {/* Who can take bookings in this category */}
+      {workersModal.isOpen && (
+        <Modal
+          isOpen
+          onClose={() => setWorkersModal((prev) => ({ ...prev, isOpen: false }))}
+          title={`Workers for ${workersModal.category?.title || "this category"}`}
+        >
+          {workersModal.loading ? (
+            <p className="py-8 text-center text-sm text-gray-500">Loading…</p>
+          ) : workersModal.workers.length === 0 ? (
+            <p className="py-6 text-center text-sm text-gray-600">
+              No approved professional can take bookings here yet. They appear once a professional ticks this category
+              (or one of its services) in their profile.
+            </p>
+          ) : (
+            <div className="max-h-96 overflow-y-auto divide-y divide-gray-100">
+              {workersModal.workers.map((w) => (
+                <a
+                  key={w.id}
+                  href={`/admin/workers?search=${encodeURIComponent(w.phone || w.name)}`}
+                  className="flex items-center justify-between gap-3 py-2.5 hover:bg-gray-50 px-1 rounded"
+                >
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-gray-900 truncate">
+                      {w.businessName || w.name}
+                      {w.businessName && w.name ? <span className="font-normal text-gray-500"> · {w.name}</span> : null}
+                    </p>
+                    <p className="text-xs text-gray-500">{[w.phone, w.city].filter(Boolean).join(" · ")}</p>
+                  </div>
+                  <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full shrink-0 ${w.isOnline ? "bg-emerald-50 text-emerald-700" : "bg-gray-100 text-gray-500"}`}>
+                    {w.isOnline ? "Online" : "Offline"}
+                  </span>
+                </a>
+              ))}
+              {workersModal.total > workersModal.workers.length && (
+                <p className="pt-2 text-xs text-gray-400 text-center">Showing {workersModal.workers.length} of {workersModal.total}.</p>
+              )}
+            </div>
+          )}
+        </Modal>
+      )}
 
       {/* Create / Edit Category Modal */}
       {isModalOpen && (

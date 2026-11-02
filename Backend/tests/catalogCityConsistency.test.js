@@ -55,6 +55,8 @@ const buildApp = () => {
   const mongod = await MongoMemoryServer.create();
   await mongoose.connect(mongod.getUri());
   const app = buildApp();
+  // One server for the whole run: a fresh server on a random port per request can land on a port another program just took
+  const server = require('http').createServer(app).listen(0, '127.0.0.1');
 
   try {
     const admin = await Admin.create({ name: 'Root', email: 'root@example.com', password: 'secret123', role: 'super_admin' });
@@ -107,7 +109,7 @@ const buildApp = () => {
     });
 
     console.log('\n[Admin services list]');
-    const list = (q) => request(app).get(`/api/admin/services/with-stats?${q}`).set(auth);
+    const list = (q) => request(server).get(`/api/admin/services/with-stats?${q}`).set(auth);
 
     await it('is no longer capped at 50: a page size of 200 returns every service', async () => {
       const res = await list('limit=200');
@@ -161,7 +163,7 @@ const buildApp = () => {
     });
 
     console.log('\n[Catalog health cards]');
-    const health = (q = '') => request(app).get(`/api/admin/catalog/health${q}`).set(auth);
+    const health = (q = '') => request(server).get(`/api/admin/catalog/health${q}`).set(auth);
 
     await it('health is city-scoped like the list (cards agree with the rows under them)', async () => {
       const all = await health();
@@ -182,27 +184,27 @@ const buildApp = () => {
 
     console.log('\n[Customer + admin category / brand lists use the same city rule]');
     await it('admin category list: Indore = Indore + open-to-all', async () => {
-      const res = await request(app).get(`/api/admin/categories?cityId=${indore._id}`).set(auth);
+      const res = await request(server).get(`/api/admin/categories?cityId=${indore._id}`).set(auth);
       const titles = res.body.categories.map((c) => c.title).sort();
       assert.deepStrictEqual(titles, ['Cleaning', 'Electrician']);
     });
 
     await it('customer category list agrees with the admin one', async () => {
-      const res = await request(app).get(`/api/public/categories?cityId=${indore._id}`);
+      const res = await request(server).get(`/api/public/categories?cityId=${indore._id}`);
       const titles = res.body.categories.map((c) => c.title).sort();
       assert.deepStrictEqual(titles, ['Cleaning', 'Electrician']);
     });
 
     await it('customer search finds an open-to-all category in any city (it used to be excluded)', async () => {
-      const res = await request(app).get(`/api/public/search/advanced?q=clean&cityId=${indore._id}`);
+      const res = await request(server).get(`/api/public/search/advanced?q=clean&cityId=${indore._id}`);
       assert.strictEqual(res.status, 200, JSON.stringify(res.body));
       assert.ok(res.body.categories.some((c) => c.title === 'Cleaning'));
-      const blrOnly = await request(app).get(`/api/public/search/advanced?q=bike&cityId=${indore._id}`);
+      const blrOnly = await request(server).get(`/api/public/search/advanced?q=bike&cityId=${indore._id}`);
       assert.ok(!blrOnly.body.categories.some((c) => c.title === 'Bike Washing'));
     });
 
     await it('customer services list agrees: Indore never gets Bangalore-only services', async () => {
-      const res = await request(app).get(`/api/public/services?cityId=${indore._id}`);
+      const res = await request(server).get(`/api/public/services?cityId=${indore._id}`);
       const titles = res.body.services.map((s) => s.title);
       assert.ok(titles.includes('Home Cleaning'));
       assert.ok(!titles.includes('Car Washing'));
@@ -211,7 +213,7 @@ const buildApp = () => {
     await it('admin brand list uses the same rule (open-to-all brands are in every city)', async () => {
       await Brand.create({ title: 'Open Brand', slug: 'open-brand-ct', categoryIds: [catOpen._id], categoryId: catOpen._id });
       await Brand.create({ title: 'Blr Brand', slug: 'blr-brand-ct', categoryIds: [catOpen._id], categoryId: catOpen._id, cityIds: [bangalore._id] });
-      const res = await request(app).get(`/api/admin/brands?cityId=${indore._id}`).set(auth);
+      const res = await request(server).get(`/api/admin/brands?cityId=${indore._id}`).set(auth);
       assert.strictEqual(res.status, 200, JSON.stringify(res.body));
       const titles = res.body.brands.map((b) => b.title);
       assert.ok(titles.includes('Open Brand'));
@@ -226,7 +228,7 @@ const buildApp = () => {
 
     await it('renaming a category updates the professionals who picked it', async () => {
       await insertWorker({ name: 'RenameCat', phone: '7', email: 'w7@x.com', service: ['Cleaning', 'Plumber'], categories: ['Cleaning'] });
-      const res = await request(app).put(`/api/admin/categories/${catOpen._id}`).set(auth).send({ title: 'Home Care' });
+      const res = await request(server).put(`/api/admin/categories/${catOpen._id}`).set(auth).send({ title: 'Home Care' });
       assert.strictEqual(res.status, 200, JSON.stringify(res.body));
       const now = await skillsOf('RenameCat');
       assert.deepStrictEqual(now.service, ['Home Care', 'Plumber']);
@@ -235,7 +237,7 @@ const buildApp = () => {
 
     await it('renaming a service updates the professionals who picked it, others untouched', async () => {
       await insertWorker({ name: 'RenameSvc', phone: '8', email: 'w8@x.com', service: ['Car Washing', 'Plumber'], categories: [] });
-      const res = await request(app).put(`/api/admin/services/${svcBlr._id}`).set(auth).send({ title: 'Car Wash Deluxe' });
+      const res = await request(server).put(`/api/admin/services/${svcBlr._id}`).set(auth).send({ title: 'Car Wash Deluxe' });
       assert.strictEqual(res.status, 200, JSON.stringify(res.body));
       assert.deepStrictEqual((await skillsOf('RenameSvc')).service, ['Car Wash Deluxe', 'Plumber']);
       assert.deepStrictEqual((await skillsOf('W5')).service, ['Plumber']);
@@ -247,7 +249,7 @@ const buildApp = () => {
       await insertWorker({ name: 'Shared', phone: '9', email: 'w9@x.com', service: ['Shared Title'], categories: [] });
       // a second item carries the same title, so renaming the first must leave the pick alone
       await UserService.collection.updateOne({ title: 'Shared Title Two' }, { $set: { title: 'Shared Title', slug: 'shared-title-two-x' } });
-      const res = await request(app).put(`/api/admin/services/${dup._id}`).set(auth).send({ title: 'Renamed Elsewhere' });
+      const res = await request(server).put(`/api/admin/services/${dup._id}`).set(auth).send({ title: 'Renamed Elsewhere' });
       assert.strictEqual(res.status, 200, JSON.stringify(res.body));
       assert.deepStrictEqual((await skillsOf('Shared')).service, ['Shared Title']);
     });
@@ -259,18 +261,18 @@ const buildApp = () => {
     const svcInOrphan = await mkSvc('Orphan Child Service', subOpenUnderIndore);
 
     await it('admin category list: a sub-category is not available where its parent is not', async () => {
-      const blr = await request(app).get(`/api/admin/categories?parentId=all&cityId=${bangalore._id}`).set(auth);
+      const blr = await request(server).get(`/api/admin/categories?parentId=all&cityId=${bangalore._id}`).set(auth);
       const titles = blr.body.categories.map((c) => c.title);
       assert.ok(!titles.includes('Open Child'), 'sub-category of an Indore-only parent leaked into Bangalore');
       assert.ok(!titles.includes('Electrician') && !titles.includes('Fan Repair Pros'));
       assert.ok(titles.includes('Open Child Of Open'), 'child of an all-city parent should be everywhere');
-      const ind = await request(app).get(`/api/admin/categories?parentId=all&cityId=${indore._id}`).set(auth);
+      const ind = await request(server).get(`/api/admin/categories?parentId=all&cityId=${indore._id}`).set(auth);
       const indTitles = ind.body.categories.map((c) => c.title);
       assert.ok(indTitles.includes('Open Child') && indTitles.includes('Fan Repair Pros'));
     });
 
     await it('customer category list agrees (top level and children)', async () => {
-      const kids = await request(app).get(`/api/public/categories?parentId=all&cityId=${bangalore._id}`);
+      const kids = await request(server).get(`/api/public/categories?parentId=all&cityId=${bangalore._id}`);
       const titles = kids.body.categories.map((c) => c.title);
       assert.ok(!titles.includes('Open Child'));
       assert.ok(titles.includes('Open Child Of Open'));
@@ -304,7 +306,7 @@ const buildApp = () => {
 
     console.log('\n[Partner skill tree: category > sub-category > service]');
     await it('returns categories with their sub-categories and services, only active ones', async () => {
-      const res = await request(app).get('/api/public/worker-skill-tree');
+      const res = await request(server).get('/api/public/worker-skill-tree');
       assert.strictEqual(res.status, 200, JSON.stringify(res.body));
       const electrician = res.body.categories.find((c) => c.title === 'Electrician');
       assert.ok(electrician, 'top-level category missing');
@@ -317,19 +319,102 @@ const buildApp = () => {
     });
 
     await it('follows the city: an Indore-only category (and its children) is not offered in Bangalore', async () => {
-      const blr = await request(app).get(`/api/public/worker-skill-tree?cityId=${bangalore._id}`);
+      const blr = await request(server).get(`/api/public/worker-skill-tree?cityId=${bangalore._id}`);
       const titles = blr.body.categories.map((c) => c.title);
       assert.ok(!titles.includes('Electrician'));
       assert.ok(titles.includes('Cleaning') || titles.includes('Home Care'), 'an all-city category should be offered');
-      const ind = await request(app).get(`/api/public/worker-skill-tree?cityId=${indore._id}`);
+      const ind = await request(server).get(`/api/public/worker-skill-tree?cityId=${indore._id}`);
       assert.ok(ind.body.categories.some((c) => c.title === 'Electrician'));
     });
 
     await it('is public (a new partner has no login yet) and leaves out inactive items', async () => {
       await Category.updateOne({ _id: catBlr._id }, { status: 'inactive' });
-      const res = await request(app).get('/api/public/worker-skill-tree');
+      const res = await request(server).get('/api/public/worker-skill-tree');
       assert.strictEqual(res.status, 200);
       assert.ok(!res.body.categories.some((c) => c.title === 'Bike Washing'));
+    });
+
+    console.log('\n[What is inside each category (admin list counts)]');
+    await Brand.create({ title: 'Indore Brand', slug: 'indore-brand-ct', categoryIds: [catIndore._id], categoryId: catIndore._id, cityIds: [indore._id] });
+    const withCounts = async (q = '') => (await request(server).get(`/api/admin/categories?parentId=all&withCounts=true${q}`).set(auth)).body.categories;
+    const find = (cats, title) => cats.find((c) => c.title === title);
+
+    await it('is off unless asked for (the plain list stays cheap)', async () => {
+      const res = await request(server).get('/api/admin/categories?parentId=all').set(auth);
+      assert.ok(res.body.categories.every((c) => c.counts === undefined));
+    });
+
+    await it('a top-level category counts its sub-categories, brands, services and workers', async () => {
+      const electrician = find(await withCounts(`&cityId=${indore._id}`), 'Electrician').counts;
+      assert.deepStrictEqual(electrician.subCategories, { total: 2, active: 2 }); // Fan Repair Pros, Open Child
+      assert.strictEqual(electrician.brands, 1);
+      // 55 straight under it + Fan Repair (in Fan Repair Pros); the archived Orphan Child Service is left out
+      assert.deepStrictEqual(electrician.services, { total: 56, active: 56 });
+      assert.strictEqual(electrician.workers, 1); // W1 lists ELECTRICIAN; pending / inactive / other-skill / legacy-string workers do not count
+    });
+
+    await it('a sub-category counts its own services, and workers who list its parent', async () => {
+      const cats = await withCounts(`&cityId=${indore._id}`);
+      const fanPros = find(cats, 'Fan Repair Pros').counts;
+      assert.deepStrictEqual(fanPros.subCategories, { total: 0, active: 0 });
+      assert.deepStrictEqual(fanPros.services, { total: 1, active: 1 });
+      assert.strictEqual(fanPros.workers, 1, 'W1 lists the parent, which covers the sub-category');
+      const openChild = find(cats, 'Open Child').counts;
+      assert.deepStrictEqual(openChild.services, { total: 0, active: 0 });
+      assert.strictEqual(openChild.workers, 1);
+    });
+
+    await it('a category nobody can serve shows zero workers (so the admin can spot it)', async () => {
+      const cats = await withCounts();
+      // 3 distinct workers can take work in 'Home Care': RenameCat lists the category itself, W2 lists its service
+      // 'Home Cleaning', and 'Shared' lists another service in it
+      assert.strictEqual(find(cats, 'Home Care').counts.workers, 3);
+      const empty = await Category.create({ title: 'Nobody Does This', slug: 'nobody-does-this-ct' });
+      const again = await withCounts();
+      assert.strictEqual(find(again, 'Nobody Does This').counts.workers, 0);
+      await Category.deleteOne({ _id: empty._id });
+    });
+
+    await it('with a city the numbers match that city (the Services tab), not the whole catalogue', async () => {
+      // 'Home Care' (open to all cities) has the open-to-all service everywhere
+      // 'Home Care' is open to every city, so its 3 services (Home Cleaning + the two 'Shared Title' ones) are in Bangalore too
+      const blr = find(await withCounts(`&cityId=${bangalore._id}`), 'Home Care').counts;
+      assert.deepStrictEqual(blr.services, { total: 3, active: 3 });
+      // while Indore-only Electrician is not even listed in Bangalore
+      assert.strictEqual(find(await withCounts(`&cityId=${bangalore._id}`), 'Electrician'), undefined);
+      // Brand tagged to Indore only: counted in Indore, not in Bangalore
+      const indoreBrand = find(await withCounts(`&cityId=${indore._id}`), 'Electrician').counts.brands;
+      assert.strictEqual(indoreBrand, 1);
+    });
+
+    await it('the workers behind a count can be listed, and are exactly that many', async () => {
+      const cats = await withCounts(`&cityId=${indore._id}`);
+      const electrician = find(cats, 'Electrician');
+      const res = await request(server).get(`/api/admin/categories/${electrician.id}/workers?cityId=${indore._id}`).set(auth);
+      assert.strictEqual(res.status, 200, JSON.stringify(res.body));
+      assert.strictEqual(res.body.total, electrician.counts.workers);
+      assert.deepStrictEqual(res.body.workers.map((w) => w.name), ['W1']);
+      assert.ok(res.body.workers[0].phone !== undefined);
+      const missing = await request(server).get(`/api/admin/categories/${new mongoose.Types.ObjectId()}/workers`).set(auth);
+      assert.strictEqual(missing.status, 404);
+    });
+
+    await it('the Services tab filtered by a category includes its sub-categories\' services (and a sub-category narrows it)', async () => {
+      const electrician = find(await withCounts(`&cityId=${indore._id}`), 'Electrician');
+      const parent = await request(server).get(`/api/admin/services/with-stats?categoryId=${electrician.id}&cityId=${indore._id}&limit=200`).set(auth);
+      assert.strictEqual(parent.body.total, electrician.counts.services.total, 'list total must equal the count shown on the Categories tab');
+      assert.ok(parent.body.services.some((s) => s.title === 'Fan Repair'), 'a service under a sub-category must be included');
+      const fanPros = find(await withCounts(`&cityId=${indore._id}`), 'Fan Repair Pros');
+      const sub = await request(server).get(`/api/admin/services/with-stats?categoryId=${fanPros.id}&limit=200`).set(auth);
+      assert.deepStrictEqual(sub.body.services.map((s) => s.title), ['Fan Repair']);
+    });
+
+    await it('archived services are not counted', async () => {
+      const before = find(await withCounts(`&cityId=${indore._id}`), 'Electrician').counts.services.total;
+      const svc = await UserService.findOne({ title: 'Indore Extra 3' });
+      await UserService.updateOne({ _id: svc._id }, { status: 'deleted' });
+      const after = find(await withCounts(`&cityId=${indore._id}`), 'Electrician').counts.services.total;
+      assert.strictEqual(after, before - 1);
     });
   } finally {
     await mongoose.disconnect();

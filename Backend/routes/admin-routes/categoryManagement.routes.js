@@ -9,6 +9,7 @@ const {
   getCategoryById,
   checkSlugAvailability,
   getCategoryDependencies,
+  getCategoryWorkers,
   createCategory,
   updateCategory,
   deleteCategory,
@@ -88,6 +89,7 @@ router.patch('/categories/bulk-status', authenticate, isAdmin, requirePermission
 router.get('/categories', authenticate, isAdmin, requirePermission('categories'), getAllCategories);
 router.get('/categories/:id', authenticate, isAdmin, requirePermission('categories'), getCategoryById);
 router.get('/categories/:id/children', authenticate, isAdmin, requirePermission('categories'), getCategoryChildren);
+router.get('/categories/:id/workers', authenticate, isAdmin, requirePermission('categories'), getCategoryWorkers);
 router.get('/categories/:id/dependencies', authenticate, isAdmin, requirePermission('categories'), getCategoryDependencies);
 router.post('/categories', authenticate, isAdmin, requirePermission('categories'), createCategoryValidation, createCategory);
 router.put('/categories/:id', authenticate, isAdmin, requirePermission('categories'), updateCategoryValidation, updateCategory);

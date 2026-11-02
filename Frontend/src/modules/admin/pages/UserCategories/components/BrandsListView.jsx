@@ -19,12 +19,15 @@ import Modal from "./Modal";
 import ToggleSwitch from "./ToggleSwitch";
 import { slugify, toAssetUrl } from "../utils";
 
-const BrandsListView = ({ selectedCity, onRefreshHealth }) => {
+const BrandsListView = ({ selectedCity, onRefreshHealth, initialCategory = "" }) => {
   const [brands, setBrands] = useState([]);
   const [categories, setCategories] = useState([]);
+  // Every category and sub-category (all cities): names for a brand's categories, and "everything under a
+  // category" for the filter. `categories` above stays the city's top-level list used by the pickers.
+  const [allCats, setAllCats] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [selectedCategoryFilter, setSelectedCategoryFilter] = useState("all");
+  const [selectedCategoryFilter, setSelectedCategoryFilter] = useState(initialCategory || "all");
 
   // Create / Edit Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -54,11 +57,13 @@ const BrandsListView = ({ selectedCity, onRefreshHealth }) => {
       setLoading(true);
       const params = {};
       if (selectedCity) params.cityId = selectedCity;
-      const [brandRes, catRes] = await Promise.all([
+      const [brandRes, catRes, allRes] = await Promise.all([
         brandService.getAll(params),
         categoryService.getAll(params),
+        categoryService.getAll({ parentId: "all" }).catch(() => null),
       ]);
 
+      if (allRes?.success) setAllCats(allRes.categories || []);
       if (brandRes?.success) setBrands(brandRes.brands || []);
       if (catRes?.success) setCategories(catRes.categories || []);
     } catch (err) {
@@ -78,15 +83,20 @@ const BrandsListView = ({ selectedCity, onRefreshHealth }) => {
     let list = Array.isArray(brands) ? brands.filter(Boolean) : [];
 
     if (selectedCategoryFilter !== "all") {
+      const wanted = new Set([String(selectedCategoryFilter)]);
+      allCats.forEach((c) => {
+        const p = typeof c.parentId === "object" ? c.parentId?._id || c.parentId?.id : c.parentId;
+        if (p && String(p) === String(selectedCategoryFilter)) wanted.add(String(c.id || c._id));
+      });
       list = list.filter((b) => {
         if (!b) return false;
         const directId = typeof b.categoryId === "object" ? b.categoryId?._id || b.categoryId?.id : b.categoryId;
-        if (String(directId) === String(selectedCategoryFilter)) return true;
+        if (wanted.has(String(directId))) return true;
         if (Array.isArray(b.categoryIds)) {
           return b.categoryIds.some((cid) => {
             if (!cid) return false;
             const id = typeof cid === "object" ? cid?._id || cid?.id : cid;
-            return String(id) === String(selectedCategoryFilter);
+            return wanted.has(String(id));
           });
         }
         return false;
@@ -105,7 +115,7 @@ const BrandsListView = ({ selectedCity, onRefreshHealth }) => {
     }
 
     return list.sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0));
-  }, [brands, selectedCategoryFilter, search]);
+  }, [brands, selectedCategoryFilter, search, allCats]);
 
   // Status toggle
   const handleToggleStatus = async (brand) => {
@@ -419,7 +429,7 @@ const BrandsListView = ({ selectedCity, onRefreshHealth }) => {
               <tbody className="divide-y divide-gray-100 text-gray-700">
                 {filteredBrands.map((brand, idx) => {
                   const id = brand.id || brand._id;
-                  const catTitles = categories
+                  const catTitles = (allCats.length ? allCats : categories)
                     .filter((c) => {
                       const cId = String(c.id || c._id);
                       const directId = String(typeof brand.categoryId === "object" ? brand.categoryId?._id || brand.categoryId?.id : brand.categoryId);

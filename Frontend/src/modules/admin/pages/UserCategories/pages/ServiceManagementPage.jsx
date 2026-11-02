@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo, useCallback } from "react";
+import React, { useEffect, useState, useMemo, useCallback, useRef } from "react";
 import {
   FiGrid,
   FiList,
@@ -78,6 +78,11 @@ const ServiceManagementPage = ({ selectedCity: propCity }) => {
   const [allCategories, setAllCategories] = useState([]);
   const categories = useMemo(() => allCategories.filter((c) => c && !c.parentId), [allCategories]);
   const allSubCategories = useMemo(() => allCategories.filter((c) => c && c.parentId), [allCategories]);
+
+  // Opening a tab from a category's badges ("12 services", "3 sub-categories", ...) pre-filters it
+  const [subParentPreset, setSubParentPreset] = useState("");
+  const [brandCategoryPreset, setBrandCategoryPreset] = useState("");
+  const pendingSubRef = useRef(null);
   const [brands, setBrands] = useState([]);
 
   // ─── SERVICES STATE ───────────────────────────────────────────────────
@@ -205,6 +210,37 @@ const ServiceManagementPage = ({ selectedCity: propCity }) => {
     setPage(1);
   }, [propCity]);
 
+  // Jump from a category row to what is inside it, with the target tab already filtered.
+  const openFromCategory = (kind, category) => {
+    const id = String(category.id || category._id);
+    const rawParent = category.parentId;
+    const parentId = rawParent ? String(typeof rawParent === "object" ? rawParent._id || rawParent.id : rawParent) : null;
+
+    if (kind === "services") {
+      const topId = parentId || id;
+      const subId = parentId ? id : "all";
+      setSelectedBrand("all");
+      setSelectedStatus("all");
+      setSelectedPublishStatus("all");
+      setActiveStatFilter("all");
+      setSearchTerm("");
+      setPage(1);
+      if (selectedCategory === topId) {
+        setSelectedSubCategory(subId);
+      } else {
+        pendingSubRef.current = subId !== "all" ? subId : null;
+        setSelectedCategory(topId);
+      }
+      setActiveTab("services");
+    } else if (kind === "subcategories") {
+      setSubParentPreset(id);
+      setActiveTab("subcategories");
+    } else if (kind === "brands") {
+      setBrandCategoryPreset(parentId || id);
+      setActiveTab("brands");
+    }
+  };
+
   // ─── SUB-CATEGORIES OF THE CHOSEN CATEGORY (from the same list) ───────
   const subCategories = useMemo(() => {
     if (!selectedCategory || selectedCategory === "all") return [];
@@ -215,7 +251,12 @@ const ServiceManagementPage = ({ selectedCity: propCity }) => {
   }, [allSubCategories, selectedCategory]);
 
   useEffect(() => {
-    setSelectedSubCategory("all");
+    if (pendingSubRef.current) {
+      setSelectedSubCategory(pendingSubRef.current); // chosen by a badge on the Sub-categories tab
+      pendingSubRef.current = null;
+    } else {
+      setSelectedSubCategory("all");
+    }
   }, [selectedCategory, selectedCity]);
 
   // Check if current category hasBrands === true
@@ -766,7 +807,7 @@ const ServiceManagementPage = ({ selectedCity: propCity }) => {
           <button
             key={id}
             type="button"
-            onClick={() => setActiveTab(id)}
+            onClick={() => { setSubParentPreset(""); setBrandCategoryPreset(""); setActiveTab(id); }}
             className={`px-4 py-2.5 text-xs font-bold transition-all relative flex items-center gap-2 shrink-0 ${
               activeTab === id
                 ? "text-blue-600 border-b-2 border-blue-600"
@@ -1672,17 +1713,17 @@ const ServiceManagementPage = ({ selectedCity: propCity }) => {
 
       {/* ─── TAB 2: CATEGORIES ────────────────────────────────────────── */}
       {activeTab === "categories" && (
-        <CategoriesListView level="root" selectedCity={selectedCity} onRefreshHealth={loadHealth} />
+        <CategoriesListView level="root" selectedCity={selectedCity} onRefreshHealth={loadHealth} onOpen={openFromCategory} />
       )}
 
       {/* ─── TAB 2: SUB-CATEGORIES ────────────────────────────────────── */}
       {activeTab === "subcategories" && (
-        <CategoriesListView level="sub" selectedCity={selectedCity} onRefreshHealth={loadHealth} />
+        <CategoriesListView level="sub" selectedCity={selectedCity} onRefreshHealth={loadHealth} onOpen={openFromCategory} initialParent={subParentPreset} />
       )}
 
       {/* ─── TAB 3: SECTIONS AND BRANDS ───────────────────────────────── */}
       {activeTab === "brands" && (
-        <BrandsListView selectedCity={selectedCity} onRefreshHealth={loadHealth} />
+        <BrandsListView selectedCity={selectedCity} onRefreshHealth={loadHealth} initialCategory={brandCategoryPreset} />
       )}
 
       {/* ─── TAB 4: DRAFT AND ARCHIVE ─────────────────────────────────── */}
