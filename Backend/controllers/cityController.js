@@ -1,4 +1,5 @@
 const City = require('../models/City');
+const escapeRegex = require('../utils/escapeRegex');
 
 // Helper wrapper to avoid repeating try-catch
 const catchAsync = (fn) => (req, res, next) => {
@@ -71,7 +72,7 @@ exports.createCity = catchAsync(async (req, res) => {
   let existingCity = await City.findOne({
     $or: [
       { slug },
-      { name: new RegExp(`^${name}$`, 'i') }
+      { name: new RegExp(`^${escapeRegex(name)}$`, 'i') }
     ]
   });
 

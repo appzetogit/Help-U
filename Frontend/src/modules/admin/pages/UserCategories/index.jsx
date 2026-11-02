@@ -79,6 +79,8 @@ const UserCategories = () => {
               onChange={(e) => setSelectedCity(e.target.value)}
               className="px-4 py-2 bg-slate-700 text-white border border-slate-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-slate-500 min-w-[200px]"
             >
+              {/* Empty = no city filter: every page below already treats it as "all cities" */}
+              <option value="">All Cities</option>
               {cities.map(city => {
                 const cityId = city._id || city.id;
                 return <option key={cityId} value={cityId}>{city.name}</option>
