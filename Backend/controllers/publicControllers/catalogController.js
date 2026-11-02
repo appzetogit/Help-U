@@ -12,11 +12,14 @@ const { getServiceRatings, combineRatings, toDisplayRating } = require('../../se
 const { resolveFieldsForCategories } = require('../../utils/detailFields');
 const { expandZoneCategories } = require('../../utils/zoneCategories');
 const { cityScopeQuery } = require('../../utils/cityScope');
+const { zonesInUse } = require('../../utils/dispatchMode');
 
 /**
  * Helper to resolve zone from query (zoneId, lat, lng, cityId)
  */
 const resolveZone = async ({ zoneId, lat, lng, cityId }) => {
+  // Distance mode: zones are not used, so nothing is scoped to one
+  if (!(await zonesInUse())) return null;
   if (zoneId && mongoose.Types.ObjectId.isValid(zoneId)) {
     try {
       return await Zone.findById(zoneId).lean();
@@ -762,7 +765,7 @@ const getPublicHomeContent = async (req, res) => {
       resolveZone({ zoneId, lat, lng, cityId })
     ]);
 
-    const activeZoneId = matchedZone ? String(matchedZone._id) : (zoneId || null);
+    const activeZoneId = matchedZone ? String(matchedZone._id) : ((await zonesInUse()) ? (zoneId || null) : null);
     const contentObj = contentObjDoc.toObject();
     await applyLiveServiceData(contentObj);
     const isGlobalScrapEnabled = settings ? settings.isScrapEnabled !== false : true;
@@ -797,7 +800,7 @@ const getPublicHomeData = async (req, res) => {
     const { cityId, zoneId, lat, lng } = req.query;
 
     const matchedZone = await resolveZone({ zoneId, lat, lng, cityId });
-    const activeZoneId = matchedZone ? String(matchedZone._id) : (zoneId || null);
+    const activeZoneId = matchedZone ? String(matchedZone._id) : ((await zonesInUse()) ? (zoneId || null) : null);
 
     const catQuery = { status: 'active', parentId: null, publishStatus: { $ne: 'draft' }, showOnHome: { $ne: false } };
     if (cityId) {
@@ -1058,7 +1061,7 @@ const getPublicCategoryCatalog = async (req, res) => {
     }
 
     const matchedZone = await resolveZone({ zoneId, lat, lng, cityId });
-    const activeZoneId = matchedZone ? String(matchedZone._id) : (zoneId || null);
+    const activeZoneId = matchedZone ? String(matchedZone._id) : ((await zonesInUse()) ? (zoneId || null) : null);
 
     const cacheKey = `public:catalog:${idOrSlug}:${cityId || 'all'}:${activeZoneId || 'all'}`;
     const redis = getRedis();

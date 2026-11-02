@@ -29,6 +29,7 @@ import { cityService } from "../../services/cityService";
 import { categoryService } from "../../../../services/catalogService";
 import ModalLock from '../../../../components/common/ModalLock';
 import OutOfZonePageModal from './OutOfZonePageModal';
+import DispatchModeSwitch from '../../components/DispatchModeSwitch';
 
 const LIBRARIES = ["places", "geometry"];
 
@@ -92,6 +93,7 @@ const ZonesPage = () => {
 
   const [zones, setZones] = useState([]);
   const [showOutOfZoneEditor, setShowOutOfZoneEditor] = useState(false);
+  const [dispatchMode, setDispatchMode] = useState('zone');
   const [cities, setCities] = useState([]);
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -689,6 +691,17 @@ const ZonesPage = () => {
             Add Zone
           </button>
         </div>
+      </div>
+
+      {/* Which rule sends bookings: zones, or distance. Only one applies at a time. */}
+      <div className="bg-white border-b border-gray-200 px-5 py-2 flex flex-wrap items-center justify-between gap-2 shrink-0">
+        <p className="text-[11px] text-gray-600">
+          <span className="font-bold text-gray-800">Booking dispatch:</span>{' '}
+          {dispatchMode === 'distance'
+            ? 'by distance. Zones are saved but NOT used right now - nothing is blocked or limited by them.'
+            : 'by zone. Bookings go to professionals in the customer\'s zone; addresses outside every zone are refused.'}
+        </p>
+        <DispatchModeSwitch compact onChanged={setDispatchMode} onLoaded={setDispatchMode} />
       </div>
 
       {/* Main Container: Left Zone List + Right Fullscreen Map */}

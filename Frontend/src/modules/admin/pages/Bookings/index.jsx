@@ -36,7 +36,7 @@ const Bookings = () => {
       try {
         const res = await adminBookingService.getUnassignedBookings({ limit: 1 });
         if (alive && res.success) setQueueCount(res.pagination?.total || 0);
-      } catch (_) { /* the badge is a nicety */ }
+      } catch { /* the badge is a nicety */ }
     };
     loadCount();
     const t = setInterval(loadCount, 30000);

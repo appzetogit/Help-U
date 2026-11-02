@@ -139,7 +139,9 @@ const AssignWorkerModal = ({ booking, onClose, onAssigned }) => {
                       {w.distanceKm != null && <span>{w.distanceKm} km away</span>}
                     </p>
                     <div className="flex items-center gap-1 mt-1 flex-wrap">
-                      <Badge tone={w.inZone ? 'green' : 'amber'}>{w.inZone ? 'In zone' : 'Outside zone'}</Badge>
+                      {w.inZone !== null && w.inZone !== undefined && (
+                        <Badge tone={w.inZone ? 'green' : 'amber'}>{w.inZone ? 'In zone' : 'Outside zone'}</Badge>
+                      )}
                       <Badge tone={w.isOnline ? 'green' : 'gray'}>{w.isOnline ? 'Online' : 'Offline'}</Badge>
                       {w.isBusy && <Badge tone="blue">On a job</Badge>}
                       {w.declinedEarlier && <Badge tone="red">Declined earlier</Badge>}
@@ -152,7 +154,7 @@ const AssignWorkerModal = ({ booking, onClose, onAssigned }) => {
           )}
         </div>
 
-        {selected && (!selected.inZone || selected.declinedEarlier) && (
+        {selected && (selected.inZone === false || selected.declinedEarlier) && (
           <div className="flex items-start gap-2 rounded-lg bg-amber-50 border border-amber-200 p-2.5 text-[11px] text-amber-800">
             <FiAlertTriangle className="w-4 h-4 shrink-0 mt-px" />
             <span>

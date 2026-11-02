@@ -442,6 +442,9 @@ const settingsSchema = new mongoose.Schema({
   autoReassignOnWorkerCancel: { type: Boolean, default: true },
   maxReassignments: { type: Number, default: 3, min: 0, max: 10 },
 
+  // How bookings find professionals: by the customer's zone, or by distance (see utils/bookingConfig.js)
+  dispatchMode: { type: String, enum: ['zone', 'distance'], default: 'zone' },
+
   // ==========================================
   // ADMIN ASSIGNMENT QUEUE
   // A booking nobody in the zone can take (no professional with the skill, or nobody accepted)

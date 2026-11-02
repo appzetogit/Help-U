@@ -13,6 +13,7 @@
  */
 
 const Coupon = require('../models/Coupon');
+const { zonesInUse } = require('../utils/dispatchMode');
 const CouponRedemption = require('../models/CouponRedemption');
 const Booking = require('../models/Booking');
 
@@ -69,7 +70,9 @@ const validateCoupon = async (code, { userId, orderAmount, categoryId, serviceId
     }
   }
 
-  if (coupon.zones && coupon.zones.length > 0) {
+  // Zone-limited coupons only mean something in zone mode; in distance mode there are no zones
+  const zoneRuleApplies = await zonesInUse();
+  if (zoneRuleApplies && coupon.zones && coupon.zones.length > 0) {
     if (!zoneId) {
       return { valid: false, reason: 'This coupon is valid only in specific service zones' };
     }

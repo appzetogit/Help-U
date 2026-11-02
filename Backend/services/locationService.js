@@ -450,7 +450,7 @@ const findServiceAreaWorkers = async (center, config, filters = {}, excludeIds =
  * measured from his saved home address: left out when the customer is beyond it, and included when the customer
  * is inside it even though his current position is outside the platform radius. Everyone else is unchanged.
  */
-const findNearbyWorkers = async (centerLocation, radiusKm = 10, filters = {}) => {
+const findNearbyWorkers = async (centerLocation, radiusKm = 10, filters = {}, options = {}) => {
   const pool = await findNearbyByLiveLocation(centerLocation, radiusKm, filters);
   if (!centerLocation || typeof centerLocation.lat !== 'number' || typeof centerLocation.lng !== 'number') return pool;
 
@@ -460,7 +460,8 @@ const findNearbyWorkers = async (centerLocation, radiusKm = 10, filters = {}) =>
   } catch (err) {
     return pool;
   }
-  if (!config.isWorkerServiceRadiusEnabled) return pool;
+  // ignoreServiceArea: the zone decides who qualifies, so a professional's own radius is not applied
+  if (!config.isWorkerServiceRadiusEnabled || options.ignoreServiceArea) return pool;
 
   const serviceArea = require('../utils/serviceArea');
   const kept = pool.filter((w) => serviceArea.insideOwnArea(w, centerLocation, config) !== false);

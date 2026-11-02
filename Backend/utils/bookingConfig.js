@@ -54,6 +54,13 @@ const CONFIG_SCHEMA = {
     'Other'
   ], 'stringList'],
 
+  // How a booking finds its professionals - ONE rule at a time:
+  //   zone      the customer's zone decides: only professionals in that zone, however far away. Addresses
+  //             outside every zone are refused. The search radius and a professional's own service radius
+  //             are not used. With no active zone it behaves like 'distance'.
+  //   distance  zones are not used at all (no out-of-zone block, zone surge or zone category limits):
+  //             professionals within the search radius of the address, nearest first.
+  dispatchMode: ['zone', 'enum', ['zone', 'distance']],
   assignmentStrategy: ['smart', 'enum', ['distance', 'smart']],
   assignmentDistanceWeight: [40, 'number', 0, 100],
   assignmentRatingWeight: [25, 'number', 0, 100],

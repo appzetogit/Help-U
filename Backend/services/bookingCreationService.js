@@ -34,6 +34,7 @@ const { resolveCheckoutAmount } = require('../utils/servicePricing');
 const { resolveBookedItemDetails } = require('./bookingDetailsService');
 const { summariseBookedDetails } = require('../utils/detailFields');
 const { expandZoneCategories } = require('../utils/zoneCategories');
+const { ZONE_WIDE_RADIUS_KM } = require('../utils/dispatchMode');
 
 const fail = (statusCode, message, extra = {}) => ({
   statusCode,
@@ -297,11 +298,15 @@ const placeBooking = async (userId, payload, options = {}) => {
   // The customer's coordinates decide the zone. A zoneId sent by the app is only a hint for when
   // the address has no usable coordinates; it must never override where the address really is.
   const Zone = require('../models/Zone');
+  // One rule at a time (Booking Config -> dispatch mode): in 'distance' mode zones are not used at all
+  const zoneMode = config.dispatchMode !== 'distance';
   let matchedZone = null;
   const hasCoordinates = !!bookingLocation
     && Number.isFinite(bookingLocation.lat) && Number.isFinite(bookingLocation.lng);
 
-  if (hasCoordinates) {
+  if (!zoneMode) {
+    // no zone matching, no out-of-zone block, no zone surge or category limits
+  } else if (hasCoordinates) {
     try {
       matchedZone = await Zone.findZoneByCoordinates(bookingLocation.lng, bookingLocation.lat);
       if (matchedZone) {
@@ -325,7 +330,7 @@ const placeBooking = async (userId, payload, options = {}) => {
   // Once the admin has set up zones, only addresses inside one can be booked. With no active zone
   // there is nothing to enforce. Recurring visits are created by the system for a plan the customer
   // already placed, so they are not re-checked here.
-  if (!matchedZone && hasCoordinates && !recurringContext) {
+  if (zoneMode && !matchedZone && hasCoordinates && !recurringContext) {
     let zonesConfigured = false;
     try {
       zonesConfigured = Boolean(await Zone.exists({ status: 'active' }));
@@ -377,7 +382,16 @@ const placeBooking = async (userId, payload, options = {}) => {
     ...(matchedZone ? { zoneId: matchedZone._id, zoneCoordinates: matchedZone.coordinates } : {})
   };
 
-  let nearbyWorkers = await findNearbyWorkers(bookingLocation, searchRadiusKm, workerFilters);
+  // Zone mode: any professional in the customer's zone qualifies, however far, so the search radius
+  // and a professional's own service radius are left out. Without a zone (distance mode, or zone mode
+  // with no zone set up) the usual radius rules apply.
+  const zoneDecides = zoneMode && !!matchedZone;
+  let nearbyWorkers = await findNearbyWorkers(
+    bookingLocation,
+    zoneDecides ? ZONE_WIDE_RADIUS_KM : searchRadiusKm,
+    workerFilters,
+    { ignoreServiceArea: zoneDecides }
+  );
 
   // Deduplicate by _id to prevent duplicate notifications
   const uniqueWorkerIds = new Set();
@@ -771,7 +785,8 @@ const placeBooking = async (userId, payload, options = {}) => {
     // Live search details for the checkout "searching" popup; later waves
     // arrive as 'booking_search_progress' socket events.
     search: {
-      radiusKm: searchRadiusKm,
+      // No radius when the zone decides
+      radiusKm: zoneDecides ? null : searchRadiusKm,
       nearbyCount: rankedWorkers.length,
       notifiedCount: wave1Workers.length,
       wave: 1,

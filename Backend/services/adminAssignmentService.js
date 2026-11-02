@@ -21,6 +21,7 @@ const Zone = require('../models/Zone');
 const Admin = require('../models/Admin');
 const { BOOKING_STATUS, WORKER_STATUS } = require('../utils/constants');
 const { getBookingConfig } = require('../utils/bookingConfig');
+const { zonesInUse } = require('../utils/dispatchMode');
 const { calculateDistance } = require('./locationService');
 const { createNotification } = require('../controllers/notificationControllers/notificationController');
 const escapeRegex = require('../utils/escapeRegex');
@@ -206,7 +207,9 @@ const listAssignableWorkers = async (bookingId, { search = '', limit = 50 } = {}
     .limit(Math.min(Number(limit) || 50, 200))
     .lean();
 
-  const zone = booking.zoneId ? await Zone.findById(booking.zoneId).select('name coordinates').lean() : null;
+  // In distance mode zones are not used: no zone badges, ordering by distance only
+  const zoneMode = await zonesInUse();
+  const zone = zoneMode && booking.zoneId ? await Zone.findById(booking.zoneId).select('name coordinates').lean() : null;
   const inZoneIds = new Set();
   if (zone && workers.length > 0) {
     const inside = await Worker.find({
@@ -245,20 +248,21 @@ const listAssignableWorkers = async (bookingId, { search = '', limit = 50 } = {}
       isOnline: !!w.isOnline,
       isBusy: busyIds.has(id),
       city: w.address?.city || '',
-      inZone: inZoneIds.has(id)
+      // null = zones are not in use (distance mode), so there is nothing to show
+      inZone: !zoneMode ? null : (inZoneIds.has(id)
         || (!!booking.zoneId && (String(w.zoneId) === String(booking.zoneId)
-          || (w.zoneIds || []).some((z) => String(z) === String(booking.zoneId)))),
+          || (w.zoneIds || []).some((z) => String(z) === String(booking.zoneId))))),
       distanceKm,
       declinedEarlier: excluded.has(id)
     };
   });
 
   rows.sort((a, b) =>
-    (Number(b.inZone) - Number(a.inZone))
+    (Number(!!b.inZone) - Number(!!a.inZone))
     || (Number(b.isOnline) - Number(a.isOnline))
     || ((a.distanceKm ?? Infinity) - (b.distanceKm ?? Infinity)));
 
-  return { booking: { _id: booking._id, zoneId: booking.zoneId || null, skills: names }, zoneName: zone?.name || null, workers: rows };
+  return { dispatchMode: zoneMode ? 'zone' : 'distance', booking: { _id: booking._id, zoneId: booking.zoneId || null, skills: names }, zoneName: zone?.name || null, workers: rows };
 };
 
 /**

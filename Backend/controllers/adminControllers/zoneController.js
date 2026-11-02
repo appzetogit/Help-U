@@ -1,6 +1,7 @@
 const Zone = require('../../models/Zone');
 const Settings = require('../../models/Settings');
 const { getOutOfZonePage, sanitizeOutOfZonePage } = require('../../utils/outOfZonePage');
+const { getDispatchMode } = require('../../utils/dispatchMode');
 const { validationResult } = require('express-validator');
 
 const Worker = require('../../models/Worker');
@@ -200,6 +201,13 @@ const findZoneByPoint = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Valid numerical lat and lng are required' });
     }
 
+    // Distance mode: zones are not used, so no address is ever "out of area" (zonesConfigured false
+    // tells the apps not to block anything)
+    const dispatchMode = await getDispatchMode();
+    if (dispatchMode === 'distance') {
+      return res.status(200).json({ success: true, zone: null, zonesConfigured: false, dispatchMode, message: 'Zones are not used (distance mode)' });
+    }
+
     const zone = await Zone.findZoneByCoordinates(lng, lat, cityId);
     if (!zone) {
       // Tell the client whether zone gating applies at all: with no active zones defined,
@@ -210,7 +218,7 @@ const findZoneByPoint = async (req, res) => {
       return res.status(200).json({ success: true, zone: null, zonesConfigured, outOfZonePage, message: 'No active zone found for these coordinates' });
     }
 
-    res.status(200).json({ success: true, zone: toZoneResponse(zone) });
+    res.status(200).json({ success: true, zone: toZoneResponse(zone), dispatchMode });
   } catch (error) {
     console.error('Find zone by point error:', error);
     res.status(500).json({ success: false, message: 'Failed to find zone' });

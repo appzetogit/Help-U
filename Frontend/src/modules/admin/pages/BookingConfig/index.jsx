@@ -6,6 +6,7 @@ import {
 } from 'react-icons/fi';
 import bookingFeaturesAdminService from '../../services/bookingFeaturesAdminService';
 import { PageHeader, Card, Toggle, Field, Button } from '../../components/adminUi';
+import { DispatchModeCards } from '../../components/DispatchModeSwitch';
 import { inputClass } from '../../components/adminFormat';
 
 /**
@@ -274,6 +275,14 @@ const BookingConfig = () => {
         </Card>
 
         {/* Assignment */}
+        <Card title="How bookings find professionals" icon={FiTarget}>
+          <p className="text-[11px] text-gray-500 mb-3">
+            One rule decides at a time. Switch it here or from the Zones page; it applies to every new booking straight away.
+            Zones themselves (maps, surge, allowed services) are kept, just not used while "By distance" is on.
+          </p>
+          <DispatchModeCards value={config.dispatchMode || 'zone'} onChange={set('dispatchMode')} />
+        </Card>
+
         <Card title="Worker Assignment" icon={FiTarget}>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <Field label="Strategy" hint="Smart ranks nearby workers by the weights below; Distance alerts the closest first.">
