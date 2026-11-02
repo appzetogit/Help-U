@@ -87,7 +87,8 @@ const Signup = () => {
     const validationResult = signupSchema.safeParse(formData);
 
     if (!validationResult.success) {
-      validationResult.error.errors.forEach(err => toast.error(err.message));
+      // Only one toast is visible at a time (ToastLimiter), so show the first error
+      toast.error(validationResult.error.errors[0].message);
       return;
     }
 
@@ -247,7 +248,7 @@ const Signup = () => {
           <div className="absolute top-0 left-0 right-0 h-[3px] bg-gradient-to-r from-[#163B66] via-[#D68F35] to-[#BB5F36]" />
 
           {step === 'details' ? (
-            <form onSubmit={handleDetailsSubmit} className="space-y-4">
+            <form onSubmit={handleDetailsSubmit} className="space-y-4" noValidate>
               {verificationToken && (
                 <button
                   type="button"
