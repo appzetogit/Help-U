@@ -80,10 +80,11 @@ const BrandsPage = ({ catalog, setCatalog, selectedCity }) => {
       const params = { status: 'active' };
       if (selectedCity) params.cityId = selectedCity;
 
-      // Fetch ALL categories for reliable resolution, but filtered services
+      // Brands AND the categories offered for them follow the selected city, so this page lists the
+      // same categories as the Categories tab (it used to load every city's categories here).
       const [servicesRes, categoriesRes] = await Promise.all([
         brandService.getAll(params),
-        categoryService.getAll()
+        categoryService.getAll(selectedCity ? { cityId: selectedCity } : {})
       ]);
 
       let mappedBrands = [];

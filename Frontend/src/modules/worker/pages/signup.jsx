@@ -1,3 +1,4 @@
+import SkillTreePicker from '../components/SkillTreePicker';
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { FiUser, FiMail, FiPhone, FiFileText, FiUpload, FiX, FiArrowRight, FiChevronLeft, FiCheckCircle, FiCamera, FiGift, FiBriefcase, FiChevronDown, FiSearch, FiCheck } from 'react-icons/fi';
@@ -7,7 +8,6 @@ import { register, sendOTP as sendWorkerOTP, getPartnerRegistrationFields } from
 import LogoLoader from '../../../components/common/LogoLoader';
 import Logo from '../../../components/common/Logo';
 import { compressImage } from '../../../utils/imageCompression';
-import { publicCatalogService } from '../../../services/catalogService';
 import { buildCoreConfig } from '../utils/registrationConfig';
 
 import { z } from "zod";
@@ -65,13 +65,6 @@ const WorkerSignup = () => {
   const [uploadingCustomDocs, setUploadingCustomDocs] = useState({});
   const [customFieldErrors, setCustomFieldErrors] = useState({});
 
-  // Available services & categories (dynamic from admin catalog)
-  const [availableItems, setAvailableItems] = useState([]);
-  const [isLoadingCatalog, setIsLoadingCatalog] = useState(false);
-  const [catalogFilterTab, setCatalogFilterTab] = useState('all'); // 'all', 'categories', 'services'
-  const [isCategoryOpen, setIsCategoryOpen] = useState(false);
-  const [categorySearch, setCategorySearch] = useState('');
-  const categoryDropdownRef = useRef(null);
 
   // Refs for auto-focus
   const nameInputRef = useRef(null);
@@ -108,87 +101,6 @@ const WorkerSignup = () => {
     localStorage.removeItem('workerData');
   }, []);
 
-  // Load all service categories and individual services dynamically from admin catalog
-  useEffect(() => {
-    const loadCatalogData = async () => {
-      setIsLoadingCatalog(true);
-      try {
-        if (publicCatalogService.invalidateCache) {
-          publicCatalogService.invalidateCache();
-        }
-
-        const [catRes, svcRes] = await Promise.allSettled([
-          publicCatalogService.getCategories({ parentId: 'all', bypassCache: true }),
-          publicCatalogService.getServices({ bypassCache: true })
-        ]);
-
-        const rawCategories = catRes.status === 'fulfilled' && catRes.value?.success
-          ? (catRes.value.categories || [])
-          : [];
-
-        const rawServices = svcRes.status === 'fulfilled' && svcRes.value?.success
-          ? (svcRes.value.services || [])
-          : [];
-
-        const catMap = new Map();
-        rawCategories.forEach(cat => catMap.set(String(cat._id || cat.id), cat));
-
-        const items = [];
-        const seenTitles = new Set();
-
-        // 1. Process Categories (Top-level & Sub-categories)
-        rawCategories.forEach(cat => {
-          if (!cat.title || /\s\d{4}$/.test(cat.title)) return;
-          const cleanTitle = cat.title.trim();
-          const parentCat = cat.parentId ? catMap.get(String(cat.parentId)) : null;
-          const isSub = Boolean(cat.parentId);
-
-          items.push({
-            id: `cat-${cat._id || cat.id}`,
-            title: cleanTitle,
-            type: isSub ? 'sub_category' : 'category',
-            typeLabel: isSub ? 'Sub-category' : 'Category',
-            categoryName: parentCat ? parentCat.title : null,
-            icon: cat.homeIconUrl || cat.icon || null,
-            sortPriority: isSub ? 2 : 1
-          });
-          seenTitles.add(cleanTitle.toLowerCase());
-        });
-
-        // 2. Process Services
-        rawServices.forEach(svc => {
-          if (!svc.title) return;
-          const cleanTitle = svc.title.trim();
-
-          items.push({
-            id: `svc-${svc._id || svc.id}`,
-            title: cleanTitle,
-            type: 'service',
-            typeLabel: 'Service',
-            categoryName: svc.categoryName || (svc.categoryId ? catMap.get(String(svc.categoryId))?.title : null) || null,
-            price: svc.basePrice,
-            icon: svc.icon || (Array.isArray(svc.images) && svc.images[0]) || null,
-            sortPriority: 3
-          });
-        });
-
-        // Sort: Categories first, then sub-categories, then services, alphabetically within group
-        items.sort((a, b) => {
-          if (a.sortPriority !== b.sortPriority) {
-            return a.sortPriority - b.sortPriority;
-          }
-          return a.title.localeCompare(b.title);
-        });
-
-        setAvailableItems(items);
-      } catch (err) {
-        console.error('Failed to load services and categories for worker signup:', err);
-      } finally {
-        setIsLoadingCatalog(false);
-      }
-    };
-    loadCatalogData();
-  }, []);
 
   // Load dynamic registration fields configured in Admin Panel
   useEffect(() => {
@@ -221,55 +133,6 @@ const WorkerSignup = () => {
       .sort((a, b) => (a.order || 0) - (b.order || 0));
   }, [dynamicFields]);
 
-  // Close dropdown on outside click
-  useEffect(() => {
-    const handleClickOutside = (e) => {
-      if (categoryDropdownRef.current && !categoryDropdownRef.current.contains(e.target)) {
-        setIsCategoryOpen(false);
-        setCategorySearch('');
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
-  const filteredCatalogItems = useMemo(() => {
-    let list = availableItems;
-    if (catalogFilterTab === 'categories') {
-      list = list.filter(item => item.type === 'category' || item.type === 'sub_category');
-    } else if (catalogFilterTab === 'services') {
-      list = list.filter(item => item.type === 'service');
-    }
-
-    if (categorySearch.trim()) {
-      const q = categorySearch.toLowerCase().trim();
-      list = list.filter(item =>
-        item.title.toLowerCase().includes(q) ||
-        (item.categoryName && item.categoryName.toLowerCase().includes(q))
-      );
-    }
-    return list;
-  }, [availableItems, catalogFilterTab, categorySearch]);
-
-  const catalogCounts = useMemo(() => ({
-    all: availableItems.length,
-    categories: availableItems.filter(i => i.type === 'category' || i.type === 'sub_category').length,
-    services: availableItems.filter(i => i.type === 'service').length
-  }), [availableItems]);
-
-  // Toggle a service or category selection
-  const handleCategoryToggle = (title) => {
-    setFormData(prev => {
-      const current = Array.isArray(prev.service) ? prev.service : [];
-      const updated = current.includes(title)
-        ? current.filter(c => c !== title)
-        : [...current, title];
-      return { ...prev, service: updated };
-    });
-    if (fieldErrors.service) {
-      setFieldErrors(prev => ({ ...prev, service: '' }));
-    }
-  };
 
   // Auto-focus logic
   useEffect(() => {
@@ -1117,242 +980,23 @@ const WorkerSignup = () => {
                 </div>
               </div>
 
-              {/* ── Services & Categories — full width, proper dropdown with elevated stacking context ── */}
+              {/* ── Services & Categories: pick a category, or open it to choose sub-categories and services ── */}
               {core.service_categories.active && (
-              <div
-                className={`transition-all duration-200 ${isCategoryOpen ? 'relative z-40' : 'relative z-10'} animate-fade-in`}
-                style={{ animationDelay: '0.7s' }}
-                ref={categoryDropdownRef}
-              >
+              <div className="relative z-10 animate-fade-in" style={{ animationDelay: '0.7s' }}>
                 <div className="flex items-center justify-between mb-2">
                   <label className="flex text-sm font-medium text-gray-700 items-center gap-1.5">
                     <FiBriefcase className="text-gray-400 w-4 h-4" />
                     {core.service_categories.label} {core.service_categories.required ? <span className="text-red-500">*</span> : <span className="text-gray-400 text-xs font-normal">(Optional)</span>}
                   </label>
-                  {Array.isArray(formData.service) && formData.service.length > 0 && (
-                    <span className="text-xs font-semibold px-2 py-0.5 rounded-full" style={{ background: `${brandColor}15`, color: brandColor }}>
-                      {formData.service.length} selected
-                    </span>
-                  )}
                 </div>
-
-                {/* Selected chips with badges */}
-                {Array.isArray(formData.service) && formData.service.length > 0 && (
-                  <div className="flex flex-wrap gap-1.5 mb-2.5">
-                    {formData.service.map((title, idx) => {
-                      const matchedItem = availableItems.find(i => i.title.toLowerCase() === title.toLowerCase());
-                      const isSvc = matchedItem?.type === 'service';
-                      const isSub = matchedItem?.type === 'sub_category';
-                      return (
-                        <span
-                          key={idx}
-                          className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full font-semibold border transition-all"
-                          style={{
-                            background: isSvc ? '#ECFDF5' : isSub ? '#FFFBEB' : `${brandColor}12`,
-                            color: isSvc ? '#065F46' : isSub ? '#92400E' : brandColor,
-                            borderColor: isSvc ? '#A7F3D0' : isSub ? '#FDE68A' : `${brandColor}30`
-                          }}
-                        >
-                          <span className="truncate max-w-[150px]">{title}</span>
-                          <span
-                            className="text-[9px] uppercase px-1 py-0.2 rounded font-bold opacity-80"
-                            style={{
-                              background: isSvc ? '#D1FAE5' : isSub ? '#FEF3C7' : `${brandColor}20`
-                            }}
-                          >
-                            {matchedItem?.typeLabel || 'Category'}
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => handleCategoryToggle(title)}
-                            className="hover:opacity-70 p-0.5 rounded-full cursor-pointer"
-                            title={`Remove ${title}`}
-                          >
-                            <FiX className="w-3 h-3" />
-                          </button>
-                        </span>
-                      );
-                    })}
-                  </div>
-                )}
-
-                {/* Dropdown trigger */}
-                <div className="relative">
-                  <button
-                    type="button"
-                    onClick={() => { setIsCategoryOpen(prev => !prev); setCategorySearch(''); }}
-                    className={`w-full text-left px-4 py-2.5 bg-white border rounded-xl flex items-center justify-between transition-all duration-200 outline-none shadow-xs cursor-pointer ${
-                      fieldErrors.service
-                        ? 'border-red-500 ring-2 ring-red-200'
-                        : isCategoryOpen
-                          ? 'ring-2 ring-offset-1 border-transparent'
-                          : 'border-gray-300 hover:border-gray-400'
-                    }`}
-                    style={{ '--tw-ring-color': fieldErrors.service ? '#EF4444' : brandColor }}
-                  >
-                    <span className={`text-sm ${formData.service.length > 0 ? 'text-gray-800 font-medium' : 'text-gray-400'}`}>
-                      {formData.service.length > 0
-                        ? `${formData.service.length} item${formData.service.length > 1 ? 's' : ''} selected`
-                        : (core.service_categories.placeholder || 'Select services & categories')}
-                    </span>
-                    <FiChevronDown className={`w-4 h-4 text-gray-400 transition-transform duration-200 ${isCategoryOpen ? 'rotate-180' : ''}`} />
-                  </button>
-
-                  {/* Dropdown panel */}
-                  {isCategoryOpen && (
-                    <div className="absolute left-0 right-0 mt-1.5 bg-white border border-gray-200 rounded-2xl shadow-2xl z-50 overflow-hidden ring-1 ring-black/5 animate-fade-in">
-                      {/* Search & Tabs */}
-                      <div className="p-3 border-b border-gray-100 bg-gray-50/50 space-y-2">
-                        <div className="relative">
-                          <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                          <input
-                            type="text"
-                            value={categorySearch}
-                            onChange={(e) => setCategorySearch(e.target.value)}
-                            className="w-full pl-9 pr-8 py-2 text-sm bg-white border border-gray-200 rounded-lg outline-none focus:border-gray-300 focus:ring-2 focus:ring-gray-100 transition-all placeholder:text-gray-400"
-                            placeholder="Search categories & services..."
-                            autoFocus
-                          />
-                          {categorySearch && (
-                            <button
-                              type="button"
-                              onClick={() => setCategorySearch('')}
-                              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-1 cursor-pointer"
-                            >
-                              <FiX className="w-3.5 h-3.5" />
-                            </button>
-                          )}
-                        </div>
-
-                        {/* Filter Tabs */}
-                        <div className="flex items-center gap-1.5 pt-0.5">
-                          <button
-                            type="button"
-                            onClick={() => setCatalogFilterTab('all')}
-                            className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                              catalogFilterTab === 'all'
-                                ? 'bg-gray-900 text-white shadow-xs'
-                                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                            }`}
-                          >
-                            All ({catalogCounts.all})
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setCatalogFilterTab('categories')}
-                            className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                              catalogFilterTab === 'categories'
-                                ? 'bg-blue-600 text-white shadow-xs'
-                                : 'bg-blue-50 text-blue-700 hover:bg-blue-100'
-                            }`}
-                          >
-                            Categories ({catalogCounts.categories})
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setCatalogFilterTab('services')}
-                            className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
-                              catalogFilterTab === 'services'
-                                ? 'bg-emerald-600 text-white shadow-xs'
-                                : 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
-                            }`}
-                          >
-                            Services ({catalogCounts.services})
-                          </button>
-                        </div>
-                      </div>
-
-                      {/* Options List */}
-                      <div className="max-h-64 overflow-y-auto divide-y divide-gray-50">
-                        {isLoadingCatalog ? (
-                          <div className="px-4 py-8 text-gray-400 text-sm text-center flex items-center justify-center gap-2">
-                            <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-                            <span>Loading services & categories...</span>
-                          </div>
-                        ) : filteredCatalogItems.length === 0 ? (
-                          <div className="px-4 py-8 text-gray-400 text-sm text-center">
-                            No matching services or categories found
-                          </div>
-                        ) : (
-                          filteredCatalogItems.map((item) => {
-                            const isSelected = Array.isArray(formData.service) && formData.service.includes(item.title);
-                            const isSvc = item.type === 'service';
-                            const isSub = item.type === 'sub_category';
-                            return (
-                              <button
-                                key={item.id}
-                                type="button"
-                                onClick={() => handleCategoryToggle(item.title)}
-                                className={`w-full text-left px-4 py-2.5 flex items-center justify-between text-sm transition-colors cursor-pointer ${
-                                  isSelected
-                                    ? 'bg-blue-50/70 text-blue-900 font-semibold'
-                                    : 'text-gray-700 hover:bg-gray-50'
-                                }`}
-                              >
-                                <div className="flex items-center gap-3 min-w-0 pr-2">
-                                  <div
-                                    className={`w-4 h-4 rounded shrink-0 flex items-center justify-center border transition-colors ${
-                                      isSelected ? 'border-transparent text-white' : 'border-gray-300 bg-white'
-                                    }`}
-                                    style={{ backgroundColor: isSelected ? brandColor : undefined }}
-                                  >
-                                    {isSelected && <FiCheck className="w-3 h-3 stroke-[3]" />}
-                                  </div>
-                                  <div className="min-w-0">
-                                    <div className="flex items-center gap-1.5">
-                                      <span className="leading-snug truncate">{item.title}</span>
-                                    </div>
-                                    {item.categoryName && (
-                                      <p className="text-[11px] text-gray-400 truncate mt-0.5">
-                                        under {item.categoryName}
-                                      </p>
-                                    )}
-                                  </div>
-                                </div>
-
-                                <div className="flex items-center gap-2 shrink-0">
-                                  {item.price !== undefined && (
-                                    <span className="text-xs font-bold text-gray-700">
-                                      ₹{item.price}
-                                    </span>
-                                  )}
-                                  <span
-                                    className={`text-[10px] uppercase font-bold px-1.5 py-0.5 rounded border ${
-                                      isSvc
-                                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                                        : isSub
-                                          ? 'bg-amber-50 text-amber-700 border-amber-200'
-                                          : 'bg-blue-50 text-blue-700 border-blue-200'
-                                    }`}
-                                  >
-                                    {item.typeLabel}
-                                  </span>
-                                </div>
-                              </button>
-                            );
-                          })
-                        )}
-                      </div>
-
-                      {/* Footer bar */}
-                      <div className="px-4 py-2.5 bg-gray-50 border-t border-gray-100 flex items-center justify-between">
-                        <span className="text-xs text-gray-500">
-                          {formData.service.length > 0
-                            ? `${formData.service.length} service${formData.service.length > 1 ? 's' : ''} chosen`
-                            : 'No services chosen'}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => setIsCategoryOpen(false)}
-                          className="px-4 py-1.5 text-white font-bold rounded-lg text-xs transition-opacity hover:opacity-90 shadow-sm active:scale-95"
-                          style={{ backgroundColor: brandColor }}
-                        >
-                          Done
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
+                <SkillTreePicker
+                  value={Array.isArray(formData.service) ? formData.service : []}
+                  onChange={(titles) => {
+                    setFormData(prev => ({ ...prev, service: titles }));
+                    if (fieldErrors.service) setFieldErrors(prev => ({ ...prev, service: null }));
+                  }}
+                  accentColor={brandColor}
+                />
                 {fieldErrors.service && (
                   <p className="text-xs text-red-500 mt-1.5 font-medium">{fieldErrors.service}</p>
                 )}

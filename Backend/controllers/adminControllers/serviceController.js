@@ -701,7 +701,9 @@ const listServicesWithStats = async (req, res) => {
     const limit = Math.min(200, Math.max(1, Number(req.query.limit) || 50));
 
     const match = {};
-    if (status) match.status = status;
+    // Archived ("deleted") services only show when asked for; the health cards leave them out too, so
+    // the list and the cards count the same thing. They live under Draft and archive.
+    match.status = status || { $ne: SERVICE_STATUS.DELETED };
     if (brandId) match.brandId = new (require('mongoose').Types.ObjectId)(brandId);
     if (categoryId) match.categoryId = new (require('mongoose').Types.ObjectId)(categoryId);
     if (publishStatus) match.publishStatus = publishStatus;

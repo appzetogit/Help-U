@@ -26,43 +26,90 @@ const availableInCity = (cityIds, cityId) => {
 };
 
 /**
+ * Where a category stands in a city. A sub-category with no cities of its own follows its PARENT, and
+ * is never available where its parent is not (a customer reaches it through the parent, so a
+ * sub-category left "open to all" under an Indore-only parent must not show up in other cities).
+ *
+ *   'explicit'  lists this city (itself, or inherited from its parent)
+ *   'open'      no cities anywhere up the chain: every city
+ *   'other'     not available in this city
+ */
+const categoryCityStates = async (cityId) => {
+  const Category = require('../models/Category');
+  const docs = await Category.find({}).select('cityIds parentId').lean();
+  const byId = new Map(docs.map((d) => [String(d._id), d]));
+  const memo = new Map();
+
+  const stateOf = (id, depth = 0) => {
+    const key = String(id);
+    if (memo.has(key)) return memo.get(key);
+    const doc = byId.get(key);
+    let state;
+    if (!doc || depth > 5) {
+      state = 'open';
+    } else {
+      const own = Array.isArray(doc.cityIds) ? doc.cityIds : [];
+      const parentState = doc.parentId ? stateOf(doc.parentId, depth + 1) : 'open';
+      if (parentState === 'other') state = 'other';
+      else if (own.length > 0) state = own.some((c) => String(c) === String(cityId)) ? 'explicit' : 'other';
+      else state = parentState; // inherits: 'open', or 'explicit' from the parent
+    }
+    memo.set(key, state);
+    return state;
+  };
+
+  const states = new Map();
+  docs.forEach((d) => states.set(String(d._id), stateOf(d._id)));
+  return states;
+};
+
+/** Mongo filter on Category `_id`: the categories available in this city (null = no filtering). */
+const categoryCityFilter = async (cityId) => {
+  if (!isValidCityId(cityId)) return null;
+  const states = await categoryCityStates(cityId);
+  const ids = [];
+  states.forEach((state, id) => { if (state !== 'other') ids.push(new mongoose.Types.ObjectId(id)); });
+  return { _id: { $in: ids } };
+};
+
+/**
  * Mongo filter on services for a city, matching what the customer app shows: a service is in the
  * city when its category or its brand names the city, or when both are open to every city.
  * Returns null when no (valid) city is given, i.e. no filtering.
  */
 const buildServiceCityMatch = async (cityId) => {
   if (!isValidCityId(cityId)) return null;
-  const Category = require('../models/Category');
   const Brand = require('../models/Brand');
 
-  const [categories, brands] = await Promise.all([
-    Category.find({}).select('cityIds').lean(),
+  const [catStates, brands] = await Promise.all([
+    categoryCityStates(cityId),
     Brand.find({}).select('cityIds').lean()
   ]);
 
-  // explicit: lists this city. restricted: lists any city at all (so is NOT open to everyone).
-  const split = (docs) => {
-    const explicit = [];
-    const restricted = [];
-    docs.forEach((d) => {
-      if (!Array.isArray(d.cityIds) || d.cityIds.length === 0) return;
-      restricted.push(d._id);
-      if (d.cityIds.some((c) => String(c) === String(cityId))) explicit.push(d._id);
-    });
-    return { explicit, restricted };
-  };
+  const toIds = (list) => list.map((id) => new mongoose.Types.ObjectId(id));
+  const catExplicit = [];
+  const catNotOpen = [];
+  catStates.forEach((state, id) => {
+    if (state === 'explicit') { catExplicit.push(id); catNotOpen.push(id); }
+    else if (state === 'other') catNotOpen.push(id);
+  });
 
-  const cats = split(categories);
-  const brs = split(brands);
+  const brandExplicit = [];
+  const brandRestricted = [];
+  brands.forEach((d) => {
+    if (!Array.isArray(d.cityIds) || d.cityIds.length === 0) return;
+    brandRestricted.push(d._id);
+    if (d.cityIds.some((c) => String(c) === String(cityId))) brandExplicit.push(d._id);
+  });
 
   return {
     $or: [
-      { categoryId: { $in: cats.explicit } },
-      { brandId: { $in: brs.explicit } },
+      { categoryId: { $in: toIds(catExplicit) } },
+      { brandId: { $in: brandExplicit } },
       // Open to every city on both levels. A missing or deleted category / brand counts as open.
-      { categoryId: { $nin: cats.restricted }, brandId: { $nin: brs.restricted } }
+      { categoryId: { $nin: toIds(catNotOpen) }, brandId: { $nin: brandRestricted } }
     ]
   };
 };
 
-module.exports = { isValidCityId, cityScopeQuery, availableInCity, buildServiceCityMatch };
+module.exports = { isValidCityId, cityScopeQuery, availableInCity, categoryCityStates, categoryCityFilter, buildServiceCityMatch };

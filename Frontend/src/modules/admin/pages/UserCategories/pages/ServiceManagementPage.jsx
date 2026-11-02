@@ -61,7 +61,8 @@ import { toAssetUrl } from "../utils";
  */
 const ServiceManagementPage = ({ selectedCity: propCity }) => {
   // ─── TABS ─────────────────────────────────────────────────────────────
-  const [activeTab, setActiveTab] = useState("services"); // "services" | "categories" | "brands" | "draft-archive" | "audit-log"
+  // Follows the catalog hierarchy: categories -> sub-categories -> sections/brands -> services
+  const [activeTab, setActiveTab] = useState("categories"); // "categories" | "subcategories" | "brands" | "services" | "draft-archive" | "audit-log"
 
   // ─── HEALTH METRICS ───────────────────────────────────────────────────
   const [healthData, setHealthData] = useState({});
@@ -71,8 +72,12 @@ const ServiceManagementPage = ({ selectedCity: propCity }) => {
   // ─── COMMON DATA ──────────────────────────────────────────────────────
   const [cities, setCities] = useState([]);
   const [selectedCity, setSelectedCity] = useState(propCity || "");
-  const [categories, setCategories] = useState([]);
-  const [subCategories, setSubCategories] = useState([]);
+  // ONE list of categories (every level, already limited to the selected city by the server).
+  // Categories, sub-categories, the tab counts and the filters below are all derived from it, so
+  // they can never disagree with each other.
+  const [allCategories, setAllCategories] = useState([]);
+  const categories = useMemo(() => allCategories.filter((c) => c && !c.parentId), [allCategories]);
+  const allSubCategories = useMemo(() => allCategories.filter((c) => c && c.parentId), [allCategories]);
   const [brands, setBrands] = useState([]);
 
   // ─── SERVICES STATE ───────────────────────────────────────────────────
@@ -153,11 +158,11 @@ const ServiceManagementPage = ({ selectedCity: propCity }) => {
       try {
         const cityParams = selectedCity ? { cityId: selectedCity } : {};
         const [catRes, brandRes] = await Promise.all([
-          categoryService.getAll(cityParams),
+          categoryService.getAll({ parentId: "all", ...cityParams }),
           brandService.getAll(cityParams),
         ]);
         if (!alive) return;
-        if (catRes?.success) setCategories(catRes.categories || []);
+        if (catRes?.success) setAllCategories(catRes.categories || []);
         if (brandRes?.success) setBrands(brandRes.brands || []);
       } catch (err) {
         console.error("Meta load error:", err);
@@ -174,9 +179,9 @@ const ServiceManagementPage = ({ selectedCity: propCity }) => {
   useEffect(() => {
     const handleCategoryUpdate = async () => {
       try {
-        const catRes = await categoryService.getAll({ parentId: null, ...(selectedCity ? { cityId: selectedCity } : {}) });
+        const catRes = await categoryService.getAll({ parentId: "all", ...(selectedCity ? { cityId: selectedCity } : {}) });
         if (catRes?.success) {
-          setCategories(catRes.categories || []);
+          setAllCategories(catRes.categories || []);
         }
       } catch (err) {
         console.error("Categories update error:", err);
@@ -200,30 +205,18 @@ const ServiceManagementPage = ({ selectedCity: propCity }) => {
     setPage(1);
   }, [propCity]);
 
-  // ─── DYNAMIC SUB-CATEGORIES ON CATEGORY CHANGE ────────────────────────
+  // ─── SUB-CATEGORIES OF THE CHOSEN CATEGORY (from the same list) ───────
+  const subCategories = useMemo(() => {
+    if (!selectedCategory || selectedCategory === "all") return [];
+    return allSubCategories.filter((c) => {
+      const pId = typeof c.parentId === "object" ? c.parentId?._id || c.parentId?.id : c.parentId;
+      return String(pId) === String(selectedCategory);
+    });
+  }, [allSubCategories, selectedCategory]);
+
   useEffect(() => {
-    if (!selectedCategory || selectedCategory === "all") {
-      setSubCategories([]);
-      setSelectedSubCategory("all");
-      return;
-    }
-
-    const loadSubs = async () => {
-      try {
-        const res = await categoryService.getChildren(selectedCategory);
-        if (res?.success) {
-          setSubCategories(res.categories || []);
-        } else {
-          setSubCategories([]);
-        }
-      } catch (err) {
-        console.error("Failed to load sub-categories:", err);
-        setSubCategories([]);
-      }
-    };
-
-    loadSubs();
-  }, [selectedCategory]);
+    setSelectedSubCategory("all");
+  }, [selectedCategory, selectedCity]);
 
   // Check if current category hasBrands === true
   const activeCategoryObj = useMemo(() => {
@@ -760,72 +753,30 @@ const ServiceManagementPage = ({ selectedCity: propCity }) => {
         </div>
       )}
 
-      {/* ─── 5 MAIN TABS ──────────────────────────────────────────────── */}
+      {/* ─── MAIN TABS, in catalog order: categories -> sub-categories -> brands -> services ─── */}
       <div className="flex items-center gap-1 border-b border-gray-200 bg-white px-2 pt-2 rounded-t-xl overflow-x-auto">
-        <button
-          type="button"
-          onClick={() => setActiveTab("services")}
-          className={`px-4 py-2.5 text-xs font-bold transition-all relative flex items-center gap-2 shrink-0 ${
-            activeTab === "services"
-              ? "text-blue-600 border-b-2 border-blue-600"
-              : "text-gray-500 hover:text-gray-900"
-          }`}
-        >
-          <FiBox className="w-4 h-4" />
-          Services ({services.length})
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setActiveTab("categories")}
-          className={`px-4 py-2.5 text-xs font-bold transition-all relative flex items-center gap-2 shrink-0 ${
-            activeTab === "categories"
-              ? "text-blue-600 border-b-2 border-blue-600"
-              : "text-gray-500 hover:text-gray-900"
-          }`}
-        >
-          <FiLayers className="w-4 h-4" />
-          Categories ({categories.length})
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setActiveTab("brands")}
-          className={`px-4 py-2.5 text-xs font-bold transition-all relative flex items-center gap-2 shrink-0 ${
-            activeTab === "brands"
-              ? "text-blue-600 border-b-2 border-blue-600"
-              : "text-gray-500 hover:text-gray-900"
-          }`}
-        >
-          <FiTag className="w-4 h-4" />
-          Sections and brands ({brands.length})
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setActiveTab("draft-archive")}
-          className={`px-4 py-2.5 text-xs font-bold transition-all relative flex items-center gap-2 shrink-0 ${
-            activeTab === "draft-archive"
-              ? "text-blue-600 border-b-2 border-blue-600"
-              : "text-gray-500 hover:text-gray-900"
-          }`}
-        >
-          <FiArchive className="w-4 h-4" />
-          Draft and archive
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setActiveTab("audit-log")}
-          className={`px-4 py-2.5 text-xs font-bold transition-all relative flex items-center gap-2 shrink-0 ${
-            activeTab === "audit-log"
-              ? "text-blue-600 border-b-2 border-blue-600"
-              : "text-gray-500 hover:text-gray-900"
-          }`}
-        >
-          <FiActivity className="w-4 h-4" />
-          Audit log
-        </button>
+        {[
+          { id: "categories", label: "Categories", count: categories.length, Icon: FiLayers },
+          { id: "subcategories", label: "Sub-categories", count: allSubCategories.length, Icon: FiGrid },
+          { id: "brands", label: "Sections and brands", count: brands.length, Icon: FiTag },
+          { id: "services", label: "Services", count: services.length, Icon: FiBox },
+          { id: "draft-archive", label: "Draft and archive", Icon: FiArchive },
+          { id: "audit-log", label: "Audit log", Icon: FiActivity },
+        ].map(({ id, label, count, Icon: TabIcon }) => (
+          <button
+            key={id}
+            type="button"
+            onClick={() => setActiveTab(id)}
+            className={`px-4 py-2.5 text-xs font-bold transition-all relative flex items-center gap-2 shrink-0 ${
+              activeTab === id
+                ? "text-blue-600 border-b-2 border-blue-600"
+                : "text-gray-500 hover:text-gray-900"
+            }`}
+          >
+            <TabIcon className="w-4 h-4" />
+            {label}{count !== undefined ? ` (${count})` : ""}
+          </button>
+        ))}
       </div>
 
       {/* ─── TAB 1: SERVICES (MAIN LIST) ────────────────────────────────── */}
@@ -1215,7 +1166,7 @@ const ServiceManagementPage = ({ selectedCity: propCity }) => {
                           const catTitle =
                             typeof service.categoryId === "object"
                               ? service.categoryId?.title
-                              : categories.find((c) => (c.id || c._id) === service.categoryId)?.title || "—";
+                              : allCategories.find((c) => String(c.id || c._id) === String(typeof service.categoryId === "object" ? service.categoryId?._id || service.categoryId?.id : service.categoryId))?.title || "—";
 
                           const brandTitle =
                             typeof service.brandId === "object"
@@ -1721,7 +1672,12 @@ const ServiceManagementPage = ({ selectedCity: propCity }) => {
 
       {/* ─── TAB 2: CATEGORIES ────────────────────────────────────────── */}
       {activeTab === "categories" && (
-        <CategoriesListView selectedCity={selectedCity} onRefreshHealth={loadHealth} />
+        <CategoriesListView level="root" selectedCity={selectedCity} onRefreshHealth={loadHealth} />
+      )}
+
+      {/* ─── TAB 2: SUB-CATEGORIES ────────────────────────────────────── */}
+      {activeTab === "subcategories" && (
+        <CategoriesListView level="sub" selectedCity={selectedCity} onRefreshHealth={loadHealth} />
       )}
 
       {/* ─── TAB 3: SECTIONS AND BRANDS ───────────────────────────────── */}

@@ -22,7 +22,10 @@ import DetailFieldsEditor from "./DetailFieldsEditor";
 import { slugify, toAssetUrl } from "../utils";
 import IconUploadWithPreview from "../../../components/IconUploadWithPreview";
 
-const CategoriesListView = ({ selectedCity, onRefreshHealth }) => {
+// level: "root" = top-level categories only, "sub" = sub-categories only (each has its own tab),
+// anything else = both (the old combined view).
+const CategoriesListView = ({ level = "all", selectedCity, onRefreshHealth }) => {
+  const noun = level === "sub" ? "Sub-category" : "Category";
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -116,7 +119,17 @@ const CategoriesListView = ({ selectedCity, onRefreshHealth }) => {
   const filteredCategories = useMemo(() => {
     let list = Array.isArray(categories) ? categories.filter(Boolean) : [];
 
-    if (filterParent === "root") {
+    if (level === "root") {
+      list = list.filter((c) => c && !c.parentId);
+    } else if (level === "sub") {
+      list = list.filter((c) => c && c.parentId);
+      if (filterParent !== "all" && filterParent !== "root") {
+        list = list.filter((c) => {
+          const pId = typeof c.parentId === "object" ? c.parentId?._id || c.parentId?.id : c.parentId;
+          return String(pId) === String(filterParent);
+        });
+      }
+    } else if (filterParent === "root") {
       list = list.filter((c) => c && !c.parentId);
     } else if (filterParent !== "all") {
       list = list.filter((c) => {
@@ -138,7 +151,7 @@ const CategoriesListView = ({ selectedCity, onRefreshHealth }) => {
     }
 
     return list.sort((a, b) => (a?.homeOrder || 0) - (b?.homeOrder || 0));
-  }, [categories, filterParent, search]);
+  }, [categories, filterParent, search, level]);
 
   // Status toggle
   const handleToggleStatus = async (category) => {
@@ -197,7 +210,7 @@ const CategoriesListView = ({ selectedCity, onRefreshHealth }) => {
     setForm({
       title: "",
       slug: "",
-      parentId: filterParent !== "all" && filterParent !== "root" ? filterParent : "",
+      parentId: level === "root" ? "" : (filterParent !== "all" && filterParent !== "root" ? filterParent : ""),
       hasBrands: false,
       showOnHome: true,
       isEmergencyAvailable: false,
@@ -245,6 +258,10 @@ const CategoriesListView = ({ selectedCity, onRefreshHealth }) => {
     e.preventDefault();
     if (!form.title.trim()) {
       toast.error("Title is required");
+      return;
+    }
+    if (level === "sub" && !form.parentId) {
+      toast.error("Choose the category this sub-category belongs to");
       return;
     }
 
@@ -382,27 +399,40 @@ const CategoriesListView = ({ selectedCity, onRefreshHealth }) => {
       {/* Control Bar */}
       <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex flex-col md:flex-row items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-semibold text-gray-500 uppercase">View:</span>
-            <select
-              value={filterParent}
-              onChange={(e) => setFilterParent(e.target.value)}
-              className="text-xs px-3 py-1.5 border border-gray-300 rounded-lg bg-gray-50 text-gray-700 font-medium focus:ring-2 focus:ring-blue-500 focus:outline-none"
-            >
-              <option value="all">All Categories ({categories.length})</option>
-              <option value="root">Root Categories Only ({rootCategories.length})</option>
-              {rootCategories.map((rc) => (
-                <option key={rc.id || rc._id} value={rc.id || rc._id}>
-                  Sub-categories of: {rc.title}
-                </option>
-              ))}
-            </select>
-          </div>
+          {level === "root" ? (
+            <span className="text-xs font-semibold text-gray-600">
+              {rootCategories.length} {rootCategories.length === 1 ? "category" : "categories"}
+              {selectedCity ? " in this city" : " in all cities"}
+            </span>
+          ) : (
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-semibold text-gray-500 uppercase">{level === "sub" ? "Under:" : "View:"}</span>
+              <select
+                value={filterParent}
+                onChange={(e) => setFilterParent(e.target.value)}
+                className="text-xs px-3 py-1.5 border border-gray-300 rounded-lg bg-gray-50 text-gray-700 font-medium focus:ring-2 focus:ring-blue-500 focus:outline-none"
+              >
+                {level === "sub" ? (
+                  <option value="all">All sub-categories ({categories.filter((c) => c && c.parentId).length})</option>
+                ) : (
+                  <>
+                    <option value="all">All Categories ({categories.length})</option>
+                    <option value="root">Root Categories Only ({rootCategories.length})</option>
+                  </>
+                )}
+                {rootCategories.map((rc) => (
+                  <option key={rc.id || rc._id} value={rc.id || rc._id}>
+                    {level === "sub" ? rc.title : `Sub-categories of: ${rc.title}`}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
           <div className="relative flex-1 md:w-60">
             <input
               type="text"
-              placeholder="Search categories..."
+              placeholder={level === "sub" ? "Search sub-categories..." : "Search categories..."}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="w-full text-xs px-3 py-1.5 pl-8 border border-gray-300 rounded-lg bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -428,7 +458,7 @@ const CategoriesListView = ({ selectedCity, onRefreshHealth }) => {
             className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 shadow-sm transition-colors"
           >
             <FiPlus className="w-4 h-4" />
-            Add Category
+            Add {noun}
           </button>
         </div>
       </div>
@@ -450,8 +480,16 @@ const CategoriesListView = ({ selectedCity, onRefreshHealth }) => {
         ) : filteredCategories.length === 0 ? (
           <div className="p-12 text-center">
             <FiLayers className="w-10 h-10 text-gray-300 mx-auto mb-2" />
-            <h3 className="text-sm font-bold text-gray-700">No categories found</h3>
-            <p className="text-xs text-gray-400 mt-1">Try resetting search or create a new category.</p>
+            <h3 className="text-sm font-bold text-gray-700">
+              {level === "sub" ? "No sub-categories found" : "No categories found"}
+            </h3>
+            <p className="text-xs text-gray-400 mt-1">
+              {level === "sub"
+                ? "Sub-categories follow their category's cities. Pick another city, or add one under a category available here."
+                : selectedCity
+                  ? "No category is available in this city. Add one, or choose another city."
+                  : "Try resetting search or create a new category."}
+            </p>
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -534,6 +572,11 @@ const CategoriesListView = ({ selectedCity, onRefreshHealth }) => {
                           <span className="inline-block px-2 py-0.5 rounded bg-gray-100 text-gray-700 font-medium">
                             {parent.title}
                           </span>
+                        ) : category.parentId ? (
+                          // Has a parent that is not in the list (another city / archived): never call it a root
+                          <span className="text-[11px] text-amber-700 font-semibold bg-amber-50 px-2 py-0.5 rounded">
+                            Parent not available here
+                          </span>
                         ) : (
                           <span className="text-[11px] text-emerald-700 font-semibold bg-emerald-50 px-2 py-0.5 rounded">
                             Top-Level (Root)
@@ -606,7 +649,7 @@ const CategoriesListView = ({ selectedCity, onRefreshHealth }) => {
         <Modal
           isOpen={isModalOpen}
           onClose={() => setIsModalOpen(false)}
-          title={editingCategory ? "Edit Category" : "Add New Category"}
+          title={editingCategory ? `Edit ${noun}` : `Add New ${noun}`}
           size="md"
         >
           <form onSubmit={handleSaveCategory} className="space-y-4">
@@ -645,16 +688,19 @@ const CategoriesListView = ({ selectedCity, onRefreshHealth }) => {
                 />
               </div>
 
+              {level !== "root" && (
               <div>
                 <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wide mb-1">
-                  Parent Category
+                  {level === "sub" ? "Belongs to category *" : "Parent Category"}
                 </label>
                 <select
                   value={form.parentId}
                   onChange={(e) => setForm((prev) => ({ ...prev, parentId: e.target.value }))}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none"
                 >
-                  <option value="">-- None (Top-Level Category) --</option>
+                  {level === "sub"
+                    ? <option value="">-- Choose a category --</option>
+                    : <option value="">-- None (Top-Level Category) --</option>}
                   {rootCategories
                     .filter((c) => (c.id || c._id) !== (editingCategory?.id || editingCategory?._id))
                     .map((c) => (
@@ -664,6 +710,7 @@ const CategoriesListView = ({ selectedCity, onRefreshHealth }) => {
                     ))}
                 </select>
               </div>
+              )}
             </div>
 
             <IconUploadWithPreview

@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const {
+  getWorkerSkillTree,
   getPublicCategories,
   getPublicBrands,
   getPublicBrandBySlug,
@@ -14,6 +15,7 @@ const {
 
 // Public routes - no authentication required
 router.get('/categories', getPublicCategories);
+router.get('/worker-skill-tree', getWorkerSkillTree);
 router.get('/categories/eta', getCategoriesEta);
 router.get('/categories/:idOrSlug/catalog', getPublicCategoryCatalog);
 router.get('/brands', getPublicBrands); // Formerly services

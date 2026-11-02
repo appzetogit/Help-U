@@ -11,7 +11,7 @@ const { getRedis, isRedisConnected } = require('../../services/redisService');
 const { getServiceRatings, combineRatings, toDisplayRating } = require('../../services/serviceRatingService');
 const { resolveFieldsForCategories } = require('../../utils/detailFields');
 const { expandZoneCategories } = require('../../utils/zoneCategories');
-const { cityScopeQuery } = require('../../utils/cityScope');
+const { cityScopeQuery, categoryCityFilter } = require('../../utils/cityScope');
 const { zonesInUse } = require('../../utils/dispatchMode');
 
 /**
@@ -66,13 +66,9 @@ const getPublicCategories = async (req, res) => {
 
     // Build query
     const query = { status: 'active', publishStatus: { $ne: 'draft' } };
-    if (cityId) {
-      query.$or = [
-        { cityIds: cityId },
-        { cityIds: { $size: 0 } },
-        { cityIds: { $exists: false } }
-      ];
-    }
+    // A sub-category follows its parent's cities (see utils/cityScope.js)
+    const cityFilter = await categoryCityFilter(cityId);
+    if (cityFilter) query.$and = [cityFilter];
 
     // Default: top-level categories only (parentId: null). Sub-categories
     // never leak into the Home grid or /public/categories listing. Clients
@@ -502,7 +498,8 @@ const advancedCatalogSearch = async (req, res) => {
     // surfaces inside a parent catalog, not standalone search results).
     const catQuery = { status: 'active', parentId: null, publishStatus: { $ne: 'draft' } };
     // Categories open to every city (empty cityIds) are in every city's search too
-    if (cityId) catQuery.$and = [cityScopeQuery(cityId)];
+    const searchCityFilter = await categoryCityFilter(cityId);
+    if (searchCityFilter) catQuery.$and = [searchCityFilter];
     catQuery.$or = [
       { title: { $regex: queryTerm, $options: 'i' } },
       { slug: { $regex: queryTerm, $options: 'i' } }
@@ -802,27 +799,16 @@ const getPublicHomeData = async (req, res) => {
     const matchedZone = await resolveZone({ zoneId, lat, lng, cityId });
     const activeZoneId = matchedZone ? String(matchedZone._id) : ((await zonesInUse()) ? (zoneId || null) : null);
 
+    const homeCityFilter = await categoryCityFilter(cityId);
     const catQuery = { status: 'active', parentId: null, publishStatus: { $ne: 'draft' }, showOnHome: { $ne: false } };
-    if (cityId) {
-      catQuery.$or = [
-        { cityIds: cityId },
-        { cityIds: { $size: 0 } },
-        { cityIds: { $exists: false } }
-      ];
-    }
+    if (homeCityFilter) catQuery.$and = [homeCityFilter];
     const homeZoneSet = matchedZone ? await expandZoneCategories(matchedZone.allowedCategories) : null;
     if (homeZoneSet) {
       catQuery._id = { $in: [...homeZoneSet] };
     }
 
     const allCatQuery = { status: 'active', publishStatus: { $ne: 'draft' } };
-    if (cityId) {
-      allCatQuery.$or = [
-        { cityIds: cityId },
-        { cityIds: { $size: 0 } },
-        { cityIds: { $exists: false } }
-      ];
-    }
+    if (homeCityFilter) allCatQuery.$and = [homeCityFilter];
 
     const [categoriesRes, allCategoriesRes, homeContent, settings] = await Promise.all([
       Category.find(catQuery)
@@ -928,7 +914,8 @@ const getCategoriesEta = async (req, res) => {
     const { WORKER_STATUS } = require('../../utils/constants');
 
     const categoryQuery = { status: 'active', publishStatus: { $ne: 'draft' } };
-    if (cityId) Object.assign(categoryQuery, cityScopeQuery(cityId));
+    const etaCityFilter = await categoryCityFilter(cityId);
+    if (etaCityFilter) categoryQuery.$and = [etaCityFilter];
     // Top-level only — sub-categories inherit their parent's ETA badge
     // through the catalog modal; they don't own their own badge on the grid.
     categoryQuery.parentId = null;
@@ -1139,13 +1126,8 @@ const getPublicCategoryCatalog = async (req, res) => {
       status: 'active',
       publishStatus: { $ne: 'draft' }
     };
-    if (cityId) {
-      subCategoriesQuery.$or = [
-        { cityIds: cityId },
-        { cityIds: { $size: 0 } },
-        { cityIds: { $exists: false } }
-      ];
-    }
+    const subCityFilter = await categoryCityFilter(cityId);
+    if (subCityFilter) subCategoriesQuery.$and = [subCityFilter];
 
     const subCategoriesDocs = await Category.find(subCategoriesQuery)
       .select('title slug homeIconUrl homeBadge subCategoryBadge sortOrder homeOrder heroBanner')
@@ -1401,7 +1383,76 @@ const getPublicCategoryCatalog = async (req, res) => {
   }
 };
 
+
+/**
+ * What a professional can offer, as a tree: category -> sub-category -> service.
+ * GET /api/public/worker-skill-tree?cityId=
+ *
+ * Used by partner signup and profile edit (and the admin worker edit) so everyone picks from the same
+ * hierarchy. `cityId` is optional: a new partner may not have a city yet, in which case every
+ * category is offered. Only active, published items are listed. Services sit under their
+ * sub-category, or straight under the category when they have none.
+ */
+const getWorkerSkillTree = async (req, res) => {
+  try {
+    const { cityId } = req.query;
+    const live = { status: 'active', publishStatus: { $ne: 'draft' } };
+
+    const cityFilter = await categoryCityFilter(cityId);
+    const catQuery = { ...live, ...(cityFilter ? { $and: [cityFilter] } : {}) };
+
+    const categories = await Category.find(catQuery)
+      .select('title slug homeIconUrl parentId homeOrder')
+      .sort({ homeOrder: 1, title: 1 })
+      .lean();
+
+    const catIds = categories.map((c) => c._id);
+    const services = await Service.find({ ...live, categoryId: { $in: catIds } })
+      .select('title categoryId brandId basePrice')
+      .populate('brandId', 'title')
+      .sort({ title: 1 })
+      .lean();
+
+    const servicesByCat = new Map();
+    services.forEach((svc) => {
+      const key = String(svc.categoryId);
+      if (!servicesByCat.has(key)) servicesByCat.set(key, []);
+      servicesByCat.get(key).push({
+        id: String(svc._id),
+        title: svc.title,
+        brandTitle: svc.brandId?.title || null
+      });
+    });
+
+    const subsByParent = new Map();
+    categories.filter((c) => c.parentId).forEach((c) => {
+      const key = String(c.parentId);
+      if (!subsByParent.has(key)) subsByParent.set(key, []);
+      subsByParent.get(key).push({
+        id: String(c._id),
+        title: c.title,
+        services: servicesByCat.get(String(c._id)) || []
+      });
+    });
+
+    const tree = categories.filter((c) => !c.parentId).map((c) => ({
+      id: String(c._id),
+      title: c.title,
+      icon: c.homeIconUrl || '',
+      subCategories: subsByParent.get(String(c._id)) || [],
+      // Services that sit directly under the category
+      services: servicesByCat.get(String(c._id)) || []
+    }));
+
+    res.status(200).json({ success: true, categories: tree });
+  } catch (error) {
+    console.error('Get worker skill tree error:', error);
+    res.status(500).json({ success: false, message: 'Failed to load the service list' });
+  }
+};
+
 module.exports = {
+  getWorkerSkillTree,
   getPublicCategories,
   getPublicBrands,
   getPublicBrandBySlug,

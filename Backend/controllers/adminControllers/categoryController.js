@@ -1,5 +1,6 @@
 const Category = require('../../models/Category');
 const { renameWorkerSkill } = require('../../utils/workerSkills');
+const { categoryCityFilter } = require('../../utils/cityScope');
 const Brand = require('../../models/Brand');
 const UserService = require('../../models/UserService');
 const Booking = require('../../models/Booking');
@@ -151,13 +152,9 @@ const getAllCategories = async (req, res) => {
     const query = { ...parentIdFilter(parentId) };
     if (status) query.status = status;
     if (showOnHome !== undefined) query.showOnHome = showOnHome === 'true';
-    if (cityId) {
-      query.$or = [
-        { cityIds: cityId },
-        { cityIds: { $size: 0 } },
-        { cityIds: { $exists: false } }
-      ];
-    }
+    // A sub-category follows its parent's cities (see utils/cityScope.js)
+    const cityFilter = await categoryCityFilter(cityId);
+    if (cityFilter) query.$and = [cityFilter];
 
     const categories = await Category.find(query)
       .select('-__v')

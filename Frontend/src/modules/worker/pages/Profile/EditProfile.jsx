@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useLayoutEffect } from 'react';
+import SkillTreePicker from '../../components/SkillTreePicker';
 import { useNavigate } from 'react-router-dom';
 import { FiSave, FiUser, FiBriefcase, FiPhone, FiMail, FiMapPin, FiChevronDown, FiCamera, FiUpload, FiFileText, FiCheckCircle, FiEye, FiX, FiShield } from 'react-icons/fi';
 import { workerTheme as themeColors } from '../../../../theme';
 import Header from '../../components/layout/Header';
-import { publicCatalogService } from '../../../../services/catalogService';
 import { workerAuthService } from '../../../../services/authService';
 import api from '../../../../services/api';
 import AddressSelectionModal from '../../../user/pages/Checkout/components/AddressSelectionModal';
@@ -77,8 +77,6 @@ const EditProfile = () => {
   const [isAddressModalOpen, setIsAddressModalOpen] = useState(false);
 
   // Load service categories from admin config (dynamic)
-  const [categories, setCategories] = useState([]);
-  const [isCategoryOpen, setIsCategoryOpen] = useState(false);
   const [errors, setErrors] = useState({});
   const [isFlutter, setIsFlutter] = useState(flutterBridge.isFlutter);
 
@@ -146,60 +144,6 @@ const EditProfile = () => {
     }
   };
 
-  useEffect(() => {
-    const loadServiceCategories = async () => {
-      try {
-        if (publicCatalogService.invalidateCache) {
-          publicCatalogService.invalidateCache();
-        }
-        const [catRes, svcRes] = await Promise.allSettled([
-          publicCatalogService.getCategories({ parentId: 'all', bypassCache: true }),
-          publicCatalogService.getServices({ bypassCache: true })
-        ]);
-
-        const rawCategories = catRes.status === 'fulfilled' && catRes.value?.success
-          ? (catRes.value.categories || [])
-          : [];
-
-        const rawServices = svcRes.status === 'fulfilled' && svcRes.value?.success
-          ? (svcRes.value.services || [])
-          : [];
-
-        const catMap = new Map();
-        rawCategories.forEach(cat => catMap.set(String(cat._id || cat.id), cat));
-
-        const items = [];
-        rawCategories.forEach(cat => {
-          if (!cat.title || /\s\d{4}$/.test(cat.title)) return;
-          const isSub = Boolean(cat.parentId);
-          const parentCat = cat.parentId ? catMap.get(String(cat.parentId)) : null;
-          items.push({
-            _id: `cat-${cat._id || cat.id}`,
-            title: cat.title.trim(),
-            typeLabel: isSub ? 'Sub-category' : 'Category',
-            categoryName: parentCat ? parentCat.title : null
-          });
-        });
-
-        rawServices.forEach(svc => {
-          if (!svc.title) return;
-          items.push({
-            _id: `svc-${svc._id || svc.id}`,
-            title: svc.title.trim(),
-            typeLabel: 'Service',
-            categoryName: svc.categoryName || null,
-            price: svc.basePrice
-          });
-        });
-
-        setCategories(items);
-      } catch (error) {
-        console.error('Error loading service categories:', error);
-      }
-    };
-
-    loadServiceCategories();
-  }, []);
 
   useLayoutEffect(() => {
     const html = document.documentElement;
@@ -374,24 +318,6 @@ const EditProfile = () => {
         [field]: null,
       }));
     }
-  };
-
-  const handleCategoryChange = (val) => {
-    setFormData(prev => {
-      const current = prev.serviceCategories || [];
-      const updated = current.includes(val)
-        ? current.filter(c => c !== val)
-        : [...current, val];
-
-      // When categories change, we might want to filter out skills that no longer apply?
-      // For now, let's keep all skills or clear them if categories become empty.
-      // Better: Keep skills, user can remove them manually.
-      return {
-        ...prev,
-        serviceCategories: updated,
-        // skills: [] // Optional: clear skills on category change? Maybe annoying. Let's keep them.
-      };
-    });
   };
 
   const handleSubmit = async () => {
@@ -749,76 +675,14 @@ const EditProfile = () => {
               </div>
               <span>Service Categories <span className="text-red-500">*</span></span>
             </label>
-            <div className="relative">
-              <button
-                type="button"
-                onClick={() => setIsCategoryOpen(!isCategoryOpen)}
-                className="w-full px-4 py-3 bg-white rounded-xl border border-gray-200 flex items-center justify-between focus:outline-none focus:ring-2 focus:ring-blue-100"
-              >
-                <div className="flex flex-wrap gap-2 overflow-hidden">
-                  {formData.serviceCategories.length > 0 ? (
-                    formData.serviceCategories.map((cat, idx) => (
-                      <span key={idx} className="text-sm bg-blue-50 text-blue-700 px-2 py-1 rounded-md">
-                        {cat}
-                      </span>
-                    ))
-                  ) : (
-                    <span className="text-gray-400">Select Categories</span>
-                  )}
-                </div>
-                <FiChevronDown className={`w-5 h-5 text-gray-500 transition-transform ${isCategoryOpen ? 'rotate-180' : ''}`} />
-              </button>
-
-              {isCategoryOpen && (
-                <>
-                  <div
-                    className="fixed inset-0 z-10 bg-transparent"
-                    onClick={() => setIsCategoryOpen(false)}
-                  />
-                  <div className="absolute z-20 w-full mt-2 bg-white rounded-xl shadow-xl border border-gray-100 max-h-60 overflow-y-auto">
-                    {categories.length > 0 ? (
-                      categories.map((cat, index) => {
-                        const isSelected = formData.serviceCategories.includes(cat.title);
-                        return (
-                          <button
-                            key={cat._id || index}
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation(); // Prevent closing dropdown immediately
-                              handleCategoryChange(cat.title);
-                            }}
-                            className="w-full text-left px-4 py-3 hover:bg-gray-50 font-medium text-gray-700 border-b border-gray-50 last:border-0 flex items-center justify-between"
-                          >
-                            <div>
-                              <p className="leading-tight">{cat.title}</p>
-                              {cat.categoryName && (
-                                <p className="text-[11px] text-gray-400 mt-0.5">under {cat.categoryName}</p>
-                              )}
-                            </div>
-                            <div className="flex items-center gap-2">
-                              {cat.typeLabel && (
-                                <span className={`text-[10px] uppercase font-bold px-1.5 py-0.5 rounded border ${
-                                  cat.typeLabel === 'Service'
-                                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                                    : 'bg-blue-50 text-blue-700 border-blue-200'
-                                }`}>
-                                  {cat.typeLabel}
-                                </span>
-                              )}
-                              <div className={`w-5 h-5 rounded border flex items-center justify-center ${isSelected ? 'bg-blue-500 border-blue-500' : 'border-gray-300'}`}>
-                                {isSelected && <span className="text-white text-xs">✓</span>}
-                              </div>
-                            </div>
-                          </button>
-                        );
-                      })
-                    ) : (
-                      <div className="px-4 py-3 text-gray-400 text-sm">No categories found</div>
-                    )}
-                  </div>
-                </>
-              )}
-            </div>
+            <SkillTreePicker
+              value={formData.serviceCategories || []}
+              onChange={(titles) => {
+                setFormData((prev) => ({ ...prev, serviceCategories: titles }));
+                if (errors.serviceCategories) setErrors((prev) => ({ ...prev, serviceCategories: null }));
+              }}
+              accentColor={themeColors.button}
+            />
             {errors.serviceCategories && <p className="text-red-500 text-sm mt-1">{errors.serviceCategories}</p>}
           </div>
 
