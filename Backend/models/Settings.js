@@ -509,6 +509,8 @@ const settingsSchema = new mongoose.Schema({
   // Category, worker and worker+category overrides live in CommissionRule.
   // 'percentage' uses servicePayoutPercentage above; 'fixed' keeps
   // defaultFixedCommission rupees per booking from the service amount.
+  // servicePayoutPercentage, partsPayoutPercentage and these two fields are edited only on the
+  // Commission page (PUT /api/admin/commission-rules/default).
   // ==========================================
   defaultCommissionType: { type: String, enum: ['percentage', 'fixed'], default: 'percentage' },
   defaultFixedCommission: { type: Number, default: 0, min: 0 },

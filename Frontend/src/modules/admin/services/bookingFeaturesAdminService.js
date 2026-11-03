@@ -22,6 +22,7 @@ export const bookingFeaturesAdminService = {
   createCommissionRule: (body) => data(api.post('/admin/commission-rules', body)),
   updateCommissionRule: (id, body) => data(api.put(`/admin/commission-rules/${id}`, body)),
   deleteCommissionRule: (id) => data(api.delete(`/admin/commission-rules/${id}`)),
+  updateCommissionDefault: (body) => data(api.put('/admin/commission-rules/default', body)),
   previewCommission: (params) => data(api.get('/admin/commission-rules/preview', { params })),
 
   // Disputes

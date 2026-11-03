@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { FiSettings, FiGrid, FiDollarSign, FiSave, FiUser, FiMail, FiTrash2, FiPlus, FiUsers, FiShield, FiFileText, FiMapPin, FiPhone, FiHeadphones, FiMessageCircle, FiEdit, FiLock, FiUnlock, FiX, FiCheckCircle, FiGlobe, FiCheck, FiCompass, FiClock, FiActivity, FiSearch, FiRefreshCw, FiSmartphone, FiMonitor, FiAlertCircle, FiEye, FiSliders } from 'react-icons/fi';
+import { FiSettings, FiGrid, FiDollarSign, FiSave, FiUser, FiMail, FiTrash2, FiPlus, FiUsers, FiShield, FiFileText, FiMapPin, FiPhone, FiHeadphones, FiMessageCircle, FiEdit, FiLock, FiUnlock, FiX, FiCheckCircle, FiGlobe, FiCheck, FiCompass, FiClock, FiActivity, FiSearch, FiRefreshCw, FiSmartphone, FiMonitor, FiAlertCircle, FiEye, FiSliders, FiPercent } from 'react-icons/fi';
 import { getSettings, updateSettings, updateAdminProfile, getAdminProfile, getAllAdmins, createAdmin, deleteAdmin, updateAdminDetails, toggleAdminStatus, getAdminLoginHistory, getAdminAuditLogs } from '../../services/settingsService';
 import { ALL_AVAILABLE_LANGUAGES } from '../../../../context/LanguageContext';
 import { cityService } from '../../services/cityService';
 import { publicCatalogService } from '../../../../services/catalogService';
 import CityManagement from '../Cities';
+import Commission from '../Commission';
 import { toast } from 'react-hot-toast';
 import ModalLock from '../../../../components/common/ModalLock';
 
@@ -20,7 +21,7 @@ const AVAILABLE_PERMISSIONS = [
   { key: 'scrap', label: 'Scrap Items', desc: 'Scrap requests & verification' },
   { key: 'payments', label: 'Payments', desc: 'User & worker payments, platform revenue' },
   { key: 'settlements', label: 'Settlements', desc: 'Worker withdrawals & payouts' },
-  { key: 'commission', label: 'Commission', desc: 'Worker commission rules & tiers' },
+  { key: 'commission', label: 'Commission', desc: 'Default commission and per-category / per-worker rules' },
   { key: 'user-categories', label: 'User Catalog', desc: 'Categories, brands & user services' },
   { key: 'worker-services', label: 'Worker Services', desc: 'Worker-side service catalog' },
   { key: 'worker-parts', label: 'Worker Parts', desc: 'Spare parts inventory & pricing' },
@@ -34,6 +35,36 @@ const AVAILABLE_PERMISSIONS = [
   { key: 'booking-config', label: 'Booking Config', desc: 'Search radius, waves & ranking' }
 ];
 
+const MENU_TONES = {
+  blue: 'bg-blue-50 text-blue-600 group-hover:bg-blue-100',
+  green: 'bg-green-50 text-green-600 group-hover:bg-green-100',
+  rose: 'bg-rose-50 text-rose-600 group-hover:bg-rose-100',
+  purple: 'bg-purple-50 text-purple-600 group-hover:bg-purple-100',
+  sky: 'bg-sky-50 text-sky-600 group-hover:bg-sky-100',
+  teal: 'bg-teal-50 text-teal-600 group-hover:bg-teal-100',
+  amber: 'bg-amber-50 text-amber-600 group-hover:bg-amber-100'
+};
+
+// One compact tile of the Settings home screen: icon beside a title and a two-line description.
+const MenuCard = ({ icon: Icon, tone, title, desc, badge, onClick }) => (
+  <button
+    type="button"
+    onClick={onClick}
+    className="group flex items-center gap-3 rounded-xl border border-gray-100 bg-white px-4 py-3 text-left shadow-sm transition-shadow hover:shadow-md"
+  >
+    <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg transition-colors ${MENU_TONES[tone]}`}>
+      <Icon className="h-5 w-5" />
+    </span>
+    <span className="min-w-0 flex-1">
+      <span className="flex items-center justify-between gap-2">
+        <span className="truncate text-sm font-bold text-gray-800">{title}</span>
+        {badge && <span className="shrink-0 rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-bold uppercase text-sky-800">{badge}</span>}
+      </span>
+      <span className="mt-0.5 line-clamp-2 block text-xs leading-snug text-gray-500">{desc}</span>
+    </span>
+  </button>
+);
+
 const AdminSettings = () => {
   const location = useLocation();
   const navigate = useNavigate();
@@ -45,8 +76,6 @@ const AdminSettings = () => {
     visitedCharges: 0,
     serviceGstPercentage: 18,
     partsGstPercentage: 18,
-    servicePayoutPercentage: 90,
-    partsPayoutPercentage: 100,
     vendorCashLimit: 10000,
     cancellationPenalty: 49,
     tdsPercentage: 1,
@@ -168,7 +197,7 @@ const AdminSettings = () => {
 
   const [loading, setLoading] = useState(false);
   const [profileLoading, setProfileLoading] = useState(false);
-  const [activeView, setActiveView] = useState('main'); // 'main', 'profile', 'financial', 'system', 'admins'
+  const [activeView, setActiveView] = useState('main'); // 'main', 'profile', 'financial', 'commission', 'system', 'admins'
 
   const isSuperAdmin = profile.role === 'super_admin';
 
@@ -187,6 +216,8 @@ const AdminSettings = () => {
       setActiveView('admins');
     } else if (path.includes('/settings/cities')) {
       setActiveView('cities');
+    } else if (path.includes('/settings/commission')) {
+      setActiveView('commission');
     } else if (path === '/admin/settings' || path === '/admin/settings/') {
       setActiveView('main');
     }
@@ -243,8 +274,6 @@ const AdminSettings = () => {
             visitedCharges: res.settings.visitedCharges || 0,
             serviceGstPercentage: res.settings.serviceGstPercentage ?? 18,
             partsGstPercentage: res.settings.partsGstPercentage ?? 18,
-            servicePayoutPercentage: res.settings.servicePayoutPercentage ?? 90,
-            partsPayoutPercentage: res.settings.partsPayoutPercentage ?? 100,
             tdsPercentage: res.settings.tdsPercentage || 1,
             platformFeePercentage: res.settings.platformFeePercentage || 1,
             vendorCashLimit: res.settings.vendorCashLimit || 10000,
@@ -787,97 +816,51 @@ const AdminSettings = () => {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {/* Profile Settings Card */}
-        <div onClick={() => changeView('profile')}
-          className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow cursor-pointer group">
-          <div className="w-12 h-12 bg-blue-50 rounded-lg flex items-center justify-center mb-4 group-hover:bg-blue-100 transition-colors">
-            <FiUser className="w-6 h-6 text-blue-600" />
-          </div>
-          <h3 className="text-lg font-bold text-gray-800 mb-2">Profile Settings</h3>
-          <p className="text-sm text-gray-500">Manage your personal account details and password</p>
-        </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
+        <MenuCard icon={FiUser} tone="blue" title="Profile Settings"
+          desc="Manage your personal account details and password"
+          onClick={() => changeView('profile')} />
 
-        {/* Financial Settings Card - Super Admin Only */}
         {isSuperAdmin && (
-          <div onClick={() => changeView('financial')}
-            className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow cursor-pointer group">
-            <div className="w-12 h-12 bg-green-50 rounded-lg flex items-center justify-center mb-4 group-hover:bg-green-100 transition-colors">
-              <FiDollarSign className="w-6 h-6 text-green-600" />
-            </div>
-            <h3 className="text-lg font-bold text-gray-800 mb-2">Financial Info</h3>
-            <p className="text-sm text-gray-500">Configure charges, commissions, and billing details</p>
-          </div>
+          <MenuCard icon={FiDollarSign} tone="green" title="Financial Info"
+            desc="Configure charges, taxes, and billing details"
+            onClick={() => changeView('financial')} />
         )}
 
-        {/* System Settings Card - Accessible to all admins */}
-        <div onClick={() => changeView('system')}
-          className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow cursor-pointer group">
-          <div className="w-12 h-12 bg-purple-50 rounded-lg flex items-center justify-center mb-4 group-hover:bg-purple-100 transition-colors">
-            <FiSettings className="w-6 h-6 text-purple-600" />
-          </div>
-          <h3 className="text-lg font-bold text-gray-800 mb-2">System & Support</h3>
-          <p className="text-sm text-gray-500">Manage feature toggles, scrap service, and help contact info</p>
-        </div>
-
-        {/* Map API & Language Card - Accessible to all admins */}
-        <div onClick={() => changeView('map-language')}
-          className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow cursor-pointer group">
-          <div className="w-12 h-12 bg-sky-50 rounded-lg flex items-center justify-center mb-4 group-hover:bg-sky-100 transition-colors">
-            <FiGlobe className="w-6 h-6 text-sky-600" />
-          </div>
-          <div className="flex items-center justify-between mb-2">
-            <h3 className="text-lg font-bold text-gray-800">Map API & Language</h3>
-            <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-sky-100 text-sky-800 uppercase">
-              {mapAndLanguageSettings.defaultAppLanguage}
-            </span>
-          </div>
-          <p className="text-sm text-gray-500">Google Maps API key, dynamic map localization, and app language settings</p>
-        </div>
-
-        {/* City Management Card - Super Admin Only */}
         {isSuperAdmin && (
-          <div onClick={() => changeView('cities')}
-            className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow cursor-pointer group">
-            <div className="w-12 h-12 bg-teal-50 rounded-lg flex items-center justify-center mb-4 group-hover:bg-teal-100 transition-colors">
-              <FiMapPin className="w-6 h-6 text-teal-600" />
-            </div>
-            <h3 className="text-lg font-bold text-gray-800 mb-2">City Management</h3>
-            <p className="text-sm text-gray-500">Manage operational cities and default location</p>
-          </div>
+          <MenuCard icon={FiPercent} tone="rose" title="Commission"
+            desc="Default platform commission and overrides per category or worker"
+            onClick={() => changeView('commission')} />
         )}
 
-        {/* Admin Management Card - Super Admin Only */}
+        <MenuCard icon={FiSettings} tone="purple" title="System & Support"
+          desc="Manage feature toggles, scrap service, and help contact info"
+          onClick={() => changeView('system')} />
+
+        <MenuCard icon={FiGlobe} tone="sky" title="Map API & Language"
+          badge={mapAndLanguageSettings.defaultAppLanguage}
+          desc="Google Maps API key, map localization, and app language settings"
+          onClick={() => changeView('map-language')} />
+
         {isSuperAdmin && (
-          <div onClick={() => changeView('admins')}
-            className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow cursor-pointer group">
-            <div className="w-12 h-12 bg-amber-50 rounded-lg flex items-center justify-center mb-4 group-hover:bg-amber-100 transition-colors">
-              <FiUsers className="w-6 h-6 text-amber-600" />
-            </div>
-            <h3 className="text-lg font-bold text-gray-800 mb-2">Manage Admins</h3>
-            <p className="text-sm text-gray-500">Add, remove, and view all system administrators</p>
-          </div>
+          <MenuCard icon={FiMapPin} tone="teal" title="City Management"
+            desc="Manage operational cities and default location"
+            onClick={() => changeView('cities')} />
         )}
 
-        {/* Booking Configuration Card: service radius, rescheduling, slots, cancellation, assignment */}
-        <div onClick={() => navigate('/admin/booking-config')}
-          className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow cursor-pointer group">
-          <div className="w-12 h-12 bg-teal-50 rounded-lg flex items-center justify-center mb-4 group-hover:bg-teal-100 transition-colors">
-            <FiSettings className="w-6 h-6 text-teal-600" />
-          </div>
-          <h3 className="text-lg font-bold text-gray-800 mb-2">Booking Configuration</h3>
-          <p className="text-sm text-gray-500">Partner service radius, rescheduling rules, time slots, cancellation fees and partner assignment</p>
-        </div>
+        {isSuperAdmin && (
+          <MenuCard icon={FiUsers} tone="amber" title="Manage Admins"
+            desc="Add, remove, and view all system administrators"
+            onClick={() => changeView('admins')} />
+        )}
 
-        {/* Partner Registration Fields Card */}
-        <div onClick={() => navigate('/admin/workers/registration-fields')}
-          className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow cursor-pointer group">
-          <div className="w-12 h-12 bg-teal-50 rounded-lg flex items-center justify-center mb-4 group-hover:bg-teal-100 transition-colors">
-            <FiSliders className="w-6 h-6 text-teal-600" />
-          </div>
-          <h3 className="text-lg font-bold text-gray-800 mb-2">Partner Registration Fields</h3>
-          <p className="text-sm text-gray-500">Configure dynamic text boxes and document upload requirements for partner onboarding</p>
-        </div>
+        <MenuCard icon={FiSettings} tone="teal" title="Booking Configuration"
+          desc="Partner service radius, rescheduling, time slots, cancellation fees and assignment"
+          onClick={() => navigate('/admin/booking-config')} />
+
+        <MenuCard icon={FiSliders} tone="teal" title="Partner Registration Fields"
+          desc="Dynamic text boxes and document uploads for partner onboarding"
+          onClick={() => navigate('/admin/workers/registration-fields')} />
       </div>
     </div>
   );
@@ -1005,18 +988,10 @@ const AdminSettings = () => {
                       <p className="text-[10px] text-gray-400 mt-1">GST rate applied to parts &amp; materials</p>
                     </div>
                     <div>
-                      <label className="block text-xs font-semibold text-gray-500 uppercase mb-1.5">Service Payout (%)</label>
-                      <input type="number" name="servicePayoutPercentage" value={financialSettings.servicePayoutPercentage} onChange={handleFinancialChange}
-                        min="0" max="100"
-                        className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg outline-none focus:border-green-500 transition-all" />
-                      <p className="text-[10px] text-gray-400 mt-1">Worker keeps this % of service charges</p>
-                    </div>
-                    <div>
-                      <label className="block text-xs font-semibold text-gray-500 uppercase mb-1.5">Parts Payout (%)</label>
-                      <input type="number" name="partsPayoutPercentage" value={financialSettings.partsPayoutPercentage} onChange={handleFinancialChange}
-                        min="0" max="100"
-                        className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg outline-none focus:border-green-500 transition-all" />
-                      <p className="text-[10px] text-gray-400 mt-1">Worker keeps this % of parts charges</p>
+                      <label className="block text-xs font-semibold text-gray-500 uppercase mb-1.5">Commission &amp; worker payout</label>
+                      <p className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-2.5 text-sm text-gray-600">
+                        Set in <button type="button" onClick={() => changeView('commission')} className="font-semibold text-sky-700 underline">Settings &rsaquo; Commission</button>: the default split, and overrides per category or worker.
+                      </p>
                     </div>
                     <div>
                       <label className="block text-xs font-semibold text-gray-500 uppercase mb-1.5">TDS Percentage (%)</label>
@@ -1412,6 +1387,15 @@ const AdminSettings = () => {
                   </button>
                 </div>
               </form>
+            </motion.div>
+          )
+        }
+
+        {/* Commission View - Super Admin Only */}
+        {
+          activeView === 'commission' && isSuperAdmin && (
+            <motion.div key="commission" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} transition={{ duration: 0.2 }}>
+              <Commission />
             </motion.div>
           )
         }

@@ -159,7 +159,8 @@ const CONFIG_SCHEMA = {
 };
 
 // Existing settings the booking flow also needs; read here so callers have one
-// place to look, but they are still edited from the Settings page.
+// place to look. They are edited from the Settings page, except the payout percentages,
+// which belong to the Commission page.
 const PASSTHROUGH_DEFAULTS = {
   // Charged on every paid booking; set by the admin (0 means no visiting charge)
   visitedCharges: 149,
@@ -310,11 +311,16 @@ const invalidateBookingConfigCache = () => {
  * Validates an admin update against CONFIG_SCHEMA.
  * Unknown keys are ignored. Returns { updates, errors }.
  */
+// Read through the booking configuration, but edited elsewhere (the Commission page), so the
+// Booking Configuration endpoint ignores them.
+const READ_ONLY_HERE = new Set(['defaultCommissionType', 'defaultFixedCommission']);
+
 const sanitizeConfigUpdate = (payload = {}) => {
   const updates = {};
   const errors = [];
 
   for (const [name, [, kind, a, b]] of Object.entries(CONFIG_SCHEMA)) {
+    if (READ_ONLY_HERE.has(name)) continue;
     if (payload[name] === undefined) continue;
     const raw = payload[name];
 

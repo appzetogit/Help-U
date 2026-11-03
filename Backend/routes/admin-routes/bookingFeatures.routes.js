@@ -14,7 +14,8 @@ const {
   createRule,
   updateRule,
   deleteRule,
-  previewCommission
+  previewCommission,
+  updateDefault
 } = require('../../controllers/adminControllers/commissionController');
 const { adminListPlans, adminUpdatePlan } = require('../../controllers/recurringBookingController');
 const { getChatForAdmin } = require('../../controllers/chatController');
@@ -31,6 +32,7 @@ router.delete('/addons/:id', requirePermission('services'), deleteAddOn);
 
 router.get('/commission-rules/preview', requirePermission('commission'), previewCommission);
 router.get('/commission-rules', requirePermission('commission'), listRules);
+router.put('/commission-rules/default', requirePermission('commission'), updateDefault);
 router.post('/commission-rules', requirePermission('commission'), createRule);
 router.put('/commission-rules/:id', requirePermission('commission'), updateRule);
 router.delete('/commission-rules/:id', requirePermission('commission'), deleteRule);

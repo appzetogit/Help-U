@@ -105,14 +105,6 @@
     ]
   },
   {
-    "title": "Commission",
-    "route": "/admin/commission",
-    "allowedRoles": [
-      "super_admin"
-    ],
-    "children": []
-  },
-  {
     "title": "User Catalog",
     "route": "/admin/user-categories",
     "allowedRoles": [

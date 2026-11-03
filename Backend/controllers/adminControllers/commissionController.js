@@ -7,15 +7,27 @@
  *   DELETE /api/admin/commission-rules/:id
  *   GET    /api/admin/commission-rules/preview?workerId=&categoryId=&serviceAmount=&partsAmount=
  *
- * The global default lives in Settings (servicePayoutPercentage, or
- * defaultCommissionType/defaultFixedCommission) and is edited on the Settings
- * and Booking Configuration pages.
+ *   PUT    /api/admin/commission-rules/default
+ *
+ * The global default is stored in Settings (servicePayoutPercentage, partsPayoutPercentage,
+ * defaultCommissionType, defaultFixedCommission) but is edited ONLY here, on the Commission page:
+ * the Settings and Booking Configuration endpoints ignore those fields.
  */
 
 const mongoose = require('mongoose');
 const CommissionRule = require('../../models/CommissionRule');
 const { resolveCommission, computeWorkerEarnings } = require('../../services/commissionService');
-const { getBookingConfig } = require('../../utils/bookingConfig');
+const Settings = require('../../models/Settings');
+const { logAdminAudit } = require('../../utils/adminAuditLogger');
+const { getBookingConfig, invalidateBookingConfigCache } = require('../../utils/bookingConfig');
+
+const toGlobalDefault = (config) => ({
+  commissionType: config.defaultCommissionType,
+  percentageCommission: Math.round((100 - config.servicePayoutPercentage) * 100) / 100,
+  servicePayoutPercentage: config.servicePayoutPercentage,
+  fixedCommission: config.defaultFixedCommission,
+  partsPayoutPercentage: config.partsPayoutPercentage
+});
 
 const isId = (v) => v && mongoose.Types.ObjectId.isValid(String(v));
 
@@ -96,13 +108,7 @@ exports.listRules = async (req, res) => {
     res.status(200).json({
       success: true,
       data: rules,
-      globalDefault: {
-        commissionType: config.defaultCommissionType,
-        percentageCommission: Math.round((100 - config.servicePayoutPercentage) * 100) / 100,
-        servicePayoutPercentage: config.servicePayoutPercentage,
-        fixedCommission: config.defaultFixedCommission,
-        partsPayoutPercentage: config.partsPayoutPercentage
-      }
+      globalDefault: toGlobalDefault(config)
     });
   } catch (error) {
     console.error('List commission rules error:', error);
@@ -194,5 +200,83 @@ exports.previewCommission = async (req, res) => {
   } catch (error) {
     console.error('Preview commission error:', error);
     res.status(500).json({ success: false, message: 'Failed to preview commission' });
+  }
+};
+
+/**
+ * Sets the global default commission. Partial updates are allowed; anything not sent is left as is.
+ *
+ *   commissionType        'percentage' | 'fixed'
+ *   percentageCommission  % of the service amount the platform keeps (0-100)
+ *   fixedCommission       ₹ per booking the platform keeps from the service amount
+ *   partsPayoutPercentage % of parts the worker keeps (0-100)
+ *
+ * This is the only writer of these values.
+ */
+exports.updateDefault = async (req, res) => {
+  try {
+    const body = req.body || {};
+    const updates = {};
+
+    if (body.commissionType !== undefined) {
+      if (!['percentage', 'fixed'].includes(body.commissionType)) {
+        return res.status(400).json({ success: false, message: 'Choose percentage or fixed commission' });
+      }
+      updates.defaultCommissionType = body.commissionType;
+    }
+
+    const num = (value, label, max) => {
+      const n = Number(value);
+      if (value === '' || value === null || !Number.isFinite(n) || n < 0 || n > max) {
+        return { error: `${label} must be a number between 0 and ${max}` };
+      }
+      return { value: n };
+    };
+
+    if (body.percentageCommission !== undefined) {
+      const r = num(body.percentageCommission, 'Commission percentage', 100);
+      if (r.error) return res.status(400).json({ success: false, message: r.error });
+      updates.servicePayoutPercentage = Math.round((100 - r.value) * 100) / 100;
+    }
+    if (body.fixedCommission !== undefined) {
+      const r = num(body.fixedCommission, 'Fixed commission', 100000);
+      if (r.error) return res.status(400).json({ success: false, message: r.error });
+      updates.defaultFixedCommission = r.value;
+    }
+    if (body.partsPayoutPercentage !== undefined) {
+      const r = num(body.partsPayoutPercentage, 'Parts payout percentage', 100);
+      if (r.error) return res.status(400).json({ success: false, message: r.error });
+      updates.partsPayoutPercentage = r.value;
+    }
+
+    if (Object.keys(updates).length === 0) {
+      return res.status(400).json({ success: false, message: 'No commission settings were provided' });
+    }
+
+    let settings = await Settings.findOne({ type: 'global' });
+    if (!settings) settings = new Settings({ type: 'global' });
+    Object.assign(settings, updates);
+    await settings.save();
+
+    invalidateBookingConfigCache();
+
+    logAdminAudit({
+      req,
+      module: 'financial',
+      action: 'update',
+      entityType: 'Settings',
+      entityId: settings._id,
+      description: `Updated default commission (${Object.keys(updates).join(', ')})`
+    });
+
+    console.log(`[Commission] Default updated by admin ${req.user?.id}: ${Object.keys(updates).join(', ')}`);
+    res.status(200).json({
+      success: true,
+      message: 'Default commission saved',
+      globalDefault: toGlobalDefault(await getBookingConfig())
+    });
+  } catch (error) {
+    console.error('Update default commission error:', error);
+    res.status(500).json({ success: false, message: 'Failed to save the default commission' });
   }
 };

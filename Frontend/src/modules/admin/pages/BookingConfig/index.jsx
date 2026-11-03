@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'react-hot-toast';
 import {
   FiSliders, FiLoader, FiFileText, FiImage, FiPlusCircle, FiAlertTriangle, FiMessageCircle,
-  FiAlertOctagon, FiTarget, FiPercent, FiDollarSign, FiRepeat, FiSave, FiX, FiPlus, FiCalendar, FiClock, FiXCircle,
+  FiAlertOctagon, FiTarget, FiDollarSign, FiRepeat, FiSave, FiX, FiPlus, FiCalendar, FiClock, FiXCircle,
   FiSearch, FiChevronDown, FiChevronRight
 } from 'react-icons/fi';
 import bookingFeaturesAdminService from '../../services/bookingFeaturesAdminService';
@@ -15,7 +15,7 @@ import { inputClass } from '../../components/adminFormat';
  *
  * Every booking feature built for the user and worker apps is switched on/off
  * and tuned here: notes, problem media, add-ons, emergency bookings, chat,
- * disputes, worker assignment, commission default, payouts and recurring
+ * disputes, worker assignment, payouts and recurring
  * bookings. Changes are saved together and pushed to open apps immediately.
  */
 
@@ -57,13 +57,13 @@ const TAB_GROUPS = [
   { id: 'dispatch', label: 'Finding professionals', desc: 'Zone or distance, ranking, emergency, admin queue' },
   { id: 'flow', label: 'Booking flow', desc: 'Checkout options, time slots, scheduling, recurring' },
   { id: 'policies', label: 'Policies & support', desc: 'Cancellation, disputes, chat' },
-  { id: 'money', label: 'Money', desc: 'Commission, payouts, wallet' }
+  { id: 'money', label: 'Money', desc: 'Payouts, wallet' }
 ];
 
 const groupOfKey = (key) => {
   if (/^(dispatchMode|searchRadius|maxSearchTime|waveDuration|assignment|wave\d|autoReassign|maxReassignments|isAdminAssignment|escalateToAdmin|adminAssign|isWorkerServiceRadius|workerServiceRadius|isEmergency|emergency)/.test(key)) return 'dispatch';
   if (/^(userFreeCancel|userLateCancel|cancellationPenalty|workerFreeCancel|workerLateCancel|isDispute|disputeWindow|maxDisputeEvidence|disputeReasons|isChat|chat)/.test(key)) return 'policies';
-  if (/^(defaultCommissionType|defaultFixedCommission|minWithdrawal|wallet|scrap)/.test(key)) return 'money';
+  if (/^(minWithdrawal|wallet|scrap)/.test(key)) return 'money';
   return 'flow';
 };
 
@@ -83,7 +83,6 @@ const CARD_KEYWORDS = {
   'Cancellation Policy': 'cancel cancellation fee penalty refund free window late',
   'Disputes': 'dispute complaint reasons evidence window',
   'Customer ↔ Professional Chat': 'chat message phone mask images',
-  'Default Commission': 'commission percentage fixed payout share',
   'Payouts': 'payout withdrawal minimum scrap',
   'Wallet Top-up': 'wallet top up topup minimum maximum balance'
 };
@@ -266,7 +265,7 @@ const BookingConfig = () => {
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder='Search settings, e.g. "radius", "refund", "commission"'
+            placeholder='Search settings, e.g. "radius", "refund", "wallet"'
             className="w-full rounded-lg border border-gray-200 bg-white py-2 pl-9 pr-8 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
           />
           {searching && (
@@ -745,24 +744,6 @@ const BookingConfig = () => {
                 <Field label="Close chat after booking ends" hint="Chat becomes read-only after this many hours. 0 closes it immediately.">
                   <NumberInput value={config.chatCloseAfterHours} onChange={set('chatCloseAfterHours')} min={0} max={720} suffix="hours" />
                 </Field>
-              </div>
-            </Card>
-        </Section>
-        <Section show={showCard('money', 'Default Commission')} label={searching ? groupLabel('money') : null}>
-            {/* Commission */}
-            <Card title="Default Commission" icon={FiPercent}>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <Field label="Default commission type" hint="Percentage uses the service payout % on the Settings page. Category and worker overrides are on the Commission page.">
-                  <select value={config.defaultCommissionType} onChange={(e) => set('defaultCommissionType')(e.target.value)} className={inputClass}>
-                    <option value="percentage">Percentage (Settings → service payout %)</option>
-                    <option value="fixed">Fixed amount per booking</option>
-                  </select>
-                </Field>
-                {config.defaultCommissionType === 'fixed' && (
-                  <Field label="Fixed commission per booking" hint="Kept by the platform from the service amount (excluding GST).">
-                    <NumberInput value={config.defaultFixedCommission} onChange={set('defaultFixedCommission')} min={0} suffix="₹" />
-                  </Field>
-                )}
               </div>
             </Card>
         </Section>

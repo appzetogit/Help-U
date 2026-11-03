@@ -1,9 +1,9 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
-import { FiPercent, FiPlus, FiEdit2, FiTrash2, FiLoader, FiSearch, FiInfo } from 'react-icons/fi';
+import { FiPercent, FiPlus, FiEdit2, FiTrash2, FiLoader, FiSearch } from 'react-icons/fi';
 import bookingFeaturesAdminService from '../../services/bookingFeaturesAdminService';
 import Modal from '../../components/Modal';
+import GlobalDefaultCard from './GlobalDefaultCard';
 import { PageHeader, Card, Toggle, Field, Button, StatusPill, EmptyState } from '../../components/adminUi';
 import { inputClass, money } from '../../components/adminFormat';
 
@@ -192,21 +192,10 @@ const Commission = () => {
       />
 
       <div className="grid gap-6 lg:grid-cols-3">
-        <Card title="Global default" icon={FiInfo} className="lg:col-span-1">
-          {globalDefault ? (
-            <div className="space-y-2 text-sm">
-              {globalDefault.commissionType === 'fixed' ? (
-                <p><span className="font-semibold">{money(globalDefault.fixedCommission)}</span> per booking kept by the platform</p>
-              ) : (
-                <p><span className="font-semibold">{globalDefault.percentageCommission}%</span> of service kept by the platform (worker gets {globalDefault.servicePayoutPercentage}%)</p>
-              )}
-              <p>Worker gets <span className="font-semibold">{globalDefault.partsPayoutPercentage}%</span> of parts</p>
-              <p className="text-xs text-gray-500">
-                Change the type in <Link to="/admin/booking-config" className="font-semibold text-sky-700">Booking Configuration</Link> and the percentages in <Link to="/admin/settings/financial" className="font-semibold text-sky-700">Settings</Link>.
-              </p>
-            </div>
-          ) : <FiLoader className="animate-spin text-gray-400" />}
-        </Card>
+        <GlobalDefaultCard
+          globalDefault={globalDefault}
+          onSaved={(next) => { setGlobalDefault(next); setPreviewResult(null); }}
+        />
 
         <Card title="Check a split" className="lg:col-span-2">
           <div className="grid gap-3 sm:grid-cols-2">

@@ -49,8 +49,8 @@ exports.updateSettings = async (req, res, next) => {
       visitedCharges,
       serviceGstPercentage,
       partsGstPercentage,
-      servicePayoutPercentage,
-      partsPayoutPercentage,
+      // (The worker payout / platform commission split is edited only on the Commission page, so it is
+      // deliberately not read from this request: one place sets it.)
       tdsPercentage,
       platformFeePercentage,
       vendorCashLimit, // Add this
@@ -91,8 +91,6 @@ exports.updateSettings = async (req, res, next) => {
         visitedCharges,
         serviceGstPercentage,
         partsGstPercentage,
-        servicePayoutPercentage,
-        partsPayoutPercentage,
         tdsPercentage,
         platformFeePercentage,
         vendorCashLimit, // Add this
@@ -127,8 +125,6 @@ exports.updateSettings = async (req, res, next) => {
       if (visitedCharges !== undefined) settings.visitedCharges = visitedCharges;
       if (serviceGstPercentage !== undefined) settings.serviceGstPercentage = serviceGstPercentage;
       if (partsGstPercentage !== undefined) settings.partsGstPercentage = partsGstPercentage;
-      if (servicePayoutPercentage !== undefined) settings.servicePayoutPercentage = servicePayoutPercentage;
-      if (partsPayoutPercentage !== undefined) settings.partsPayoutPercentage = partsPayoutPercentage;
       if (tdsPercentage !== undefined) settings.tdsPercentage = tdsPercentage;
       if (platformFeePercentage !== undefined) settings.platformFeePercentage = platformFeePercentage;
       if (vendorCashLimit !== undefined) settings.vendorCashLimit = vendorCashLimit; // Add this
@@ -181,8 +177,7 @@ exports.updateSettings = async (req, res, next) => {
       });
     }
 
-    // Payout percentages and search limits are also read through the booking
-    // configuration cache.
+    // Some of these settings are also read through the booking configuration cache.
     invalidateBookingConfigCache();
 
     // Broadcast updated configuration to all connected clients via Socket.io
