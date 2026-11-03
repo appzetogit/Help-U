@@ -30,7 +30,7 @@ const Scrap = lazy(() => import('../pages/Scrap'));
 const Settlements = lazy(() => import('../pages/Settlements'));
 const Reviews = lazy(() => import('../pages/Reviews'));
 const BookingConfig = lazy(() => import('../pages/BookingConfig'));
-const AddOns = lazy(() => import('../pages/AddOns'));
+const Extras = lazy(() => import('../pages/Extras'));
 const Disputes = lazy(() => import('../pages/Disputes'));
 const DisputeDetail = lazy(() => import('../pages/Disputes/DisputeDetail'));
 const RecurringBookings = lazy(() => import('../pages/RecurringBookings'));
@@ -88,7 +88,8 @@ const AdminRoutes = () => {
           <Route path="legal-pages" element={<LegalPages />} />
           <Route path="support-messages" element={<SupportMessages />} />
           <Route path="booking-config" element={<BookingConfig />} />
-          <Route path="addons" element={<AddOns />} />
+          <Route path="extras/*" element={<Extras />} />
+          <Route path="addons" element={<Navigate to="/admin/extras/addons" replace />} />
           <Route path="commission" element={<Navigate to="/admin/settings/commission" replace />} />
           <Route path="disputes" element={<Disputes />} />
           <Route path="disputes/:id" element={<DisputeDetail />} />

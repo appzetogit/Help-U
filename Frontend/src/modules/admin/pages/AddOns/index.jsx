@@ -3,6 +3,7 @@ import { toast } from 'react-hot-toast';
 import { FiPlusCircle, FiPlus, FiEdit2, FiTrash2, FiLoader, FiSearch } from 'react-icons/fi';
 import bookingFeaturesAdminService from '../../services/bookingFeaturesAdminService';
 import Modal from '../../components/Modal';
+import PageGuide from '../../components/PageGuide';
 import { PageHeader, Card, Toggle, Field, Button, StatusPill, EmptyState } from '../../components/adminUi';
 import { inputClass, money } from '../../components/adminFormat';
 import { serviceService } from '../../../../services/catalogService';
@@ -164,6 +165,21 @@ const AddOns = () => {
         description="Extras customers can add to a service at checkout. Turn the feature on or off in Booking Configuration."
         actions={<Button onClick={openNew}><FiPlus /> New add-on</Button>}
       />
+
+      <div className="mb-6">
+        <PageGuide
+          id="addons"
+          title="What are add-ons?"
+          intro="Optional extras a customer can tick at checkout, on top of the service they chose, for example “Extra AC unit”, “Deep cleaning of filters” or “Wall mounting”."
+          points={[
+            "Customers see the add-ons that apply to their service and pick a quantity, up to the maximum you set. The price is added to their total, with GST.",
+            "Choose where each add-on appears: every service, certain categories, or specific services. You must pick at least one, or it cannot be saved.",
+            "The professional sees the chosen add-ons on the booking, and the amount is part of the bill, so it is split like any service charge (Settings → Commission).",
+            "Add-ons are chosen at checkout, not during the visit. For work found on site, use the Worker Services list.",
+            "Switch the whole feature on or off in Booking Config. Turning an add-on off here hides it from new bookings only."
+          ]}
+        />
+      </div>
 
       <Card>
         <div className="mb-4 flex items-center gap-2">

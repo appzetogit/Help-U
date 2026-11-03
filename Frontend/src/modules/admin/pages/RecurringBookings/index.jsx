@@ -71,15 +71,15 @@ const RecurringBookings = () => {
       </div>
 
       <Card>
-        <div className="mb-4 flex flex-wrap gap-2">
-          <select value={status} onChange={(e) => { setStatus(e.target.value); setPage(1); }} className={`${inputClass} w-40`}>
+        <div className="mb-4 flex flex-wrap items-center gap-2">
+          <select value={status} onChange={(e) => { setStatus(e.target.value); setPage(1); }} className={`${inputClass} w-40!`}>
             <option value="">All statuses</option>
             <option value="active">Active</option>
             <option value="paused">Paused</option>
             <option value="completed">Completed</option>
             <option value="cancelled">Cancelled</option>
           </select>
-          <select value={frequency} onChange={(e) => { setFrequency(e.target.value); setPage(1); }} className={`${inputClass} w-44`}>
+          <select value={frequency} onChange={(e) => { setFrequency(e.target.value); setPage(1); }} className={`${inputClass} w-44!`}>
             <option value="">All frequencies</option>
             <option value="weekly">Weekly</option>
             <option value="biweekly">Every 2 weeks</option>

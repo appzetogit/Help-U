@@ -15,7 +15,7 @@ import {
   FiSliders,
   FiChevronDown,
   FiX,
-  FiPackage,
+  FiLayers,
   FiTrash2,
   FiStar,
   FiGift,
@@ -48,8 +48,7 @@ const iconMap = {
   Referrals: FiGift,
   Bookings: FiShoppingBag,
   "User Catalog": FiGrid,
-  "Worker Services": FiGrid,
-  "Worker Parts": FiPackage,
+  "Extras & Pricing": FiLayers,
   Payments: FiDollarSign,
   Reports: FiFileText,
   Notifications: FiBell,
@@ -167,15 +166,10 @@ const AdminSidebar = ({ isOpen, onClose }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.pathname]);
 
-  const isWorkerCatalogSubroute = (pathname) =>
-    pathname.startsWith("/admin/user-categories/worker-services") ||
-    pathname.startsWith("/admin/user-categories/worker-parts");
-
   // Open the group that contains the current page
   useEffect(() => {
     const activeItem = visibleMenu.find((item) => {
       if (item.route === "/admin/dashboard") return false;
-      if (item.route === "/admin/user-categories" && isWorkerCatalogSubroute(location.pathname)) return false;
       return location.pathname.startsWith(item.route) && location.pathname !== item.route;
     });
     if (activeItem && activeItem.children && activeItem.children.length > 0) {
@@ -185,7 +179,6 @@ const AdminSidebar = ({ isOpen, onClose }) => {
 
   const isActive = (route) => {
     if (route === "/admin/dashboard") return location.pathname === "/admin/dashboard";
-    if (route === "/admin/user-categories" && isWorkerCatalogSubroute(location.pathname)) return false;
     return location.pathname === route || location.pathname.startsWith(route + "/");
   };
 

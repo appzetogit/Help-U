@@ -3,6 +3,7 @@ import { FiPlus, FiEdit2, FiTrash2, FiSave, FiX, FiSearch } from "react-icons/fi
 import { toast } from "react-hot-toast";
 import CardShell from "../components/CardShell";
 import Modal from "../components/Modal";
+import PageGuide from "../../../components/PageGuide";
 import { workerCatalogService, categoryService } from "../../../../../services/catalogService";
 import { z } from "zod";
 
@@ -139,6 +140,17 @@ const WorkerServicesPage = () => {
 
   return (
     <div className="space-y-6">
+      <PageGuide
+        id="worker-services"
+        title="What is this page for?"
+        intro="These are the repair jobs a professional adds to the final bill after inspecting the problem at the customer's home, for example “Gas refilling – ₹3200”. It is not what customers book; that is the User Catalog."
+        points={[
+          "The price is fixed here. Professionals pick a job from this list and cannot change the amount.",
+          "GST and the platform commission are added automatically (see Settings → Financial and Commission).",
+          "Changes apply to new bills only. Bills already made keep the price they were created with.",
+          "Professionals can filter the list by category. The list is the same in every city."
+        ]}
+      />
       <CardShell title="Worker Services Catalog" icon={FiPlus}>
         <div className="flex flex-col sm:flex-row gap-4 justify-between items-center mb-6">
           <div className="flex gap-4 w-full sm:w-auto flex-1">

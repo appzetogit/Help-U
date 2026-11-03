@@ -118,26 +118,8 @@
     ]
   },
   {
-    "title": "Worker Services",
-    "route": "/admin/user-categories/worker-services",
-    "allowedRoles": [
-      "super_admin",
-      "admin"
-    ],
-    "children": []
-  },
-  {
-    "title": "Worker Parts",
-    "route": "/admin/user-categories/worker-parts",
-    "allowedRoles": [
-      "super_admin",
-      "admin"
-    ],
-    "children": []
-  },
-  {
-    "title": "Add-ons",
-    "route": "/admin/addons",
+    "title": "Extras & Pricing",
+    "route": "/admin/extras",
     "allowedRoles": [
       "super_admin",
       "admin"

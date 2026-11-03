@@ -4,8 +4,6 @@ import { motion } from "framer-motion";
 import { ensureIds, loadCatalog } from "./utils";
 import HomePage from "./pages/HomePage";
 import BrandsPage from "./pages/BrandsPage";
-import WorkerServicesPage from "./pages/WorkerServicesPage";
-import WorkerPartsPage from "./pages/WorkerPartsPage";
 import ServiceManagementPage from "./pages/ServiceManagementPage";
 import HomeSectionsManagerPage from "./pages/HomeSectionsManagerPage";
 
@@ -113,10 +111,11 @@ const UserCategories = () => {
             <Route path="sections" element={<HomeSectionsManagerPage catalog={catalog} setCatalog={setCatalog} selectedCity={selectedCity} />} />
             <Route path="catalog" element={<ServiceManagementPage selectedCity={selectedCity} />} />
             <Route path="brands" element={<BrandsPage catalog={catalog} setCatalog={setCatalog} selectedCity={selectedCity} />} />
-            <Route path="worker-services" element={<WorkerServicesPage />} />
-            <Route path="vendor-services" element={<Navigate to="../worker-services" replace />} />
-            <Route path="worker-parts" element={<WorkerPartsPage />} />
-            <Route path="vendor-parts" element={<Navigate to="../worker-parts" replace />} />
+            {/* The worker price lists moved to Extras & Pricing */}
+            <Route path="worker-services" element={<Navigate to="/admin/extras/repair-jobs" replace />} />
+            <Route path="vendor-services" element={<Navigate to="/admin/extras/repair-jobs" replace />} />
+            <Route path="worker-parts" element={<Navigate to="/admin/extras/parts" replace />} />
+            <Route path="vendor-parts" element={<Navigate to="/admin/extras/parts" replace />} />
             <Route path="*" element={<Navigate to="home" replace />} />
           </Routes>
         </AdminErrorBoundary>

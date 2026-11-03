@@ -68,6 +68,14 @@ const CHILD_ROUTES = {
 export const getChildRoute = (parentRoute, childName) =>
   CHILD_ROUTES[parentRoute]?.[childName] || parentRoute;
 
+// The three price lists that live under Extras & Pricing. Each tab keeps the permission its page had
+// before they were combined (see ROUTE_PERMISSION_MAP), so access did not change.
+export const EXTRAS_TABS = [
+  { key: 'addons', label: 'Checkout add-ons', hint: 'Customer ticks these at checkout', legacyRoute: '/admin/addons' },
+  { key: 'repair-jobs', label: 'Bill: repair jobs', hint: 'Professional adds these to the final bill', legacyRoute: '/admin/user-categories/worker-services' },
+  { key: 'parts', label: 'Bill: parts', hint: 'Professional adds spare parts to the final bill', legacyRoute: '/admin/user-categories/worker-parts' }
+];
+
 export const ROUTE_PERMISSION_MAP = {
   '/admin/dashboard': 'dashboard',
   '/admin/users': 'users',
@@ -111,6 +119,11 @@ export const readAdminUser = () => {
 export const canAccessItem = (item, adminUser) => {
   if (adminUser.role === 'super_admin') return true;
 
+  // Extras & Pricing is shown when at least one of its tabs is allowed
+  if (item.route === '/admin/extras') {
+    return EXTRAS_TABS.some((t) => canAccessItem({ route: t.legacyRoute, allowedRoles: item.allowedRoles }, adminUser));
+  }
+
   const permKey = ROUTE_PERMISSION_MAP[item.route];
   const perms = adminUser.permissions || [];
 
@@ -145,7 +158,7 @@ export const NAV_GROUPS = [
   { label: 'People', titles: ['Users', 'Workers'] },
   { label: 'Operations', titles: ['Bookings', 'Disputes', 'Recurring Bookings', 'Scrap Items', 'Reviews'] },
   { label: 'Finance', titles: ['Payments', 'Settlements', 'Coupons'] },
-  { label: 'Catalog', titles: ['User Catalog', 'Worker Services', 'Worker Parts', 'Add-ons', 'Zones'] },
+  { label: 'Catalog', titles: ['User Catalog', 'Extras & Pricing', 'Zones'] },
   { label: 'Insights', titles: ['Reports'] },
   { label: 'System', titles: ['Landing Page', 'Settings', 'Booking Config', 'Customization', 'Legal & Help Pages', 'Support Messages'] },
 ];
