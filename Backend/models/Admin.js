@@ -25,6 +25,11 @@ const adminSchema = new mongoose.Schema({
     enum: Object.values(ADMIN_ROLES),
     default: ADMIN_ROLES.ADMIN
   },
+  // Booking notifications newer than this have been seen by this admin (see the booking notifications page)
+  bookingNotificationsReadAt: {
+    type: Date,
+    default: null
+  },
   permissions: {
     type: [String],
     default: []

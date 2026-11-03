@@ -61,6 +61,25 @@ export const adminBookingService = {
     }
   },
 
+  // Booking notification feed (new bookings, cancellations, completions, payments, refunds, bookings needing a professional)
+  getBookingNotifications: async (params = {}) => {
+    try {
+      const response = await api.get('/admin/bookings/notifications', { params });
+      return response.data;
+    } catch (error) {
+      throw error.response?.data || { message: 'Failed to load booking notifications' };
+    }
+  },
+
+  markBookingNotificationsRead: async () => {
+    try {
+      const response = await api.post('/admin/bookings/notifications/read');
+      return response.data;
+    } catch (error) {
+      throw error.response?.data || { message: 'Failed to update booking notifications' };
+    }
+  },
+
   // Cancel booking
   cancelBooking: async (id, reason) => {
     try {

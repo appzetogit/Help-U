@@ -22,6 +22,7 @@ const Workers = lazy(() => import('../pages/Workers'));
 const Bookings = lazy(() => import('../pages/Bookings'));
 const BookingTracking = lazy(() => import('../pages/Bookings/Tracking'));
 const BookingNotifications = lazy(() => import('../pages/Bookings/BookingNotifications'));
+const BookingDetail = lazy(() => import('../pages/Bookings/BookingDetail'));
 const Payments = lazy(() => import('../pages/Payments'));
 const Reports = lazy(() => import('../pages/Reports'));
 const Notifications = lazy(() => import('../pages/Notifications'));
@@ -45,6 +46,15 @@ import LogoLoader from '../../../components/common/LogoLoader';
 
 const LoadingFallback = () => (
   <LogoLoader />
+);
+
+// An admin address that matches no page shows this inside the layout, instead of an empty content area
+const AdminNotFound = () => (
+  <div className="mx-auto max-w-md rounded-xl border border-gray-100 bg-white p-8 text-center shadow-sm">
+    <h1 className="text-lg font-bold text-gray-900">Page not found</h1>
+    <p className="mt-1 text-sm text-gray-500">This page does not exist or has moved.</p>
+    <a href="/admin/dashboard" className="mt-5 inline-block rounded-lg bg-gray-900 px-4 py-2 text-sm font-semibold text-white">Go to the dashboard</a>
+  </div>
 );
 
 const AdminRoutes = () => {
@@ -74,6 +84,7 @@ const AdminRoutes = () => {
           <Route path="bookings" element={<Bookings />} />
           <Route path="bookings/tracking" element={<BookingTracking />} />
           <Route path="bookings/notifications" element={<BookingNotifications />} />
+          <Route path="bookings/:id" element={<BookingDetail />} />
           <Route path="user-categories/*" element={<UserCategories />} />
           <Route path="payments/*" element={<Payments />} />
           <Route path="reports/*" element={<Reports />} />
@@ -96,6 +107,7 @@ const AdminRoutes = () => {
           <Route path="recurring-bookings" element={<RecurringBookings />} />
           <Route path="coupons" element={<Coupons />} />
           <Route path="zones" element={<Zones />} />
+          <Route path="*" element={<AdminNotFound />} />
         </Route>
       </Routes>
     </Suspense>

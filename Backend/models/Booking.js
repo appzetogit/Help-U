@@ -739,6 +739,8 @@ bookingSchema.index({ userId: 1, status: 1, createdAt: -1 });
 bookingSchema.index({ vendorId: 1, status: 1, createdAt: -1 });
 bookingSchema.index({ scheduledDate: 1, status: 1 });
 bookingSchema.index({ paymentStatus: 1, status: 1 });
+// Admin booking notifications: recent events across all bookings
+bookingSchema.index({ 'statusHistory.at': -1 });
 
 // ── PERFORMANCE INDEXES (added for wave-scheduler & dashboard queries) ──
 // Scheduler: Booking.find({ status: 'searching', waveStartedAt: { $ne: null } })

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { FiSearch, FiCheckCircle, FiTruck, FiPackage, FiClipboard, FiClock } from 'react-icons/fi';
-import { useNavigate } from 'react-router-dom';
+import { FiSearch, FiCheckCircle, FiTruck, FiPackage, FiClipboard, FiXCircle, FiLoader } from 'react-icons/fi';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { adminBookingService } from '../../../../services/adminBookingService';
 import { toast } from 'react-hot-toast';
 
@@ -9,9 +9,15 @@ const Tracking = () => {
   const navigate = useNavigate();
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
-  const [debouncedSearch, setDebouncedSearch] = useState('');
+  // The Track action on the bookings list opens this page with ?search=<booking number>
+  const [urlParams] = useSearchParams();
+  const [search, setSearch] = useState(() => urlParams.get('search') || '');
+  const [debouncedSearch, setDebouncedSearch] = useState(() => urlParams.get('search') || '');
   const [selectedOrder, setSelectedOrder] = useState(null);
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const PAGE_SIZE = 20;
 
   // Debounce search
   useEffect(() => {
@@ -19,35 +25,46 @@ const Tracking = () => {
     return () => clearTimeout(timer);
   }, [search]);
 
-  // Fetch bookings
   useEffect(() => {
+    const fromUrl = urlParams.get('search');
+    if (fromUrl !== null) setSearch(fromUrl);
+  }, [urlParams]);
+
+  // A new search starts again from the first page
+  useEffect(() => { setPage(1); }, [debouncedSearch]);
+
+  // Fetch bookings: page 1 replaces the list, later pages are added to it
+  useEffect(() => {
+    let alive = true;
     const fetchData = async () => {
       try {
-        setLoading(true);
-        const params = {
-          page: 1,
-          limit: 20, // get more for tracking list
-          search: debouncedSearch,
-        };
-        const res = await adminBookingService.getAllBookings(params);
+        if (page === 1) setLoading(true); else setLoadingMore(true);
+        const res = await adminBookingService.getAllBookings({ page, limit: PAGE_SIZE, search: debouncedSearch });
+        if (!alive) return;
         if (res.success) {
-          setBookings(res.data);
-          // Automatically select first order if none selected and data exists (optional)
-          // if (res.data.length > 0 && !selectedOrder) setSelectedOrder(res.data[0]);
+          setBookings((prev) => (page === 1 ? res.data : [...prev, ...res.data.filter((b) => !prev.some((p) => p._id === b._id))]));
+          setTotal(res.pagination?.total ?? res.data.length);
+          if (page === 1 && res.data.length === 1) setSelectedOrder(res.data[0]);
         }
       } catch (error) {
         console.error('Error fetching bookings:', error);
-        toast.error('Failed to load orders');
+        toast.error(error?.message || 'Failed to load bookings');
       } finally {
-        setLoading(false);
+        if (alive) { setLoading(false); setLoadingMore(false); }
       }
     };
     fetchData();
-  }, [debouncedSearch]);
+    return () => { alive = false; };
+  }, [debouncedSearch, page]);
+
+  const isEnded = (status) => ['cancelled', 'rejected'].includes(status);
 
   const getStatusStep = (status) => {
     // Map status to step index based on project workflow
     switch (status) {
+      case 'searching':
+      case 'requested':
+      case 'awaiting_payment':
       case 'pending':
       case 'confirmed':
       case 'accepted': return 0;
@@ -95,7 +112,7 @@ const Tracking = () => {
           <FiSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
           <input
             type="text"
-            placeholder="Search by Booking ID or customer name..."
+            placeholder="Search by booking number, customer or professional (name, phone, email), service or city..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="w-full pl-12 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
@@ -170,6 +187,21 @@ const Tracking = () => {
               </tbody>
             </table>
           </div>
+          {!loading && bookings.length > 0 && (
+            <div className="flex items-center justify-between gap-3 border-t border-gray-100 bg-gray-50/40 px-4 py-3">
+              <p className="text-xs font-semibold text-gray-500">Showing {bookings.length} of {total}</p>
+              {bookings.length < total && (
+                <button
+                  type="button"
+                  disabled={loadingMore}
+                  onClick={() => setPage((p) => p + 1)}
+                  className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-1.5 text-xs font-bold text-gray-700 hover:bg-gray-50 disabled:opacity-60"
+                >
+                  {loadingMore && <FiLoader className="h-3.5 w-3.5 animate-spin" />} Load more
+                </button>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Right: Tracking Details Panel */}
@@ -188,18 +220,41 @@ const Tracking = () => {
                 <p className="text-lg font-bold text-gray-900">#{selectedOrder.bookingNumber || selectedOrder._id.slice(-6).toUpperCase()}</p>
               </div>
 
-              <div className="mb-8">
+              <div className="mb-6">
                 <p className="text-sm text-gray-500 mb-1">Customer</p>
                 <p className="text-base font-semibold text-gray-900">{selectedOrder.userId?.name || 'Unknown'}</p>
-                <p className="text-xs text-gray-500">{selectedOrder.userId?.email}</p>
+                <p className="text-xs text-gray-500">{selectedOrder.userId?.phone || selectedOrder.userId?.email}</p>
               </div>
+
+              <div className="mb-6">
+                <p className="text-sm text-gray-500 mb-1">Service</p>
+                <p className="text-base font-semibold text-gray-900">{selectedOrder.serviceName || selectedOrder.serviceId?.title || '—'}</p>
+              </div>
+
+              <div className="mb-6">
+                <p className="text-sm text-gray-500 mb-1">Professional</p>
+                <p className="text-base font-semibold text-gray-900">
+                  {selectedOrder.vendorId ? (selectedOrder.vendorId.businessName || selectedOrder.vendorId.name) : 'Not assigned yet'}
+                </p>
+                {selectedOrder.vendorId?.phone && <p className="text-xs text-gray-500">{selectedOrder.vendorId.phone}</p>}
+              </div>
+
+              {isEnded(selectedOrder.status) && (
+                <div className="mb-6 flex items-start gap-2 rounded-lg border border-red-100 bg-red-50 p-3">
+                  <FiXCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-500" />
+                  <div>
+                    <p className="text-sm font-semibold text-red-700 capitalize">{selectedOrder.status}</p>
+                    {selectedOrder.cancellationReason && <p className="text-xs text-red-600">{selectedOrder.cancellationReason}</p>}
+                  </div>
+                </div>
+              )}
 
               {/* Timeline */}
               <div className="flex-1 relative pl-4 border-l-2 border-gray-100 space-y-8 mb-8">
                 {steps.map((step, index) => {
                   const currentStepIdx = getStatusStep(selectedOrder.status);
-                  const isCompleted = index <= currentStepIdx;
-                  const isCurrent = index === currentStepIdx;
+                  // A cancelled booking did not reach the later steps, so only the first one is shown as done
+                  const isCompleted = isEnded(selectedOrder.status) ? index === 0 : index <= currentStepIdx;
 
                   return (
                     <div key={index} className="relative pl-6">

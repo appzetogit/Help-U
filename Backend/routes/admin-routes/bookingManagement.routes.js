@@ -4,6 +4,8 @@ const { body } = require('express-validator');
 const { authenticate } = require('../../middleware/authMiddleware');
 const { isAdmin, requirePermission } = require('../../middleware/roleMiddleware');
 const {
+  getBookingNotifications,
+  markBookingNotificationsRead,
   getUnassignedBookings,
   getAssignableWorkers,
   assignBooking,
@@ -27,6 +29,8 @@ router.use('/bookings', authenticate, isAdmin, requirePermission('bookings'));
 router.get('/bookings', getAllBookings);
 router.get('/bookings/analytics', getBookingAnalytics);
 router.get('/bookings/unassigned', getUnassignedBookings);
+router.get('/bookings/notifications', getBookingNotifications);
+router.post('/bookings/notifications/read', markBookingNotificationsRead);
 router.get('/bookings/:id', getBookingById);
 router.get('/bookings/:id/assignable-workers', getAssignableWorkers);
 router.post('/bookings/:id/assign', assignBooking);

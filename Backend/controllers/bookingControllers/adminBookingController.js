@@ -4,7 +4,19 @@ const { BOOKING_STATUS, PAYMENT_STATUS, ADMIN_CANCELLABLE_STATUSES } = require('
 const { claimCancellation, rollbackCancellation, explainRefusal } = require('../../services/bookingCancellation');
 const escapeRegex = require('../../utils/escapeRegex');
 const adminAssignment = require('../../services/adminAssignmentService');
+const { STATUS_GROUPS, statusCondition, buildBookingSearch, endOfDay } = require('../../utils/bookingFilters');
+const bookingFeed = require('../../services/bookingNotificationFeed');
 const { OPEN_STATUSES } = adminAssignment;
+
+/**
+ * What an admin may do with a booking right now, decided here so the pages never copy the rules.
+ */
+const adminActionsFor = (booking) => ({
+  canCancel: ADMIN_CANCELLABLE_STATUSES.includes(booking.status),
+  canAssign: !booking.vendorId && OPEN_STATUSES.includes(booking.status)
+});
+
+const withActions = (doc) => ({ ...(doc.toObject ? doc.toObject() : doc), adminActions: adminActionsFor(doc) });
 
 /**
  * Get all bookings with filters and search
@@ -27,7 +39,8 @@ const getAllBookings = async (req, res) => {
     // Build query
     const query = {};
 
-    if (status) query.status = new RegExp(`^${escapeRegex(status)}$`, 'i');
+    // A status group ("in_progress" covers on the way, arrived, working and work done) or one exact status
+    if (status) query.status = statusCondition(status);
     if (paymentStatus) query.paymentStatus = new RegExp(`^${escapeRegex(paymentStatus)}$`, 'i');
     if (userId) query.userId = userId;
     if (vendorId) query.vendorId = vendorId;
@@ -38,20 +51,19 @@ const getAllBookings = async (req, res) => {
       query.status = { $in: OPEN_STATUSES };
     }
 
+    // The date range is on the day of the service; the end date includes that whole day
     if (startDate || endDate) {
       query.scheduledDate = {};
       if (startDate) query.scheduledDate.$gte = new Date(startDate);
-      if (endDate) query.scheduledDate.$lte = new Date(endDate);
+      if (endDate) {
+        const end = endOfDay(endDate);
+        if (end) query.scheduledDate.$lte = end;
+      }
     }
 
-    // Search by booking number or service name
-    if (search) {
-      const safeSearch = escapeRegex(search);
-      query.$or = [
-        { bookingNumber: { $regex: safeSearch, $options: 'i' } },
-        { serviceName: { $regex: safeSearch, $options: 'i' } }
-      ];
-    }
+    // One search box for the booking number or id, service, address, customer and professional
+    const searchClauses = await buildBookingSearch(search);
+    if (searchClauses) query.$or = searchClauses;
 
     // Pagination
     const skip = (parseInt(page) - 1) * parseInt(limit);
@@ -70,9 +82,19 @@ const getAllBookings = async (req, res) => {
     // Get total count
     const total = await Booking.countDocuments(query);
 
+    // Bookings per status group under the same search and dates (but not the status filter), for the cards
+    const { status: _statusFilter, ...withoutStatus } = query;
+    const groupNames = Object.keys(STATUS_GROUPS);
+    const groupCounts = await Promise.all(
+      groupNames.map((name) => Booking.countDocuments({ ...withoutStatus, status: { $in: STATUS_GROUPS[name] } }))
+    );
+    const statusCounts = Object.fromEntries(groupNames.map((name, i) => [name, groupCounts[i]]));
+    statusCounts.total = await Booking.countDocuments(withoutStatus);
+
     res.status(200).json({
       success: true,
-      data: bookings,
+      data: bookings.map(withActions),
+      statusCounts,
       pagination: {
         page: parseInt(page),
         limit: parseInt(limit),
@@ -96,6 +118,10 @@ const getBookingById = async (req, res) => {
   try {
     const { id } = req.params;
 
+    if (!/^[0-9a-fA-F]{24}$/.test(String(id))) {
+      return res.status(404).json({ success: false, message: 'Booking not found' });
+    }
+
     const booking = await Booking.findById(id)
       .populate('userId', 'name phone email addresses')
       .populate('vendorId', 'name businessName phone email address')
@@ -111,7 +137,7 @@ const getBookingById = async (req, res) => {
 
     res.status(200).json({
       success: true,
-      data: booking
+      data: withActions(booking)
     });
   } catch (error) {
     console.error('Get booking error:', error);
@@ -457,7 +483,41 @@ const getBookingAnalytics = async (req, res) => {
   }
 };
 
+/**
+ * The booking notification feed (new bookings, cancellations, completions, payments, refunds, and bookings that
+ * need a professional), newest first.
+ * GET /api/admin/bookings/notifications?type=&before=&limit=
+ */
+const getBookingNotifications = async (req, res) => {
+  try {
+    const adminId = req.user?.id || req.user?._id;
+    const [feed, unreadCount] = await Promise.all([
+      bookingFeed.getFeed({ adminId, type: req.query.type, before: req.query.before, limit: req.query.limit }),
+      bookingFeed.countUnread(adminId)
+    ]);
+    res.status(200).json({ success: true, data: feed.items, hasMore: feed.hasMore, nextBefore: feed.nextBefore, unreadCount });
+  } catch (error) {
+    console.error('Booking notifications error:', error);
+    res.status(500).json({ success: false, message: 'Failed to load booking notifications' });
+  }
+};
+
+/**
+ * POST /api/admin/bookings/notifications/read — everything up to now counts as seen by this admin
+ */
+const markBookingNotificationsRead = async (req, res) => {
+  try {
+    const readAt = await bookingFeed.markAllRead(req.user?.id || req.user?._id);
+    res.status(200).json({ success: true, readAt, unreadCount: 0 });
+  } catch (error) {
+    console.error('Mark booking notifications read error:', error);
+    res.status(500).json({ success: false, message: 'Failed to update booking notifications' });
+  }
+};
+
 module.exports = {
+  getBookingNotifications,
+  markBookingNotificationsRead,
   getUnassignedBookings,
   getAssignableWorkers,
   assignBooking,
