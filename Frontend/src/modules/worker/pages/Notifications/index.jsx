@@ -155,6 +155,89 @@ const Notifications = () => {
     return '#6B7280'; // Gray
   };
 
+  const getWorkerNotificationNavigation = (notif) => {
+    const type = (notif.type || '').toLowerCase();
+    const relatedType = (notif.relatedType || notif.data?.relatedType || '').toLowerCase();
+    const bookingId = notif.relatedId || notif.data?.relatedId || notif.bookingId || notif.data?.bookingId || notif.data?.booking?._id;
+    const disputeId = notif.relatedId || notif.data?.disputeId || notif.data?.relatedId;
+
+    if (type === 'booking_request') {
+      return {
+        path: bookingId ? `/worker/booking/${bookingId}` : '/worker/booking-alerts',
+        label: 'View Alert'
+      };
+    }
+
+    if (
+      relatedType === 'booking' ||
+      notif.action === 'view_booking' ||
+      ['booking_', 'job_', 'work_', 'visit_', 'journey_', 'vendor_', 'advance_payment_requested', 'customer_added_services'].some(p => type.includes(p))
+    ) {
+      return {
+        path: bookingId ? `/worker/booking/${bookingId}` : '/worker/jobs',
+        label: 'View Job'
+      };
+    }
+
+    if (
+      relatedType === 'payment' ||
+      relatedType === 'withdrawal' ||
+      notif.action === 'view_wallet' ||
+      ['payment_', 'payout_', 'wallet_', 'refund_', 'vendor_withdrawal', 'vendor_settlement', 'vendor_cash_limit'].some(p => type.includes(p))
+    ) {
+      if (type.includes('settlement')) {
+        return {
+          path: '/worker/wallet/settlements',
+          label: 'View Settlements'
+        };
+      }
+      return {
+        path: '/worker/wallet',
+        label: 'View Wallet'
+      };
+    }
+
+    if (relatedType === 'scrap' || type.startsWith('scrap_')) {
+      return {
+        path: '/worker/scrap-pickups',
+        label: 'View Scrap Pickups'
+      };
+    }
+
+    if (relatedType === 'dispute' || type.startsWith('dispute_')) {
+      return {
+        path: disputeId ? `/worker/disputes/${disputeId}` : '/worker/disputes',
+        label: 'View Dispute'
+      };
+    }
+
+    if (type === 'review_submitted' || type.includes('rating')) {
+      return {
+        path: '/worker/my-ratings',
+        label: 'View Ratings'
+      };
+    }
+
+    if (bookingId) {
+      return {
+        path: `/worker/booking/${bookingId}`,
+        label: 'View Details'
+      };
+    }
+
+    return null;
+  };
+
+  const handleNotificationClick = (notif) => {
+    if (!notif.read) {
+      handleMarkAsRead(notif.id);
+    }
+    const nav = getWorkerNotificationNavigation(notif);
+    if (nav?.path) {
+      navigate(nav.path);
+    }
+  };
+
   return (
     <div className="min-h-screen pb-20" style={{ background: themeColors.backgroundGradient }}>
       <Header title="Notifications" />
@@ -223,78 +306,76 @@ const Notifications = () => {
           </div>
         ) : (
           <div className="space-y-3">
-            {filteredNotifications.map((notif) => (
-              <div
-                key={notif.id}
-                className={`bg-white rounded-xl p-4 shadow-md transition-all relative group ${!notif.read ? 'border-l-4' : ''
+            {filteredNotifications.map((notif) => {
+              const nav = getWorkerNotificationNavigation(notif);
+              return (
+                <div
+                  key={notif.id}
+                  onClick={() => handleNotificationClick(notif)}
+                  className={`bg-white rounded-xl p-4 shadow-md transition-all relative group cursor-pointer hover:bg-slate-50/80 active:scale-[0.99] ${
+                    !notif.read ? 'border-l-4' : ''
                   }`}
-                style={{
-                  boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)',
-                  borderLeftColor: !notif.read ? getNotificationColor(notif.type) : 'transparent',
-                }}
-              >
-                <div className="flex items-start gap-3">
-                  <div
-                    className="w-10 h-10 rounded-full flex items-center justify-center text-xl flex-shrink-0"
-                    style={{ backgroundColor: `${getNotificationColor(notif.type)}15` }}
-                  >
-                    {getNotificationIcon(notif.type)}
-                  </div>
-                  <div className="flex-1 pr-6">
-                    <div className="flex items-start justify-between mb-1">
-                      <div>
-                        <p className={`font-semibold text-gray-800 ${!notif.read ? 'font-bold' : ''}`}>{notif.title}</p>
-                        <p className="text-sm text-gray-600 mt-1 leading-snug">{notif.message}</p>
+                  style={{
+                    boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)',
+                    borderLeftColor: !notif.read ? getNotificationColor(notif.type) : 'transparent',
+                  }}
+                >
+                  <div className="flex items-start gap-3">
+                    <div
+                      className="w-10 h-10 rounded-full flex items-center justify-center text-xl flex-shrink-0"
+                      style={{ backgroundColor: `${getNotificationColor(notif.type)}15` }}
+                    >
+                      {getNotificationIcon(notif.type)}
+                    </div>
+                    <div className="flex-1 pr-6">
+                      <div className="flex items-start justify-between mb-1">
+                        <div>
+                          <p className={`font-semibold text-gray-800 ${!notif.read ? 'font-bold' : ''}`}>{notif.title}</p>
+                          <p className="text-sm text-gray-600 mt-1 leading-snug">{notif.message}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-between gap-3 mt-2">
+                        <p className="text-xs text-gray-500">{notif.time || (notif.createdAt && new Date(notif.createdAt).toLocaleString())}</p>
+
+                        {/* Navigation link based on type/related entity */}
+                        {nav && (
+                          <span
+                            className="text-sm font-bold flex items-center gap-1 shrink-0 hover:underline"
+                            style={{ color: themeColors.button }}
+                          >
+                            {nav.label}
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+                          </span>
+                        )}
                       </div>
                     </div>
-                    <p className="text-xs text-gray-500 mt-2">{notif.time || (notif.createdAt && new Date(notif.createdAt).toLocaleString())}</p>
+                  </div>
 
-                    {/* Action button based on type/related entity */}
-                    {(notif.action || notif.relatedType === 'booking' || notif.type === 'payout_requested') && (
+                  {/* Actions: Mark Read & Delete - Positioned absolute top-right */}
+                  <div className="absolute top-3 right-3 flex gap-2" onClick={(e) => e.stopPropagation()}>
+                    {!notif.read && (
                       <button
-                        onClick={() => {
-                          if (notif.relatedType === 'booking' && notif.relatedId) {
-                            navigate(`/worker/booking/${notif.relatedId}`);
-                          } else if (notif.action === 'view_booking' && notif.bookingId) {
-                            navigate(`/worker/booking/${notif.bookingId}`);
-                          } else if (notif.action === 'view_wallet') {
-                            navigate('/worker/wallet');
-                          }
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleMarkAsRead(notif.id);
                         }}
-                        className="mt-3 text-sm font-bold flex items-center gap-1"
-                        style={{ color: themeColors.button }}
+                        className="p-1.5 rounded-full bg-gray-50 hover:bg-gray-100 text-green-600 transition-colors shadow-sm"
+                        title="Mark as read"
                       >
-                        View Details
-                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+                        <FiCheck className="w-3.5 h-3.5" />
                       </button>
                     )}
+                    <button
+                      onClick={(e) => handleDelete(e, notif.id)}
+                      className="p-1.5 rounded-full bg-gray-50 hover:bg-red-50 text-gray-400 hover:text-red-500 transition-colors shadow-sm"
+                      title="Delete"
+                    >
+                      <FiX className="w-3.5 h-3.5" />
+                    </button>
                   </div>
                 </div>
-
-                {/* Actions: Mark Read & Delete - Positioned absolute top-right */}
-                <div className="absolute top-3 right-3 flex gap-2">
-                  {!notif.read && (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleMarkAsRead(notif.id);
-                      }}
-                      className="p-1.5 rounded-full bg-gray-50 hover:bg-gray-100 text-green-600 transition-colors shadow-sm"
-                      title="Mark as read"
-                    >
-                      <FiCheck className="w-3.5 h-3.5" />
-                    </button>
-                  )}
-                  <button
-                    onClick={(e) => handleDelete(e, notif.id)}
-                    className="p-1.5 rounded-full bg-gray-50 hover:bg-red-50 text-gray-400 hover:text-red-500 transition-colors shadow-sm"
-                    title="Delete"
-                  >
-                    <FiX className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </main>

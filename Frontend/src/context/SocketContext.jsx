@@ -219,16 +219,71 @@ export const SocketProvider = ({ children }) => {
           data={data}
           onClick={() => {
             toast.dismiss(t.id);
-            // Optional: navigate based on relatedId
-            if (data.relatedType === 'dispute' && data.relatedId && userType !== 'admin') {
-              navigate(`/${userType}/disputes/${data.relatedId}`);
-            } else if (data.relatedType === 'recurring' && userType === 'user') {
-              navigate('/user/recurring-bookings');
-            } else if (data.relatedId) {
-              const chatSuffix = data.type === 'chat_message' ? '?chat=1' : '';
-              if (userType === 'worker') navigate(`/worker/booking/${data.relatedId}${chatSuffix}`);
-              else navigate(`/user/booking/${data.relatedId}${chatSuffix}`);
+            const notifType = (data?.type || '').toLowerCase();
+            const relType = (data?.relatedType || data?.data?.relatedType || '').toLowerCase();
+            const bookingId = data?.relatedId || data?.bookingId || data?.data?.bookingId || data?.data?.relatedId || data?.data?._id || data?.data?.booking?._id;
+            const disputeId = data?.relatedId || data?.data?.disputeId || data?.data?.relatedId;
+            const chatSuffix = notifType === 'chat_message' ? '?chat=1' : '';
+
+            // 1. Worker new booking alert
+            if (userType === 'worker' && notifType === 'booking_request') {
+              navigate(bookingId ? `/worker/booking/${bookingId}` : '/worker/booking-alerts');
+              return;
             }
+
+            // 2. Dispute notifications
+            if (relType === 'dispute' || notifType.startsWith('dispute_')) {
+              if (userType !== 'admin') {
+                navigate(`/${userType}/disputes${disputeId ? `/${disputeId}` : ''}`);
+              }
+              return;
+            }
+
+            // 3. Recurring bookings
+            if (relType === 'recurring' || notifType.startsWith('recurring_')) {
+              if (userType === 'user') navigate('/user/recurring-bookings');
+              return;
+            }
+
+            // 4. Scrap notifications
+            if (relType === 'scrap' || notifType.startsWith('scrap_')) {
+              if (userType === 'worker') navigate('/worker/scrap-pickups');
+              else if (userType === 'user') navigate('/user/scrap');
+              return;
+            }
+
+            // 5. Payment & Wallet notifications
+            if (
+              relType === 'payment' ||
+              relType === 'wallet' ||
+              ['payment_', 'wallet_', 'payout_', 'refund_', 'vendor_settlement', 'vendor_cash_limit', 'vendor_withdrawal'].some(p => notifType.includes(p))
+            ) {
+              if (userType === 'worker') {
+                navigate(notifType.includes('settlement') ? '/worker/wallet/settlements' : '/worker/wallet');
+              } else if (userType === 'user') {
+                navigate('/user/wallet');
+              }
+              return;
+            }
+
+            // 6. Ratings & Reviews
+            if (notifType === 'review_submitted' || notifType.includes('rating')) {
+              if (userType === 'worker') navigate('/worker/my-ratings');
+              else if (userType === 'user') navigate('/user/my-rating');
+              return;
+            }
+
+            // 7. Booking / Job details
+            if (bookingId) {
+              if (userType === 'worker') navigate(`/worker/booking/${bookingId}${chatSuffix}`);
+              else if (userType === 'user') navigate(`/user/booking/${bookingId}${chatSuffix}`);
+              return;
+            }
+
+            // 8. Fallback to notification center for each portal
+            if (userType === 'worker') navigate('/worker/notifications');
+            else if (userType === 'user') navigate('/user/notifications');
+            else if (userType === 'admin') navigate('/admin/notifications');
           }}
         />
       ), {

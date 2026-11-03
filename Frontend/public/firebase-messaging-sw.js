@@ -217,44 +217,80 @@ self.addEventListener('notificationclick', (event) => {
   // Close the notification
   notification.close();
 
-  let urlToOpen = data.url || data.link || '/';
+  const bookingId = data.bookingId || data.relatedId || (data.data && (data.data.bookingId || data.data.relatedId));
+  const disputeId = data.disputeId || data.relatedId || (data.data && (data.data.disputeId || data.data.relatedId));
+  const notifType = (data.notificationType || data.type || (data.data && data.data.type) || '').toLowerCase();
+  const relType = (data.relatedType || (data.data && data.data.relatedType) || '').toLowerCase();
+  const isWorkerTarget = (
+    data.userType === 'worker' ||
+    data.recipientType === 'worker' ||
+    notifType.includes('vendor') ||
+    notifType === 'booking_request' ||
+    notifType === 'job_assigned' ||
+    (data.url && data.url.includes('/worker')) ||
+    (data.link && data.link.includes('/worker'))
+  );
 
-  // Handle different actions
-  switch (action) {
-    case 'accept':
-      // Accept booking/job - navigate to details page
-      if (data.bookingId) {
-        if (data.notificationType === 'job_assigned') {
-          urlToOpen = `/worker/job/${data.bookingId}`;
-        } else {
-          urlToOpen = `/worker/bookings/${data.bookingId}`;
-        }
+  // If action is reject or decline, just dismiss
+  if (action === 'reject' || action === 'decline') {
+    return;
+  }
+
+  let urlToOpen = (data.url && data.url !== '/') ? data.url : ((data.link && data.link !== '/') ? data.link : null);
+
+  if (!urlToOpen) {
+    if (action === 'rate' && bookingId) {
+      urlToOpen = `/user/booking/${bookingId}?rate=true`;
+    } else if (isWorkerTarget) {
+      if (notifType === 'booking_request') {
+        urlToOpen = bookingId ? `/worker/booking/${bookingId}` : '/worker/booking-alerts';
+      } else if (
+        relType === 'booking' ||
+        ['booking_', 'job_', 'work_', 'visit_', 'journey_', 'vendor_'].some(p => notifType.includes(p)) ||
+        bookingId
+      ) {
+        urlToOpen = bookingId ? `/worker/booking/${bookingId}` : '/worker/jobs';
+      } else if (
+        relType === 'payment' ||
+        relType === 'withdrawal' ||
+        ['payment_', 'wallet_', 'payout_', 'refund_', 'settlement', 'cash_limit'].some(p => notifType.includes(p))
+      ) {
+        urlToOpen = notifType.includes('settlement') ? '/worker/wallet/settlements' : '/worker/wallet';
+      } else if (relType === 'scrap' || notifType.startsWith('scrap_')) {
+        urlToOpen = '/worker/scrap-pickups';
+      } else if (relType === 'dispute' || notifType.startsWith('dispute_')) {
+        urlToOpen = disputeId ? `/worker/disputes/${disputeId}` : '/worker/disputes';
+      } else if (notifType === 'review_submitted' || notifType.includes('rating')) {
+        urlToOpen = '/worker/my-ratings';
+      } else {
+        urlToOpen = '/worker/notifications';
       }
-      break;
-
-    case 'reject':
-    case 'decline':
-      // User rejected - just close notification
-      return;
-
-    case 'view':
-    case 'track':
-      // View details
-      if (data.bookingId) {
-        urlToOpen = data.link || `/user/booking/${data.bookingId}`;
+    } else {
+      // User target
+      if (
+        relType === 'booking' ||
+        ['booking_', 'job_', 'work_', 'visit_', 'journey_', 'vendor_'].some(p => notifType.includes(p)) ||
+        bookingId
+      ) {
+        urlToOpen = bookingId ? `/user/booking/${bookingId}` : '/user/my-bookings';
+      } else if (
+        relType === 'payment' ||
+        relType === 'wallet' ||
+        ['payment_', 'wallet_', 'refund_'].some(p => notifType.includes(p))
+      ) {
+        urlToOpen = '/user/wallet';
+      } else if (relType === 'scrap' || notifType.startsWith('scrap_')) {
+        urlToOpen = '/user/scrap';
+      } else if (relType === 'dispute' || notifType.startsWith('dispute_')) {
+        urlToOpen = disputeId ? `/user/disputes/${disputeId}` : '/user/disputes';
+      } else if (relType === 'recurring' || notifType.startsWith('recurring_')) {
+        urlToOpen = '/user/recurring-bookings';
+      } else if (notifType === 'review_submitted') {
+        urlToOpen = '/user/my-rating';
+      } else {
+        urlToOpen = '/user/notifications';
       }
-      break;
-
-    case 'rate':
-      // Navigate to rating page
-      if (data.bookingId) {
-        urlToOpen = `/user/booking/${data.bookingId}?rate=true`;
-      }
-      break;
-
-    default:
-      // Default click - open the link
-      urlToOpen = data.link || data.url || '/';
+    }
   }
 
   // Ensure URL is absolute

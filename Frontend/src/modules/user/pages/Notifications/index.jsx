@@ -157,6 +157,77 @@ const Notifications = () => {
     return '#6B7280'; // Gray
   };
 
+  const getNotificationNavigation = (notif) => {
+    const type = (notif.type || '').toLowerCase();
+    const relatedType = (notif.relatedType || notif.data?.relatedType || '').toLowerCase();
+    const bookingId = notif.relatedId || notif.data?.relatedId || notif.bookingId || notif.data?.bookingId || notif.data?.booking?._id;
+    const disputeId = notif.relatedId || notif.data?.disputeId || notif.data?.relatedId;
+
+    if (
+      relatedType === 'booking' ||
+      ['booking_', 'job_', 'work_', 'visit_', 'journey_', 'vendor_', 'customer_added_services', 'advance_payment_requested'].some(p => type.includes(p))
+    ) {
+      return {
+        path: bookingId ? `/user/booking/${bookingId}` : '/user/my-bookings',
+        label: 'View booking'
+      };
+    }
+
+    if (relatedType === 'payment' || relatedType === 'wallet' || ['payment_', 'refund_', 'wallet_'].some(p => type.includes(p))) {
+      return {
+        path: '/user/wallet',
+        label: 'View wallet'
+      };
+    }
+
+    if (relatedType === 'scrap' || type.startsWith('scrap_')) {
+      return {
+        path: '/user/scrap',
+        label: 'View scrap'
+      };
+    }
+
+    if (relatedType === 'dispute' || type.startsWith('dispute_')) {
+      return {
+        path: disputeId ? `/user/disputes/${disputeId}` : '/user/disputes',
+        label: 'View dispute'
+      };
+    }
+
+    if (relatedType === 'recurring' || type.startsWith('recurring_')) {
+      return {
+        path: '/user/recurring-bookings',
+        label: 'View recurring'
+      };
+    }
+
+    if (type === 'review_submitted') {
+      return {
+        path: '/user/my-rating',
+        label: 'View review'
+      };
+    }
+
+    if (bookingId) {
+      return {
+        path: `/user/booking/${bookingId}`,
+        label: 'View details'
+      };
+    }
+
+    return null;
+  };
+
+  const handleNotificationClick = (notif) => {
+    if (!notif.read) {
+      handleMarkAsRead(notif.id);
+    }
+    const nav = getNotificationNavigation(notif);
+    if (nav?.path) {
+      navigate(nav.path);
+    }
+  };
+
   return (
     <div className="min-h-screen pb-2" style={{ background: themeColors.backgroundGradient || '#f9fafb' }}>
       {/* Header */}
@@ -258,64 +329,71 @@ const Notifications = () => {
           </div>
         ) : (
           <div className="space-y-2">
-            {filteredNotifications.map((notif) => (
-              <div
-                key={notif.id}
-                className={`bg-white rounded-xl px-3 py-2.5 shadow-md transition-all relative group ${!notif.read ? 'border-l-4' : ''
+            {filteredNotifications.map((notif) => {
+              const nav = getNotificationNavigation(notif);
+              return (
+                <div
+                  key={notif.id}
+                  onClick={() => handleNotificationClick(notif)}
+                  className={`bg-white rounded-xl px-3 py-2.5 shadow-md transition-all relative group cursor-pointer hover:bg-slate-50/80 active:scale-[0.99] ${
+                    !notif.read ? 'border-l-4' : ''
                   }`}
-                style={{
-                  boxShadow: '0 2px 8px rgba(0, 0, 0, 0.07)',
-                  borderLeftColor: !notif.read ? getNotificationColor(notif.type) : 'transparent',
-                }}
-              >
-                <div className="flex items-start gap-2.5">
-                  <div
-                    className="w-8 h-8 rounded-full flex items-center justify-center text-base flex-shrink-0"
-                    style={{ backgroundColor: `${getNotificationColor(notif.type)}15` }}
-                  >
-                    {getNotificationIcon(notif.type)}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    {/* Only the title row reserves room for the action buttons; the message uses the full width */}
-                    <p className={`text-[14px] leading-tight font-semibold text-gray-800 ${notif.read ? 'pr-6' : 'pr-14'} ${!notif.read ? 'font-bold' : ''}`}>{notif.title}</p>
-                    <p className="text-[13px] text-gray-600 mt-0.5 leading-snug">{notif.message}</p>
-                    <div className="flex items-center justify-between gap-3 mt-1">
-                      <p className="text-[11px] text-gray-400 font-medium">{notif.time}</p>
-                      {notif.relatedType === 'booking' && notif.relatedId && (
-                        <button
-                          onClick={() => navigate(`/user/booking/${notif.relatedId}`)}
-                          className="text-[12px] font-bold flex items-center gap-0.5 shrink-0"
-                          style={{ color: themeColors.button }}
-                        >
-                          View booking
-                          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
-                        </button>
-                      )}
+                  style={{
+                    boxShadow: '0 2px 8px rgba(0, 0, 0, 0.07)',
+                    borderLeftColor: !notif.read ? getNotificationColor(notif.type) : 'transparent',
+                  }}
+                >
+                  <div className="flex items-start gap-2.5">
+                    <div
+                      className="w-8 h-8 rounded-full flex items-center justify-center text-base flex-shrink-0"
+                      style={{ backgroundColor: `${getNotificationColor(notif.type)}15` }}
+                    >
+                      {getNotificationIcon(notif.type)}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      {/* Only the title row reserves room for the action buttons; the message uses the full width */}
+                      <p className={`text-[14px] leading-tight font-semibold text-gray-800 ${notif.read ? 'pr-6' : 'pr-14'} ${!notif.read ? 'font-bold' : ''}`}>{notif.title}</p>
+                      <p className="text-[13px] text-gray-600 mt-0.5 leading-snug">{notif.message}</p>
+                      <div className="flex items-center justify-between gap-3 mt-1">
+                        <p className="text-[11px] text-gray-400 font-medium">{notif.time}</p>
+                        {nav && (
+                          <span
+                            className="text-[12px] font-bold flex items-center gap-0.5 shrink-0 hover:underline"
+                            style={{ color: themeColors.button }}
+                          >
+                            {nav.label}
+                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
-                </div>
 
-                {/* Actions: Mark Read & Delete */}
-                <div className="absolute top-2 right-2 flex gap-1.5">
-                  {!notif.read && (
+                  {/* Actions: Mark Read & Delete */}
+                  <div className="absolute top-2 right-2 flex gap-1.5" onClick={(e) => e.stopPropagation()}>
+                    {!notif.read && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleMarkAsRead(notif.id);
+                        }}
+                        className="p-1 rounded-full bg-gray-50 hover:bg-gray-100 text-green-600 transition-colors shadow-sm"
+                        title="Mark as read"
+                      >
+                        <FiCheck className="w-3 h-3" />
+                      </button>
+                    )}
                     <button
-                      onClick={() => handleMarkAsRead(notif.id)}
-                      className="p-1 rounded-full bg-gray-50 hover:bg-gray-100 text-green-600 transition-colors shadow-sm"
-                      title="Mark as read"
+                      onClick={(e) => handleDelete(e, notif.id)}
+                      className="p-1 rounded-full bg-gray-50 hover:bg-red-50 text-gray-400 hover:text-red-500 transition-colors shadow-sm"
+                      title="Delete"
                     >
-                      <FiCheck className="w-3 h-3" />
+                      <FiX className="w-3 h-3" />
                     </button>
-                  )}
-                  <button
-                    onClick={(e) => handleDelete(e, notif.id)}
-                    className="p-1 rounded-full bg-gray-50 hover:bg-red-50 text-gray-400 hover:text-red-500 transition-colors shadow-sm"
-                    title="Delete"
-                  >
-                    <FiX className="w-3 h-3" />
-                  </button>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </main>
