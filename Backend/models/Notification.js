@@ -67,6 +67,10 @@ const notificationSchema = new mongoose.Schema({
       'scrap_weight_disputed',
       'support_message',
       'vendor_withdrawal_request',
+      'vendor_approval_request',      // Admin: a new professional is waiting for approval
+      'vendor_settlement_request',    // Admin: a professional asked to settle cash
+      'vendor_settlement_completed',  // Professional: a settlement was completed
+      'vendor_cash_limit_exceeded',   // Professional: cash in hand passed the limit
       'vendor_referral_success',
       'vendor_referral_rewarded',
       'advance_payment_requested',

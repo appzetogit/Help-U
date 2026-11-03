@@ -160,6 +160,16 @@ async function sendPushNotification(tokens, payload) {
     message.data.body = payload.body || 'New Update';
     if (payload.icon) message.data.icon = payload.icon;
 
+    // One tag per event: if the same push is displayed twice on a device (for example once by the browser and
+    // once by our service worker), the second replaces the first instead of showing as a duplicate.
+    const tag = String(payload.data?.tag || payload.data?.notificationId
+      || `${payload.data?.type || 'general'}:${payload.data?.relatedId || payload.data?.bookingId || ''}`).slice(0, 60);
+    message.data.tag = tag;
+    message.android.notification.tag = tag;
+    message.webpush.notification.tag = tag;
+    message.webpush.notification.renotify = false;
+    message.apns.headers['apns-collapse-id'] = tag.slice(0, 64);
+
     // Log intent
     console.log(`[FCM] Sending standard notification to ${uniqueTokens.length} tokens:`, payload.title);
 

@@ -226,8 +226,10 @@ const handleWorkerCancellation = async (bookingId, workerId, reason = '') => {
   await createNotification({
     userId: booking.userId,
     type: 'booking_cancelled',
-    title: 'Booking Cancelled',
-    message: `Sorry, your professional cancelled booking ${booking.bookingNumber} and no one else is available right now. Please book again.`,
+    title: totalToRefund > 0 ? 'Booking cancelled, refund issued' : 'Booking Cancelled',
+    message: `Sorry, your professional cancelled booking ${booking.bookingNumber} and no one else is available right now.`
+      + (totalToRefund > 0 ? ` ₹${totalToRefund} has been refunded to your wallet.` : '')
+      + ' Please book again.',
     relatedId: booking._id,
     relatedType: 'booking',
     pushData: {

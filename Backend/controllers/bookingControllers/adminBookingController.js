@@ -233,8 +233,9 @@ const cancelBooking = async (req, res) => {
       await createNotification({
         userId: booking.userId,
         type: 'booking_cancelled',
-        title: 'Booking Cancelled by Admin',
-        message: `Your booking ${booking.bookingNumber} was cancelled by support. Reason: ${cancellationReason || 'Administrative cancellation'}.`,
+        title: refundedNow > 0 ? 'Booking cancelled, refund issued' : 'Booking Cancelled by Admin',
+        message: `Your booking ${booking.bookingNumber} was cancelled by support. Reason: ${cancellationReason || 'Administrative cancellation'}.`
+          + (refundedNow > 0 ? ` ₹${refundedNow} has been refunded to your wallet.` : ''),
         relatedId: booking._id,
         relatedType: 'booking'
       }).catch(() => null);

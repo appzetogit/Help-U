@@ -982,6 +982,19 @@ const processRefund = async (req, res) => {
 
     await booking.save();
 
+    // The customer should hear about their money: wallet or original payment method
+    await createNotification({
+      userId: booking.userId,
+      type: 'payment_refunded',
+      title: 'Refund processed',
+      message: booking.paymentMethod === 'wallet' || !booking.razorpayPaymentId
+        ? `₹${refundAmount} has been refunded to your wallet for booking ${booking.bookingNumber}.`
+        : `₹${refundAmount} is being refunded to your original payment method for booking ${booking.bookingNumber}.`,
+      relatedId: booking._id,
+      relatedType: 'booking',
+      pushData: { type: 'payment_refunded', bookingId: booking._id.toString(), link: `/user/booking/${booking._id}` }
+    }).catch((err) => console.error('[Refund] Notification failed:', err.message));
+
     res.status(200).json({
       success: true,
       message: 'Refund processed successfully',

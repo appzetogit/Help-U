@@ -357,6 +357,23 @@ class BookingScheduler {
       await CouponRedemption.deleteOne({ bookingId: booking._id }).catch(() => null);
     }
 
+    // Tell the customer: this cancels their booking (and may refund them), so it must reach their phone too
+    await createNotification({
+      userId: booking.userId,
+      type: 'booking_cancelled',
+      title: totalToRefund > 0 ? 'Booking cancelled, refund issued' : 'Booking cancelled',
+      message: `No professional was available for booking ${booking.bookingNumber}, so it was cancelled.`
+        + (totalToRefund > 0 ? ` ₹${totalToRefund} has been refunded to your wallet.` : '')
+        + ' Please try booking again.',
+      relatedId: booking._id,
+      relatedType: 'booking',
+      pushData: {
+        type: 'booking_cancelled',
+        bookingId: booking._id.toString(),
+        link: `/user/booking/${booking._id}`
+      }
+    }).catch((err) => console.error('[BookingScheduler] Cancellation notification failed:', err.message));
+
     if (this.io) {
       this.io.to(`user_${booking.userId}`).emit('booking_search_failed', {
         bookingId: booking._id,

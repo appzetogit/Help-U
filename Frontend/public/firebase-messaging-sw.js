@@ -68,7 +68,8 @@ messaging.onBackgroundMessage((payload) => {
 
   let icon = data.icon || notification.icon || '/helpu-logo.png';
   let badge = '/helpu-logo.png';
-  let tag = data.bookingId || `notification-${Date.now()}`;
+  // Same tag as the one the server put on the push, so a second copy of one event replaces the first
+  let tag = data.tag || data.notificationId || data.bookingId || `notification-${Date.now()}`;
   let requireInteraction = false;
   let vibrate = [200, 100, 200];
   let actions = [];
@@ -179,7 +180,7 @@ messaging.onBackgroundMessage((payload) => {
     // Sound will be played by the system for high priority
     silent: false,
     // Renotify even if same tag exists
-    renotify: true,
+    renotify: !data.tag, // a repeat of the same event replaces the first quietly
     // Timestamp
     timestamp: Date.now()
   };
