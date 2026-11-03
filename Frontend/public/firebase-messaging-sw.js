@@ -185,15 +185,16 @@ messaging.onBackgroundMessage((payload) => {
     timestamp: Date.now()
   };
 
-  // Show the notification ONLY if app is not in foreground (to avoid duplicate with in-app socket toast)
+  // Show the notification if app is not in foreground, or if it is an urgent job alert
   return self.clients.matchAll({ type: 'window', includeUncontrolled: true })
     .then(function (clientList) {
       const isVisible = clientList.some(function (client) {
         return client.visibilityState === 'visible';
       });
 
-      if (isVisible) {
-        console.log('[SW] 🚫 App is visible, skipping system notification to avoid duplicate');
+      const isUrgent = ['new_booking', 'booking_request', 'job_assigned'].includes(notificationType);
+      if (isVisible && !isUrgent) {
+        console.log('[SW] 🚫 App is visible, skipping non-urgent notification to avoid duplicate');
         return;
       }
 

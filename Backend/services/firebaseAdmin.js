@@ -129,9 +129,16 @@ async function sendPushNotification(tokens, payload) {
     message.android.notification = {
       title: message.notification.title,
       body: message.notification.body,
-      icon: 'stock_ticker_update',
-      color: '#f44336'
+      channelId: payload.channelId || 'helpu_notifications',
+      sound: 'default',
+      defaultSound: true,
+      defaultVibrateTimings: true,
+      priority: payload.highPriority !== false ? 'high' : 'default',
+      color: '#163B66'
     };
+    if (payload.icon && payload.icon !== 'stock_ticker_update') {
+      message.android.notification.icon = payload.icon;
+    }
 
     // iOS/APNs specific (Sound, Alert, Badge)
     message.apns.payload.aps.alert = {
@@ -186,7 +193,9 @@ async function sendPushNotification(tokens, payload) {
           console.log(`❌ Failed token[${idx}]: ${errorCode} - ${resp.error?.message}`);
 
           if (errorCode === 'messaging/registration-token-not-registered' ||
-            errorCode === 'messaging/invalid-registration-token') {
+            errorCode === 'messaging/invalid-registration-token' ||
+            errorCode === 'messaging/mismatched-credential' ||
+            errorCode === 'messaging/invalid-argument') {
             invalidTokens.push(uniqueTokens[idx]);
           }
         }
@@ -310,8 +319,14 @@ async function sendNotificationToWorker(vendorId, payload, includeMobile = true)
 
     console.log(`[FCM] 📤 Sending notification to worker ${worker.businessName || worker.name} (${vendorId}) on ${tokens.length} devices`);
 
+    const isHighPriority = payload.priority === 'high' ||
+      ['new_booking', 'booking_request', 'job_assigned', 'booking_accepted', 'booking_cancelled', 'work_started', 'payment_received'].includes(payload.data?.type);
+
     const finalPayload = {
       ...payload,
+      highPriority: isHighPriority,
+      channelId: 'helpu_partner_notifications',
+      dataOnly: false,
       title: `🏢 [Partner] ${payload.title}` // Add identification
     };
 

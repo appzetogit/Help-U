@@ -58,18 +58,27 @@ async function registerServiceWorker() {
  * @returns {Promise<boolean>}
  */
 async function requestNotificationPermission() {
-  if ('Notification' in window) {
-    const permission = await Notification.requestPermission();
-    if (permission === 'granted') {
-      // console.log('✅ Notification permission granted');
-      return true;
-    } else {
-      // console.log('❌ Notification permission denied');
+  if (typeof window !== 'undefined' && 'Notification' in window) {
+    try {
+      const permission = await Notification.requestPermission();
+      return permission === 'granted';
+    } catch (error) {
+      console.warn('[FCM] Notification permission request error:', error);
       return false;
     }
   }
-  // console.log('❌ Notifications not supported');
   return false;
+}
+
+/**
+ * Get current browser notification permission state
+ * @returns {'granted' | 'denied' | 'default' | 'unsupported'}
+ */
+function getNotificationPermissionState() {
+  if (typeof window !== 'undefined' && 'Notification' in window) {
+    return Notification.permission;
+  }
+  return 'unsupported';
 }
 
 /**
@@ -112,32 +121,24 @@ async function getFCMToken() {
  */
 async function registerFCMToken(userType = 'user', forceUpdate = false) {
   try {
-    // console.log(`[FCM] Starting registration for ${userType}, forceUpdate: ${forceUpdate}`);
-
-    // Check if already registered
-    const storageKey = `fcm_token_${userType}_web`;
+    const platform = getPlatformType();
+    const storageKey = `fcm_token_${userType}_${platform}`;
     const savedToken = localStorage.getItem(storageKey);
     if (savedToken && !forceUpdate) {
-      // console.log('[FCM] Token already registered in localStorage');
       return savedToken;
     }
 
     // Request permission
-    // console.log('[FCM] Requesting notification permission...');
     const hasPermission = await requestNotificationPermission();
     if (!hasPermission) {
-      // console.log('[FCM] ❌ Notification permission not granted, skipping FCM registration');
       return null;
     }
 
     // Get token
-    // console.log('[FCM] Getting FCM token from Firebase...');
     const token = await getFCMToken();
     if (!token) {
-      // console.log('[FCM] ❌ Failed to get FCM token from Firebase');
       return null;
     }
-    // console.log('[FCM] ✅ Got FCM token:', token.substring(0, 30) + '...');
 
     // Determine API endpoint based on user type
     let endpoint;
@@ -152,7 +153,6 @@ async function registerFCMToken(userType = 'user', forceUpdate = false) {
         authTokenKey = 'accessToken';
         break;
       default:
-        // console.warn(`[FCM] Unknown userType: ${userType}, defaulting to user`);
         endpoint = '/users/fcm-tokens/save';
         authTokenKey = 'accessToken';
     }
@@ -160,13 +160,11 @@ async function registerFCMToken(userType = 'user', forceUpdate = false) {
     // Get auth token
     const authToken = localStorage.getItem(authTokenKey);
     if (!authToken) {
-      // console.log(`[FCM] ❌ No auth token found for ${userType} (${authTokenKey}), skipping registration`);
       return null;
     }
 
     // Save to backend
     const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
-    // console.log(`[FCM] Saving to backend: ${baseUrl}${endpoint}`);
 
     const response = await fetch(`${baseUrl}${endpoint}`, {
       method: 'POST',
@@ -176,23 +174,18 @@ async function registerFCMToken(userType = 'user', forceUpdate = false) {
       },
       body: JSON.stringify({
         token: token,
-        platform: 'web'
+        platform: platform
       })
     });
 
-    // console.log(`[FCM] Backend response status: ${response.status}`);
-
     if (response.ok) {
       localStorage.setItem(storageKey, token);
-      // console.log('[FCM] ✅ FCM token registered with backend successfully!');
       return token;
     } else {
       const error = await response.json();
-      // console.error('[FCM] ❌ Failed to register token with backend:', error);
       return null;
     }
   } catch (error) {
-    // console.error('[FCM] ❌ Error registering FCM token:', error);
     return null;
   }
 }
@@ -318,5 +311,6 @@ export {
   removeFCMToken,
   setupForegroundNotificationHandler,
   requestNotificationPermission,
+  getNotificationPermissionState,
   getFCMToken
 };

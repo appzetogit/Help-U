@@ -80,6 +80,14 @@ export const login = async (credentials) => {
       localStorage.setItem('workerAccessToken', response.data.accessToken);
       localStorage.setItem('workerRefreshToken', response.data.refreshToken);
       localStorage.setItem('workerData', JSON.stringify(response.data.worker));
+
+      // Notify Flutter about the login for mobile app FCM token handling
+      notifyFlutterLogin(response.data);
+
+      // Register FCM token after successful login
+      registerFCMToken('worker', true).catch(err => {
+        console.error('[WORKER AUTH] FCM token registration failed:', err);
+      });
     }
 
     return response.data;

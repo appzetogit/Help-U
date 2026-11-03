@@ -293,3 +293,134 @@ controller.addJavaScriptHandler(handlerName: 'voiceSearchCancel', callback: (arg
   await voice.cancel();
   return {'success': true};
 });
+
+// ==============================================================================
+// E. Push Notifications (FCM) & Partner Login Capture (CRITICAL FOR VENDORS)
+// ==============================================================================
+// 1. Prerequisites:
+//    - Download google-services.json from Firebase project "help-u-b4bc7"
+//      Place it at android/app/google-services.json
+//    - iOS: Download GoogleService-Info.plist from "help-u-b4bc7"
+//      Place it in ios/Runner/GoogleService-Info.plist
+//
+// 2. pubspec.yaml dependencies:
+//    dependencies:
+//      firebase_core: ^3.0.0
+//      firebase_messaging: ^15.0.0
+//      flutter_local_notifications: ^17.0.0
+//      http: ^1.2.0
+//
+// 3. AndroidManifest.xml (inside <application>):
+//    <meta-data
+//        android:name="com.google.firebase.messaging.default_notification_channel_id"
+//        android:value="helpu_partner_notifications" />
+//
+// 4. Dart Implementation:
+/*
+import 'dart:convert';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:http/http.dart' as http;
+
+final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
+
+const AndroidNotificationChannel partnerChannel = AndroidNotificationChannel(
+  'helpu_partner_notifications', // Matches backend payload channelId
+  'Help U Partner Orders',
+  description: 'Urgent booking requests and order alerts for service partners',
+  importance: Importance.max,
+  playSound: true,
+  enableVibration: true,
+);
+
+@pragma('vm:entry-point')
+Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  await Firebase.initializeApp();
+  print('🔔 Background Push Received: ${message.messageId}');
+}
+
+// Initialize FCM in main() before runApp():
+Future<void> initPushNotifications() async {
+  await Firebase.initializeApp();
+  FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+
+  // Request native permission (Android 13+ & iOS)
+  final settings = await FirebaseMessaging.instance.requestPermission(
+    alert: true,
+    badge: true,
+    sound: true,
+    criticalAlert: true,
+  );
+
+  // Create high-importance Android channel
+  await flutterLocalNotificationsPlugin
+      .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
+      ?.createNotificationChannel(partnerChannel);
+
+  // Listen for foreground push and show heads-up notification
+  FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+    RemoteNotification? notification = message.notification;
+    AndroidNotification? android = message.notification?.android;
+    if (notification != null && android != null) {
+      flutterLocalNotificationsPlugin.show(
+        notification.hashCode,
+        notification.title,
+        notification.body,
+        NotificationDetails(
+          android: AndroidNotificationDetails(
+            partnerChannel.id,
+            partnerChannel.name,
+            channelDescription: partnerChannel.description,
+            importance: Importance.max,
+            priority: Priority.high,
+            icon: '@mipmap/ic_launcher',
+          ),
+        ),
+      );
+    }
+  });
+}
+
+// Function to send native FCM token to backend
+Future<void> registerNativeFCMToken(String accessToken, {bool isWorker = true}) async {
+  try {
+    final String? fcmToken = await FirebaseMessaging.instance.getToken();
+    if (fcmToken == null) return;
+    print('📲 Registering Native Mobile FCM Token: $fcmToken');
+
+    final String endpoint = isWorker ? '/api/workers/fcm-tokens/save' : '/api/users/fcm-tokens/save';
+    final response = await http.post(
+      Uri.parse('https://your-api-domain.com$endpoint'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $accessToken',
+      },
+      body: jsonEncode({
+        'token': fcmToken,
+        'platform': 'mobile',
+      }),
+    );
+    print('✅ Mobile FCM Registration response: ${response.statusCode}');
+  } catch (e) {
+    print('❌ Mobile FCM Registration error: $e');
+  }
+}
+
+// Inside setupJavaScriptHandlers(controller):
+controller.addJavaScriptHandler(handlerName: 'captureLoginResponse', callback: (args) async {
+  if (args.isEmpty) return {'success': false};
+  try {
+    final Map<String, dynamic> data = jsonDecode(args[0]);
+    final body = data['body'];
+    final String? accessToken = body?['accessToken'];
+    if (accessToken != null && accessToken.isNotEmpty) {
+      await registerNativeFCMToken(accessToken, isWorker: true);
+      return {'success': true};
+    }
+  } catch (e) {
+    print('Error handling captureLoginResponse: $e');
+  }
+  return {'success': false};
+});
+*/

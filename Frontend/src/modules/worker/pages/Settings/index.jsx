@@ -90,12 +90,17 @@ const Settings = () => {
       if (updated.notifications) {
         // Turning ON
         try {
-          await registerFCMToken('worker', true);
-          toast.success('Notifications enabled');
+          const token = await registerFCMToken('worker', true);
+          if (token) {
+            toast.success('Notifications enabled');
+          } else if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'denied') {
+            toast.error('Notifications are blocked in browser settings. Please enable them to receive alerts.');
+          } else {
+            toast.error('Notification permission was not granted.');
+          }
         } catch (error) {
           console.error('Error enabling notifications:', error);
           toast.error('Failed to enable notifications');
-          // Revert toggle if failed? For now, we keep UI in sync with intent.
         }
       } else {
         // Turning OFF

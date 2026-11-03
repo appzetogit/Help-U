@@ -56,6 +56,33 @@ const Dashboard = memo(() => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [globalConfig, setGlobalConfig] = useState({ maxSearchTime: 5, waveDuration: 60 });
+  const [notificationPermission, setNotificationPermission] = useState(() => {
+    if (typeof window !== 'undefined' && 'Notification' in window) {
+      return Notification.permission;
+    }
+    return 'granted';
+  });
+  const [isEnablingPush, setIsEnablingPush] = useState(false);
+
+  const handleEnableNotifications = async () => {
+    setIsEnablingPush(true);
+    try {
+      const token = await registerFCMToken('worker', true);
+      if (typeof window !== 'undefined' && 'Notification' in window) {
+        setNotificationPermission(Notification.permission);
+      }
+      if (token) {
+        toast.success('Push notifications enabled!');
+      } else if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'denied') {
+        toast.error('Notifications are blocked in your browser settings.');
+      }
+    } catch (err) {
+      console.error('Failed to enable notifications:', err);
+      toast.error('Failed to enable push notifications');
+    } finally {
+      setIsEnablingPush(false);
+    }
+  };
 
   const ignoredBookingIds = useRef(new Set());
 
@@ -479,6 +506,32 @@ const Dashboard = memo(() => {
       <Header title="Dashboard" showBack={false} showLocation notificationCount={stats.pendingAlerts} />
 
       <main className="pt-0">
+        {/* Push Notification Permission Card (User-Gesture Trigger) */}
+        {notificationPermission === 'default' && (
+          <div className="px-4 pt-3 pb-1 animate-fade-in">
+            <div className="bg-amber-50 border border-amber-200/90 rounded-2xl p-3.5 flex items-center justify-between gap-3 shadow-xs">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-amber-500/15 text-amber-700 flex items-center justify-center flex-shrink-0">
+                  <FiBell className="w-5 h-5 animate-bounce" />
+                </div>
+                <div>
+                  <h4 className="text-xs font-bold text-amber-900">Enable Order Push Alerts</h4>
+                  <p className="text-[11px] text-amber-700/90 leading-tight mt-0.5">
+                    Never miss a job! Get instant sound alerts for new booking requests.
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={handleEnableNotifications}
+                disabled={isEnablingPush}
+                className="px-3 py-1.5 bg-[#163B66] text-white text-xs font-bold rounded-xl shadow-xs hover:bg-[#122e50] active:scale-95 transition-all flex-shrink-0 cursor-pointer"
+              >
+                {isEnablingPush ? 'Enabling...' : 'Enable'}
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Profile Card Section */}
         <div className="px-4 pt-4 pb-2">
           <div
