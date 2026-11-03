@@ -27,7 +27,6 @@ const AVAILABLE_PERMISSIONS = [
   { key: 'addons', label: 'Add-ons', desc: 'Extra service add-on items' },
   { key: 'reports', label: 'Reports', desc: 'GMV, AOV & advanced business analytics' },
   { key: 'reviews', label: 'Reviews', desc: 'Ratings & customer feedback' },
-  { key: 'plans', label: 'Plans', desc: 'Subscription plans & benefits' },
   { key: 'coupons', label: 'Coupons', desc: 'Discount vouchers & promo rules' },
   { key: 'settings', label: 'Settings', desc: 'System configuration & admin staff' },
   { key: 'data-export', label: 'Data Export', desc: 'Download customer & worker data (Excel/PDF); also needs Users / Workers' },

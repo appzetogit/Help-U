@@ -19,7 +19,6 @@ import { paymentService } from '../../../../services/paymentService';
 import { walletService } from '../../../../services/walletService';
 import { cartService } from '../../../../services/cartService';
 import { configService } from '../../../../services/configService';
-import { getPlans } from '../../services/planService';
 import { userAuthService } from '../../../../services/authService';
 import { useCart } from '../../../../context/CartContext';
 import { useZone } from '../../../../context/ZoneContext';
@@ -39,7 +38,6 @@ const Checkout = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const category = location.state?.category || null;
-  const plan = location.state?.plan || null;
   const { fetchCart: fetchCartGlobal, clearCart: clearCartGlobal, removeCategoryItems: removeCategoryGlobal } = useCart();
   const { zoneId, isOutOfZone, detectZone, markOutOfZone } = useZone() || {};
   const { currentCity } = useCity() || {};
@@ -51,7 +49,7 @@ const Checkout = () => {
   const [address, setAddress] = useState('');
   const [houseNumber, setHouseNumber] = useState('');
   const [addressDetails, setAddressDetails] = useState(null);
-  const [razorpayLoaded, setRazorpayLoaded] = useState(false);
+  const [, setRazorpayLoaded] = useState(false);
   const [userPhone, setUserPhone] = useState('');
 
   // Custom Contact State (for this booking only)
@@ -146,77 +144,41 @@ const Checkout = () => {
       try {
         setLoading(true);
 
-        if (plan) {
-          setCartItems([{
-            id: plan.id,
-            name: plan.name,
-            price: plan.price,
-            description: plan.description,
-            isPlan: true,
-            serviceCount: 1
-          }]);
+        const response = await userAuthService.getCheckoutData();
+        if (response.success) {
+          // Set Config
+          setVisitedFee(response.settings?.visitedCharges ?? 0);
+          setGstPercentage(response.settings?.serviceGstPercentage ?? 18);
 
-          // Still need config and address for plan checkout
-          const response = await userAuthService.getCheckoutData();
-          if (response.success) {
-            setVisitedFee(0); // Plans usually have 0 visitor fee
-            setGstPercentage(response.settings?.serviceGstPercentage ?? 18);
-
-            if (response.user?.addresses?.length > 0) {
-              const defaultAddr = response.user.addresses.find(a => a.isDefault) || response.user.addresses[0];
-              setAddress(defaultAddr.addressLine1);
-              setHouseNumber(defaultAddr.addressLine2 || '');
-              setAddressDetails({
-                address: defaultAddr.addressLine1,
-                lat: defaultAddr.lat,
-                lng: defaultAddr.lng,
-                type: defaultAddr.type,
-                city: defaultAddr.city,
-                state: defaultAddr.state,
-                pincode: defaultAddr.pincode
-              });
-              if (defaultAddr.lat && defaultAddr.lng && detectZone) {
-                detectZone(defaultAddr.lat, defaultAddr.lng);
-              }
+          // Set Addresses
+          if (response.user?.addresses?.length > 0) {
+            const defaultAddr = response.user.addresses.find(a => a.isDefault) || response.user.addresses[0];
+            setAddress(defaultAddr.addressLine1);
+            setHouseNumber(defaultAddr.addressLine2 || '');
+            setAddressDetails({
+              address: defaultAddr.addressLine1,
+              lat: defaultAddr.lat,
+              lng: defaultAddr.lng,
+              type: defaultAddr.type,
+              city: defaultAddr.city,
+              state: defaultAddr.state,
+              pincode: defaultAddr.pincode
+            });
+            if (defaultAddr.lat && defaultAddr.lng && detectZone) {
+              detectZone(defaultAddr.lat, defaultAddr.lng);
             }
           }
-        } else {
-          const response = await userAuthService.getCheckoutData();
-          if (response.success) {
-            // Set Config
-            setVisitedFee(response.settings?.visitedCharges ?? 0);
-            setGstPercentage(response.settings?.serviceGstPercentage ?? 18);
 
-            // Set Addresses
-            if (response.user?.addresses?.length > 0) {
-              const defaultAddr = response.user.addresses.find(a => a.isDefault) || response.user.addresses[0];
-              setAddress(defaultAddr.addressLine1);
-              setHouseNumber(defaultAddr.addressLine2 || '');
-              setAddressDetails({
-                address: defaultAddr.addressLine1,
-                lat: defaultAddr.lat,
-                lng: defaultAddr.lng,
-                type: defaultAddr.type,
-                city: defaultAddr.city,
-                state: defaultAddr.state,
-                pincode: defaultAddr.pincode
-              });
-              if (defaultAddr.lat && defaultAddr.lng && detectZone) {
-                detectZone(defaultAddr.lat, defaultAddr.lng);
-              }
-            }
-
-            // Set Cart Items
-            let items = response.cartItems || [];
-            if (category) {
-              const normalizedCategory = category.toLowerCase().trim();
-              items = items.filter(item => {
-                const itemCat = (item.category || 'Other').toLowerCase().trim();
-                return itemCat === normalizedCategory;
-              });
-            }
-            setCartItems(items);
+          // Set Cart Items
+          let items = response.cartItems || [];
+          if (category) {
+            const normalizedCategory = category.toLowerCase().trim();
+            items = items.filter(item => {
+              const itemCat = (item.category || 'Other').toLowerCase().trim();
+              return itemCat === normalizedCategory;
+            });
           }
+          setCartItems(items);
         }
       } catch (error) {
         console.error('Failed to load checkout data', error);
@@ -226,7 +188,7 @@ const Checkout = () => {
     };
 
     fetchData();
-  }, [category, plan]);
+  }, [category]);
 
   const loadCart = async () => {
     try {
@@ -322,7 +284,7 @@ const Checkout = () => {
   // Checkout options (add-ons, emergency) for the service in the cart
   const firstServiceId = (() => {
     const s = cartItems[0]?.serviceId;
-    if (!s || plan) return null;
+    if (!s) return null;
     return typeof s === 'object' ? (s._id || s.id) : s;
   })();
 
@@ -588,8 +550,7 @@ const Checkout = () => {
         scheduledDate: finalDate.toISOString(),
         scheduledTime: finalTimeDisplay,
         timeSlot: timeSlotObj,
-        // Plan-covered items go through the plan path even when extras are charged
-        paymentMethod: itemTotal === 0 ? 'plan_benefit' : 'pay_at_home',
+        paymentMethod: 'pay_at_home',
         amount: amountToPay,
 
         // Pass Full Breakdown to Backend
@@ -864,20 +825,7 @@ const Checkout = () => {
   };
 
   const handlePayment = async () => {
-    if (totalAmount === 0) {
-      // Free booking covered by plan
-      toast.success('Booking confirmed!');
-      // Clear cart
-      try {
-        await clearCartGlobal();
-        setCartItems([]);
-      } catch (error) { }
-
-      // Navigate
-      if (bookingRequest) {
-        navigate(`/user/booking-confirmation/${bookingRequest._id}`, { replace: true });
-      }
-    } else if (paymentMethod === 'wallet') {
+    if (paymentMethod === 'wallet') {
       await handleWalletPayment();
     } else if (paymentMethod === 'online') {
       await handleOnlinePayment();
@@ -942,118 +890,6 @@ const Checkout = () => {
     setShowTimeSlotModal(false);
   };
 
-  const handleCartClick = () => {
-    if (plan) return; // Disable cart click for plan
-    navigate('/user/cart');
-  };
-
-  // Fetch plan upgrade details if applicable
-  const [upgradePreview, setUpgradePreview] = useState(null);
-  const isUpgrade = location.state?.isUpgrade;
-
-  useEffect(() => {
-    if (plan && isUpgrade) {
-      const fetchUpgradeDetails = async () => {
-        try {
-          const res = await paymentService.getUpgradeDetails(plan.id);
-          if (res.success) {
-            setUpgradePreview(res.data);
-          }
-        } catch (error) {
-          console.error(error);
-          toast.error('Failed to calculate upgrade price');
-        }
-      };
-      fetchUpgradeDetails();
-    }
-  }, [plan, isUpgrade]);
-
-  const handlePlanPayment = async () => {
-    try {
-      if (!razorpayLoaded) {
-        toast.error('Payment gateway not ready');
-        return;
-      }
-
-      const response = await paymentService.createPlanOrder(plan.id);
-      if (response.success) {
-        const { orderId, amount, key } = response.data;
-
-        const options = {
-          key,
-          amount: amount * 100,
-          currency: 'INR',
-          name: 'Help U',
-          description: `Payment for ${plan.name} ${isUpgrade ? '(Upgrade)' : ''}`,
-          order_id: orderId,
-          handler: async (response) => {
-            try {
-              await paymentService.verifyPlanPayment({
-                razorpay_order_id: response.razorpay_order_id,
-                razorpay_payment_id: response.razorpay_payment_id,
-                razorpay_signature: response.razorpay_signature,
-                planId: plan.id
-              });
-              toast.success('Subscription activated successfully!');
-              navigate('/user');
-            } catch (e) {
-              toast.error('Verification failed');
-            }
-          },
-          prefill: {
-            contact: userPhone
-          },
-          theme: {
-            color: themeColors.primary
-          }
-        };
-        const rzp = new window.Razorpay(options);
-        rzp.open();
-      }
-    } catch (error) {
-      console.error(error);
-      toast.error('Payment initiation failed');
-    }
-  };
-
-  // Fetch plan and user profile to determine discounts
-  useEffect(() => {
-    const fetchBenefits = async () => {
-      try {
-        const [plansRes, userRes] = await Promise.all([
-          getPlans(),
-          userAuthService.getProfile(), // Ensure we have latest status
-        ]);
-
-        if (plansRes.success && userRes.success && userRes.user?.plans?.isActive) {
-          const userPlanName = userRes.user.plans.name;
-          const userPlanId = userRes.user.plans.planId;
-          const activePlan = plansRes.data.find(p => (userPlanId && p._id === userPlanId) || p.name === userPlanName);
-
-          if (activePlan) {
-            setPlanBenefits({
-              name: activePlan.name,
-              freeCategories: activePlan.freeCategories || [],
-              freeBrands: activePlan.freeBrands || [],
-              freeServices: activePlan.freeServices || [],
-              bonusServices: activePlan.bonusServices || []
-            });
-
-          }
-        }
-      } catch (e) {
-        console.error('Failed to load plan benefits', e);
-      }
-    };
-
-    // Only fetch if not a plan purchase (standard checkout)
-    if (!plan) {
-      fetchBenefits();
-    }
-  }, [plan]);
-
-  const [planBenefits, setPlanBenefits] = useState({ name: '', freeCategories: [], freeBrands: [], freeServices: [], bonusServices: [] });
-
   // Helper to normalize MongoDB IDs (handles strings, objects with _id, and $oid)
   const normalizeId = (id) => {
     if (!id) return null;
@@ -1063,40 +899,9 @@ const Checkout = () => {
     return String(id);
   };
 
-  // Calculate totals with Plan Benefits
-  const calculateItemPrice = (item) => {
-    if (plan) return item.price || 0; // Plan purchase
-
-    const itemCatId = normalizeId(item.categoryId);
-    const itemBrandId = normalizeId(item.brandId || item.sectionId);
-    const itemServiceId = normalizeId(item.serviceId);
-
-    // Check if free
-    const isFreeCategory = itemCatId && planBenefits.freeCategories.some(cat => {
-      return normalizeId(cat) === itemCatId;
-    });
-
-    const isFreeBrand = itemBrandId && planBenefits.freeBrands.some(brand => {
-      return normalizeId(brand) === itemBrandId;
-    });
-
-    const isFreeService = itemServiceId && planBenefits.freeServices.some(svc => {
-      return normalizeId(svc) === itemServiceId;
-    });
-
-    const isBonusService = itemServiceId && (planBenefits.bonusServices || []).some(bs => {
-      const bsServiceId = normalizeId(bs.serviceId?._id || bs.serviceId);
-      return bsServiceId === itemServiceId;
-    });
-
-    if (isFreeCategory || isFreeBrand || isFreeService || isBonusService) {
-      return 0;
-    }
-    return item.price || 0;
-  };
+  const calculateItemPrice = (item) => item.price || 0;
 
   const itemTotal = cartItems.reduce((sum, item) => sum + calculateItemPrice(item), 0);
-  // Calculate savings including Plan Savings
   const totalOriginalPrice = cartItems.reduce((sum, item) => {
     const original = (item.originalPrice || item.unitPrice || (item.price / (item.serviceCount || 1))) * (item.serviceCount || 1);
     // If priced 0, original is huge saving
@@ -1105,12 +910,6 @@ const Checkout = () => {
 
   const savings = totalOriginalPrice - itemTotal;
   const taxesAndFee = Math.round((itemTotal * gstPercentage) / 100);
-  // Visited fee logic: if Total is 0 (All free), user might still pay visited fee?
-  // User says "no payemtn". So maybe visited fee also waived? Or user pays visited fee?
-  // "ask direct servicebooking" -> implies fully free.
-  // I'll set visitedFee to 0 if itemTotal is 0?
-  // Configurable?
-  // Assuming "Free under plan" means NO Payment.
   const finalVisitedFee = itemTotal === 0 ? 0 : visitedFee;
 
   // Extras — mirrors services/bookingCreationService.js so the total shown is
@@ -1135,7 +934,7 @@ const Checkout = () => {
 
   // Available coupons effect
   useEffect(() => {
-    if (plan || itemTotal === 0) return;
+    if (itemTotal === 0) return;
     const firstItem = cartItems[0];
     const catId = normalizeId(firstItem?.categoryId || firstItem?.category);
     const srvId = normalizeId(firstItem?.serviceId);
@@ -1150,7 +949,7 @@ const Checkout = () => {
         setAvailableCoupons(res.coupons);
       }
     }).catch(() => {});
-  }, [itemTotal, cartItems.length, plan, zoneId, cityId]);
+  }, [itemTotal, cartItems.length, zoneId, cityId]);
 
   const handleApplyCoupon = async (codeToApply) => {
     const code = (codeToApply || couponInput || '').trim().toUpperCase();
@@ -1203,13 +1002,9 @@ const Checkout = () => {
   const totalAmount = Math.max(0, itemTotal + taxesAndFee + finalVisitedFee + extrasBase + extrasTax - recurringDiscount - recurringTaxCut - effectiveCouponDiscount);
   const amountToPay = totalAmount;
 
-  // Helper for Free Plan Full Breakdown Display
-  // If the booking is free, we still want to show what the Tax/Fee WOULD have been
-  const displayTax = totalAmount === 0
-    ? Math.round((totalOriginalPrice * gstPercentage) / 100)
-    : taxesAndFee + extrasTax - recurringTaxCut;
-  const displayFee = totalAmount === 0 ? visitedFee : finalVisitedFee;
-  const displaySavings = totalAmount === 0 ? (totalOriginalPrice + displayTax + displayFee) : savings;
+  const displayTax = taxesAndFee + extrasTax - recurringTaxCut;
+  const displayFee = finalVisitedFee;
+  const displaySavings = savings;
 
   // Date and time slot helper functions
   const getDates = () => {
@@ -1370,47 +1165,34 @@ const Checkout = () => {
                       </dl>
                     )}
                   </div>
-                  {!item.isPlan && (
-                    <div className="flex flex-col items-end gap-2">
-                      <div className="flex items-center gap-1 bg-gray-50 border border-gray-200 rounded-lg p-0.5">
-                        <button
-                          onClick={() => handleQuantityChange(item._id, -1)}
-                          className="p-1.5 hover:bg-white rounded-md transition-all shadow-sm"
-                        >
-                          <FiMinus className="w-3.5 h-3.5 text-gray-600" />
-                        </button>
-                        <span className="w-6 text-center text-sm font-bold text-gray-900">{item.serviceCount || 1}</span>
-                        <button
-                          onClick={() => handleQuantityChange(item._id, 1)}
-                          className="p-1.5 hover:bg-white rounded-md transition-all shadow-sm"
-                        >
-                          <FiPlus className="w-3.5 h-3.5 text-gray-900" />
-                        </button>
-                      </div>
+                  <div className="flex flex-col items-end gap-2">
+                    <div className="flex items-center gap-1 bg-gray-50 border border-gray-200 rounded-lg p-0.5">
+                      <button
+                        onClick={() => handleQuantityChange(item._id, -1)}
+                        className="p-1.5 hover:bg-white rounded-md transition-all shadow-sm"
+                      >
+                        <FiMinus className="w-3.5 h-3.5 text-gray-600" />
+                      </button>
+                      <span className="w-6 text-center text-sm font-bold text-gray-900">{item.serviceCount || 1}</span>
+                      <button
+                        onClick={() => handleQuantityChange(item._id, 1)}
+                        className="p-1.5 hover:bg-white rounded-md transition-all shadow-sm"
+                      >
+                        <FiPlus className="w-3.5 h-3.5 text-gray-900" />
+                      </button>
                     </div>
-                  )}
-                  {!item.isPlan && (
-                    <button
-                      onClick={() => handleRemoveItem(item._id)}
-                      className="absolute top-3 right-3 p-1.5 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-full transition-colors"
-                    >
-                      <FiTrash2 className="w-4 h-4" />
-                    </button>
-                  )}
+                  </div>
+                  <button
+                    onClick={() => handleRemoveItem(item._id)}
+                    className="absolute top-3 right-3 p-1.5 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-full transition-colors"
+                  >
+                    <FiTrash2 className="w-4 h-4" />
+                  </button>
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="text-base font-bold text-black">
-                    {calculateItemPrice(item) === 0 ? (
-                      <span className="text-green-600">Free</span>
-                    ) : (
-                      `₹${(item.price || 0).toLocaleString('en-IN')}`
-                    )}
+                    ₹{(item.price || 0).toLocaleString('en-IN')}
                   </span>
-                  {calculateItemPrice(item) === 0 && (
-                    <span className="text-[10px] font-bold bg-green-100 text-green-700 px-2 py-0.5 rounded-full border border-green-200">
-                      WITH PLAN
-                    </span>
-                  )}
                   {calculateItemPrice(item) > 0 && (() => {
                     const unitPrice = item.unitPrice || (item.price / (item.serviceCount || 1));
                     const unitOriginalPrice = item.originalPrice || unitPrice;
@@ -1432,7 +1214,7 @@ const Checkout = () => {
         </div>
 
         {/* Optional extras, all switched on/off from the admin booking configuration */}
-        {!plan && cartItems.length > 0 && (
+        {cartItems.length > 0 && (
           <>
             {bookingConfig.isAddOnsEnabled && (
               <AddOnsSelector addOns={bookingOptions.addOns} selected={selectedAddOns} onChange={setSelectedAddOns} />
@@ -1486,8 +1268,8 @@ const Checkout = () => {
           </div>
         </div>
 
-        {/* Coupons & Promo Codes Section (disabled for plan purchases or free items) */}
-        {!plan && itemTotal > 0 && (
+        {/* Coupons & Promo Codes Section */}
+        {itemTotal > 0 && (
           <div className="bg-white border-2 border-slate-100 rounded-2xl p-5 mb-6 shadow-sm">
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2">
@@ -1634,7 +1416,6 @@ const Checkout = () => {
           </h3>
 
           <div className="space-y-3">
-            {/* Original Price (before plan) */}
             <div className="flex justify-between items-center">
               <span className="text-sm text-slate-600">Item Total</span>
               <span className="text-sm font-medium text-slate-900">
@@ -1684,14 +1465,6 @@ const Checkout = () => {
               </div>
             )}
 
-            {/* Upgrade Credit (for plan upgrades) */}
-            {upgradePreview && upgradePreview.credit > 0 && (
-              <div className="flex justify-between items-center text-green-600">
-                <span className="text-sm font-medium">Plan Credit</span>
-                <span className="text-sm font-bold">-₹{upgradePreview.credit.toLocaleString('en-IN')}</span>
-              </div>
-            )}
-
             {/* Taxes */}
             {displayTax > 0 && (
               <div className="flex justify-between items-center">
@@ -1713,18 +1486,9 @@ const Checkout = () => {
               <div className="flex justify-between items-center">
                 <span className="text-base font-bold text-slate-900">Total Payable</span>
                 <div className="flex flex-col items-end">
-                  {totalAmount === 0 ? (
-                    <>
-                      <span className="text-sm font-medium text-slate-400 line-through">
-                        ₹{Math.round(totalOriginalPrice + displayTax + displayFee).toLocaleString('en-IN')}
-                      </span>
-                      <span className="text-xl font-black text-green-600">FREE</span>
-                    </>
-                  ) : (
-                    <span className="text-xl font-black text-slate-900">
-                      ₹{totalAmount.toLocaleString('en-IN')}
-                    </span>
-                  )}
+                  <span className="text-xl font-black text-slate-900">
+                    ₹{totalAmount.toLocaleString('en-IN')}
+                  </span>
                 </div>
               </div>
             </div>
@@ -1743,24 +1507,6 @@ const Checkout = () => {
             </p>
           </div>
         </div>
-
-        {/* Free Plan Benefit Card */}
-        {totalAmount === 0 && (
-          <div className="bg-gradient-to-br from-green-50 to-emerald-100/50 border border-green-200 rounded-2xl p-5 mb-6 relative overflow-hidden">
-            <div className="flex items-start gap-4 z-10 relative">
-              <div className="bg-green-500 rounded-full p-2 shadow-lg shadow-green-200 shrink-0">
-                <FiCheckCircle className="w-6 h-6 text-white" />
-              </div>
-              <div>
-                <h3 className="text-lg font-bold text-green-800 mb-1">Covered by {planBenefits.name}</h3>
-                <p className="text-sm text-green-700 leading-relaxed font-medium opacity-90">
-                  You save <span className="font-bold">₹{Math.round(totalOriginalPrice + displayTax + displayFee).toLocaleString('en-IN')}</span> on this booking!
-                  Your plan covers all costs.
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
 
         {/* Cancellation Policy */}
         <div className="bg-white border border-gray-200 rounded-lg p-4 mb-4">
@@ -1969,21 +1715,19 @@ const Checkout = () => {
 
         <div className="p-4 pb-[max(1rem,var(--safe-bottom))]">
           <button
-            onClick={plan ? handlePlanPayment :
-              (houseNumber || addressDetails) ?
-                (currentStep === 'payment' ? handlePayment : handleSearchWorkers) :
-                handleProceed}
+            onClick={(houseNumber || addressDetails) ?
+              (currentStep === 'payment' ? handlePayment : handleSearchWorkers) :
+              handleProceed}
             disabled={searchingWorkers}
             className="w-full text-white py-3 rounded-lg text-base font-semibold transition-colors disabled:opacity-50 shadow-lg shadow-teal-500/30"
             style={{ backgroundColor: themeColors.button }}
           >
             {searchingWorkers ? 'Searching for workers...' :
-              currentStep === 'payment' ? (totalAmount === 0 ? 'Confirm Booking (Free)' : (paymentMethod === 'online' ? 'Proceed to Pay' : paymentMethod === 'wallet' ? 'Pay from Wallet' : 'Confirm Booking')) :
-                plan ? 'Proceed to Payment' :
-                  bookingType === 'instant' ? 'Find nearby workers now' :
-                    (selectedDate && selectedTime && houseNumber ?
-                      'Find nearby workers' :
-                      (houseNumber || addressDetails) ? 'Select Time Slot' : 'Add address to proceed')}
+              currentStep === 'payment' ? (paymentMethod === 'online' ? 'Proceed to Pay' : paymentMethod === 'wallet' ? 'Pay from Wallet' : 'Confirm Booking') :
+                bookingType === 'instant' ? 'Find nearby workers now' :
+                  (selectedDate && selectedTime && houseNumber ?
+                    'Find nearby workers' :
+                    (houseNumber || addressDetails) ? 'Select Time Slot' : 'Add address to proceed')}
           </button>
         </div>
       </div>

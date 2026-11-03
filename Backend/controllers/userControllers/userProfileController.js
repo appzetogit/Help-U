@@ -21,14 +21,6 @@ const getProfile = async (req, res) => {
       });
     }
 
-    // Lazy Check: Update plan expiry if needed
-    if (user.plans && user.plans.isActive && user.plans.expiry) {
-      if (new Date() > new Date(user.plans.expiry)) {
-        user.plans.isActive = false;
-        await user.save();
-      }
-    }
-
     res.status(200).json({
       success: true,
       user: {
@@ -40,7 +32,6 @@ const getProfile = async (req, res) => {
         isEmailVerified: user.isEmailVerified || false,
         profilePhoto: user.profilePhoto || null,
         addresses: user.addresses || [],
-        plans: user.plans || {},
         settings: user.settings || {},
         wallet: user.wallet || { balance: 0 },
         createdAt: user.createdAt,
@@ -160,7 +151,6 @@ const updateProfile = async (req, res) => {
         isEmailVerified: updatedUser.isEmailVerified,
         profilePhoto: updatedUser.profilePhoto || null,
         addresses: updatedUser.addresses || [],
-        plans: updatedUser.plans || {},
         settings: updatedUser.settings || {},
         wallet: updatedUser.wallet || { balance: 0 }
       }

@@ -546,7 +546,7 @@ const Home = () => {
           rating: service.rating || "",
           reviews: service.reviews || "",
           vendorId: service.vendorId || null,
-          sectionId: service.sectionId || null // VITAL: Added for plan benefits
+          sectionId: service.sectionId || null
         };
 
         const response = await addToCart(cartItemData);

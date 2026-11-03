@@ -11,9 +11,6 @@ const {
   processRefund,
   getPaymentHistory,
   confirmPayAtHome,
-  createPlanOrder,
-  verifyPlanPayment,
-  getUpgradeDetails,
   handleRazorpayWebhook
 } = require('../../controllers/paymentControllers/paymentController');
 
@@ -49,9 +46,6 @@ router.post('/wallet', authenticate, isUser, requireFlag('isWalletPaymentEnabled
 router.post('/refund', authenticate, refundValidation, processRefund);
 router.post('/pay-at-home', authenticate, isUser, walletPaymentValidation, confirmPayAtHome);
 router.get('/history', authenticate, isUser, getPaymentHistory);
-router.post('/plan/create-order', authenticate, isUser, requireFlag('isOnlinePaymentEnabled', 'Online payment is currently unavailable.'), createPlanOrder);
-router.post('/plan/verify', authenticate, isUser, verifyPlanPayment);
-router.get('/plan/upgrade-details', authenticate, isUser, getUpgradeDetails);
 
 module.exports = router;
 

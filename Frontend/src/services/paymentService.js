@@ -44,25 +44,7 @@ export const paymentService = {
   confirmPayAtHome: async (bookingId) => {
     const response = await api.post('/payments/pay-at-home', { bookingId });
     return response.data;
-  },
-
-  // Create Razorpay order for plan subscription
-  createPlanOrder: async (planId) => {
-    const response = await api.post('/payments/plan/create-order', { planId });
-    return response.data;
-  },
-
-  // Verify plan payment
-  verifyPlanPayment: async (paymentData) => {
-    const response = await api.post('/payments/plan/verify', paymentData);
-    return response.data;
-  },
-
-  getUpgradeDetails: async (planId) => {
-    const response = await api.get(`/payments/plan/upgrade-details?planId=${planId}`);
-    return response.data;
   }
 };
 
 export default paymentService;
-

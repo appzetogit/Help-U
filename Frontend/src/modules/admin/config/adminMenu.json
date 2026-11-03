@@ -176,14 +176,6 @@
     "children": []
   },
   {
-    "title": "Plans",
-    "route": "/admin/plans",
-    "allowedRoles": [
-      "super_admin"
-    ],
-    "children": []
-  },
-  {
     "title": "Coupons",
     "route": "/admin/coupons",
     "allowedRoles": [

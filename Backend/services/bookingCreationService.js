@@ -137,7 +137,6 @@ const placeBooking = async (userId, payload, options = {}) => {
     customerNotes: reqCustomerNotes,
     paymentMethod,
     amount,
-    isPlusAdded,
     bookedItems,
     visitingCharges: reqVisitingCharges,
     visitationFee: reqVisitationFee, // Backward compatibility
@@ -192,7 +191,7 @@ const placeBooking = async (userId, payload, options = {}) => {
 
   const [service, user] = await Promise.all([
     Service.findById(serviceId).select('title basePrice discountPrice description images iconUrl categoryId category categoryIds pricingType hourlyRate minHours maxHours inspectionFee variants status publishStatus').lean(),
-    User.findById(userId).select('name phone wallet plans')
+    User.findById(userId).select('name phone wallet')
   ]);
 
   if (!service) return fail(404, 'Service not found');
@@ -431,52 +430,11 @@ const placeBooking = async (userId, payload, options = {}) => {
   // ── Pricing ──
   let basePrice, discount, tax, finalAmount;
   const bookingStatus = BOOKING_STATUS.SEARCHING;
-  let bookingPaymentStatus = PAYMENT_STATUS.PENDING;
+  const bookingPaymentStatus = PAYMENT_STATUS.PENDING;
 
-  // 1. Plan benefits
-  let usePlanBenefits = false;
-  if (paymentMethod === 'plan_benefit') {
-    if (user.plans && user.plans.isActive) {
-      if (user.plans.expiry && new Date() > new Date(user.plans.expiry)) {
-        user.plans.isActive = false;
-        await user.save();
-        paymentMethod = 'pay_at_home';
-      } else {
-        usePlanBenefits = true;
-      }
-    } else {
-      paymentMethod = 'pay_at_home';
-    }
-  }
-
-  if (usePlanBenefits) {
-    const Plan = require('../models/Plan');
-    const userPlan = (user.plans.planId ? await Plan.findById(user.plans.planId) : null)
-      || await Plan.findOne({ name: user.plans.name });
-
-    if (!userPlan) {
-      usePlanBenefits = false;
-      paymentMethod = 'pay_at_home';
-    } else {
-      const isCategoryCovered = categoryId && userPlan.freeCategories &&
-        userPlan.freeCategories.some((cat) => String(cat?._id || cat) === String(categoryId));
-      const isServiceCovered = serviceId && userPlan.freeServices &&
-        userPlan.freeServices.some((svc) => String(svc?._id || svc) === String(serviceId));
-      const isBonusCovered = serviceId && userPlan.bonusServices &&
-        userPlan.bonusServices.some((bs) => String(bs.serviceId?._id || bs.serviceId) === String(serviceId));
-
-      if (isCategoryCovered || isServiceCovered || isBonusCovered) {
-        basePrice = totalServiceValue > 0 ? totalServiceValue : (service.basePrice || 500);
-        discount = basePrice; // Full discount
-        tax = 0;
-        visitingCharges = 0;
-        finalAmount = pendingPenalty; // User only pays penalty
-      } else {
-        usePlanBenefits = false;
-        paymentMethod = 'pay_at_home';
-      }
-    }
-  }
+  // Subscription plans no longer exist. An older app may still ask for the plan payment method,
+  // so it is priced as an ordinary pay-at-home booking.
+  if (paymentMethod === 'plan_benefit') paymentMethod = 'pay_at_home';
 
   // 2. Standard pricing
   //
@@ -484,51 +442,49 @@ const placeBooking = async (userId, payload, options = {}) => {
   // setting and GST is calculated on the net service amount at the admin GST rate. The app only
   // contributes the cart's service amounts (basePrice / discount), which are sanity-checked and
   // must not fall below the cheapest legitimate price of the service.
-  if (!usePlanBenefits) {
-    const hasBreakdown = amount && amount > 0 && reqBasePrice !== undefined && reqBasePrice !== null;
+  const hasBreakdown = amount && amount > 0 && reqBasePrice !== undefined && reqBasePrice !== null;
 
-    if (hasBreakdown) {
-      const clientBase = Number(reqBasePrice);
-      const clientDiscount = Number(reqDiscount) || 0;
-      if (!Number.isFinite(clientBase) || clientBase < 0 || clientDiscount < 0 || clientDiscount > clientBase) {
-        return fail(400, 'Invalid price details. Please review your cart and try again.', { code: 'PRICE_INVALID' });
-      }
-
-      basePrice = clientBase;
-      discount = clientDiscount;
-    } else {
-      // No usable breakdown (older app, or a recurring visit): price from the service itself.
-      // totalServiceValue already resolved through the service's pricing type (hourly rate x
-      // hours, inspection fee, etc.) above.
-      basePrice = totalServiceValue || service.basePrice || 500;
-      discount = service.discountPrice ? Math.max(0, basePrice - service.discountPrice) : 0;
+  if (hasBreakdown) {
+    const clientBase = Number(reqBasePrice);
+    const clientDiscount = Number(reqDiscount) || 0;
+    if (!Number.isFinite(clientBase) || clientBase < 0 || clientDiscount < 0 || clientDiscount > clientBase) {
+      return fail(400, 'Invalid price details. Please review your cart and try again.', { code: 'PRICE_INVALID' });
     }
 
-    let netService = Math.max(0, basePrice - discount);
-
-    // Only an active plan can make a booking free. A request that claims a zero amount without one
-    // (a plan that expired, or a tampered request) is priced from the service instead.
-    if (netService === 0) {
-      basePrice = totalServiceValue || service.basePrice || 500;
-      discount = service.discountPrice ? Math.max(0, basePrice - service.discountPrice) : 0;
-      netService = Math.max(0, basePrice - discount);
-    }
-
-    if (hasBreakdown && paymentMethod !== 'plan_benefit' && netService > 0) {
-      const floor = lowestServicePrice(service);
-      if (floor > 0 && netService + 0.5 < floor) {
-        return fail(400, 'The price for this service has changed. Please review your cart and try again.', { code: 'PRICE_MISMATCH' });
-      }
-    }
-
-    tax = Math.round(netService * gstPct / 100);
-    visitingCharges = netService > 0 ? adminVisitingCharge : 0;
-    finalAmount = (netService + tax + visitingCharges) + pendingPenalty;
+    basePrice = clientBase;
+    discount = clientDiscount;
+  } else {
+    // No usable breakdown (older app, or a recurring visit): price from the service itself.
+    // totalServiceValue already resolved through the service's pricing type (hourly rate x
+    // hours, inspection fee, etc.) above.
+    basePrice = totalServiceValue || service.basePrice || 500;
+    discount = service.discountPrice ? Math.max(0, basePrice - service.discountPrice) : 0;
   }
+
+  let netService = Math.max(0, basePrice - discount);
+
+  // A request that claims a zero amount is priced from the service instead.
+  if (netService === 0) {
+    basePrice = totalServiceValue || service.basePrice || 500;
+    discount = service.discountPrice ? Math.max(0, basePrice - service.discountPrice) : 0;
+    netService = Math.max(0, basePrice - discount);
+  }
+
+  if (hasBreakdown && netService > 0) {
+    const floor = lowestServicePrice(service);
+    if (floor > 0 && netService + 0.5 < floor) {
+      return fail(400, 'The price for this service has changed. Please review your cart and try again.', { code: 'PRICE_MISMATCH' });
+    }
+  }
+
+  tax = Math.round(netService * gstPct / 100);
+  visitingCharges = netService > 0 ? adminVisitingCharge : 0;
+  finalAmount = (netService + tax + visitingCharges) + pendingPenalty;
+
 
   // Service value before any extras: the base for percentage surcharges and
   // the recurring discount.
-  const serviceValue = usePlanBenefits ? basePrice : Math.max(0, basePrice - discount);
+  const serviceValue = Math.max(0, basePrice - discount);
 
   // 3. Coupon — re-validated here rather than trusting a client discount.
   let appliedCoupon = null;
@@ -582,11 +538,11 @@ const placeBooking = async (userId, payload, options = {}) => {
     console.log(`[CreateBooking] Zone surge pricing applied: ${surgeMultiplier}x (+₹${surgeDiff}) in ${matchedZone.name}`);
   }
 
-  // 5. Recurring discount on the service value (not on extras or plan visits).
+  // 5. Recurring discount on the service value (not on extras).
   const recurringDiscountPct = recurringContext
     ? (recurringContext.discountPercentage || 0)
     : (recurringPlan ? config.recurringDiscountPercentage : 0);
-  if (recurringDiscountPct > 0 && !usePlanBenefits) {
+  if (recurringDiscountPct > 0) {
     const recurringDiscount = roundMoney(serviceValue * recurringDiscountPct / 100);
     const recurringTaxCut = Math.min(tax, roundMoney(recurringDiscount * gstPct / 100));
     discount += recurringDiscount;
@@ -594,15 +550,11 @@ const placeBooking = async (userId, payload, options = {}) => {
     finalAmount = Math.max(0, finalAmount - recurringDiscount - recurringTaxCut);
   }
 
-  if (usePlanBenefits) {
-    bookingPaymentStatus = finalAmount > 0 ? PAYMENT_STATUS.PENDING : PAYMENT_STATUS.PLAN_COVERED;
-  }
-
   // Note: pendingPenalty is recorded in booking.penalty and included in finalAmount.
   // It is cleared from user.wallet.penalty only once payment is verified or cash is collected.
 
   // Ensure minimum amount for Razorpay (₹1) for paid bookings
-  if (finalAmount < 1 && paymentMethod !== 'plan_benefit') {
+  if (finalAmount < 1) {
     finalAmount = 1;
   }
 
@@ -735,7 +687,7 @@ const placeBooking = async (userId, payload, options = {}) => {
         bookedItems,
         addOns: addOnItems.map((a) => ({ addOnId: String(a.addOnId), quantity: a.quantity })),
         customerNotes,
-        paymentMethod: paymentMethod === 'plan_benefit' ? 'plan_benefit' : 'pay_at_home',
+        paymentMethod: 'pay_at_home',
         amount,
         basePrice: reqBasePrice,
         discount: reqDiscount,
@@ -826,7 +778,6 @@ const placeBooking = async (userId, payload, options = {}) => {
     userId,
     serviceId,
     vendorId,
-    isPlusAdded,
     rankedWorkers,
     wave1Workers,
     fromRecurring: !!recurringContext,
@@ -842,7 +793,7 @@ const placeBooking = async (userId, payload, options = {}) => {
  * Runs after the HTTP response; failures are logged, never thrown.
  */
 const dispatchNewBooking = async ({
-  bookingId, userId, serviceId, vendorId, isPlusAdded, rankedWorkers, wave1Workers, fromRecurring,
+  bookingId, userId, serviceId, vendorId, rankedWorkers, wave1Workers, fromRecurring,
   sendToAdmin = false, noWorkerReason = 'no_worker_nearby'
 }) => {
   try {
@@ -856,18 +807,6 @@ const dispatchNewBooking = async ({
     if (!userForBackground || !bookingForBackground || !serviceForBackground) {
       console.error('[CreateBooking] Background task failed: User, Booking or Service not found after creation.');
       return;
-    }
-
-    if (isPlusAdded) {
-      const expiryDate = new Date();
-      expiryDate.setFullYear(expiryDate.getFullYear() + 1);
-      userForBackground.plans = {
-        isActive: true,
-        name: 'Plus Membership',
-        expiry: expiryDate,
-        price: 999
-      };
-      await userForBackground.save();
     }
 
     // Store the full ranked list for the scheduler's later waves.

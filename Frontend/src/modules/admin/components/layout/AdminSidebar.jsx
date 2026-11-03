@@ -58,7 +58,6 @@ const iconMap = {
   Reviews: FiStar,
   Settlements: FiDollarSign,
   Settings: FiSettings,
-  Plans: FiPackage,
   Customization: FiSliders,
   "Landing Page": FiLayout,
   "Login Banners": FiSmartphone,

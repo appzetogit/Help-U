@@ -21,7 +21,6 @@ import {
   FiLogOut,
   FiGift,
   FiShield,
-  FiZap,
   FiHelpCircle,
   FiInfo,
   FiGlobe
@@ -38,8 +37,7 @@ const toProfile = (user = {}) => ({
   isPhoneVerified: user.isPhoneVerified || false,
   isEmailVerified: user.isEmailVerified || false,
   profilePhoto: user.profilePhoto || '',
-  walletBalance: user.wallet?.balance ?? 0,
-  plans: user.plans || null
+  walletBalance: user.wallet?.balance ?? 0
 });
 
 const readStoredUser = () => {
@@ -166,7 +164,6 @@ const Account = () => {
     navigate('/user/login', { replace: true });
   };
 
-  const plan = userProfile.plans?.isActive ? userProfile.plans : null;
   const balance = userProfile.walletBalance || 0;
 
   return (
@@ -217,28 +214,6 @@ const Account = () => {
             </span>
           </motion.button>
 
-          {/* Active plan */}
-          {plan && (
-            <motion.button
-              type="button"
-              variants={itemVariants}
-              onClick={() => navigate('/user/my-plan')}
-              className="mt-4 w-full rounded-[20px] bg-accent text-white p-4 flex items-center gap-3 text-left hover:bg-accent-dark transition-colors"
-            >
-              <span className="w-11 h-11 rounded-full bg-white/15 flex items-center justify-center shrink-0">
-                <FiZap className="w-5 h-5" />
-              </span>
-              <div className="min-w-0 flex-1">
-                <p className="text-[12px] text-white/75">{t('active_membership', 'Active membership')}</p>
-                <p className="text-[16px] font-bold truncate">{plan.name}</p>
-                {plan.expiry && (
-                  <p className="text-[12px] text-white/75">{t('valid_till', 'Valid till')} {new Date(plan.expiry).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}</p>
-                )}
-              </div>
-              <FiChevronRight className="w-5 h-5 text-white/80 shrink-0" />
-            </motion.button>
-          )}
-
           {/* Wallet + Refer */}
           <motion.div variants={itemVariants} className="mt-4 mb-6 grid grid-cols-2 gap-3">
             <button
@@ -283,7 +258,6 @@ const Account = () => {
             title={t('shopping', 'Shopping')}
             items={[
               isScrapEnabled && { icon: FiShoppingBag, label: t('scrap_deals', 'Scrap Deals'), onClick: () => navigate('/user/scrap') },
-              { icon: FiFileText, label: t('my_plans', 'My Plans'), onClick: () => navigate('/user/my-plan') },
             ]}
           />
 

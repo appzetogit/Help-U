@@ -1,7 +1,6 @@
 const Booking = require('../../models/Booking');
 const User = require('../../models/User');
 const Settings = require('../../models/Settings');
-const Plan = require('../../models/Plan');
 const { validationResult } = require('express-validator');
 const { PAYMENT_STATUS, BOOKING_STATUS, ADMIN_ROLES } = require('../../utils/constants');
 const { createOrder, verifyPayment, refundPayment } = require('../../services/razorpayService');
@@ -1117,170 +1116,6 @@ const confirmPayAtHome = async (req, res) => {
   }
 };
 
-const calculateUpgradeAmount = (currentPlan, newPlanPrice) => {
-  if (!currentPlan || !currentPlan.isActive) return { amount: newPlanPrice, credit: 0 };
-
-  const now = new Date();
-  const expiry = new Date(currentPlan.expiry);
-
-  if (expiry <= now) return { amount: newPlanPrice, credit: 0 };
-
-  const planMonths = currentPlan.validityMonths || (currentPlan.duration ? parseInt(currentPlan.duration) : 1) || 1;
-  const totalDuration = Math.max(30, planMonths * 30) * 24 * 60 * 60 * 1000;
-  const remainingTime = expiry.getTime() - now.getTime();
-
-  let remainingRatio = remainingTime / totalDuration;
-  if (remainingRatio > 1) remainingRatio = 1;
-  if (remainingRatio < 0) remainingRatio = 0;
-
-  const credit = Math.floor((currentPlan.price || 0) * remainingRatio);
-
-  if (credit <= 0) return { amount: newPlanPrice, credit: 0 };
-
-  let finalAmount = newPlanPrice - credit;
-  if (finalAmount < 0) finalAmount = 0;
-
-  return { amount: Math.ceil(finalAmount), credit };
-};
-
-const getUpgradeDetails = async (req, res) => {
-  try {
-    const { planId } = req.query;
-    if (!planId) return res.status(400).json({ success: false, message: 'Plan ID required' });
-
-    const newPlan = await Plan.findById(planId);
-    if (!newPlan) return res.status(404).json({ success: false, message: 'Plan not found' });
-
-    const userId = req.user?.id || req.user?._id;
-    const user = await User.findById(userId);
-    const { amount, credit } = calculateUpgradeAmount(user.plans, newPlan.price);
-
-    res.status(200).json({
-      success: true,
-      data: {
-        originalPrice: newPlan.price,
-        credit,
-        finalAmount: amount
-      }
-    });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ success: false, message: 'Server error' });
-  }
-};
-
-const createPlanOrder = async (req, res) => {
-  try {
-    const { planId } = req.body;
-    const plan = await Plan.findById(planId);
-    if (!plan) return res.status(404).json({ success: false, message: 'Plan not found' });
-
-    const userId = req.user?.id || req.user?._id;
-    const user = await User.findById(userId);
-
-    // Calculate dynamic pricing
-    const { amount } = calculateUpgradeAmount(user.plans, plan.price);
-
-    // GST at the admin-configured service rate (not a fixed 18%)
-    const { serviceGstPercentage } = await getBookingConfig();
-    const amountWithTax = Math.ceil(amount * (1 + serviceGstPercentage / 100));
-
-    const orderResult = await createOrder(
-      amountWithTax,
-      'INR',
-      `PLAN_${Date.now()}`,
-      { type: 'plan', planId, userId: req.user.id }
-    );
-    if (!orderResult.success) {
-      return res.status(500).json({ success: false, message: 'Order creation failed' });
-    }
-
-    res.status(200).json({
-      success: true,
-      data: {
-        orderId: orderResult.orderId,
-        amount: orderResult.amount / 100,
-        key: process.env.RAZORPAY_KEY_ID
-      }
-    });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ success: false, message: 'Server error' });
-  }
-};
-
-const verifyPlanPayment = async (req, res) => {
-  try {
-    const { razorpay_order_id, razorpay_payment_id, razorpay_signature, planId } = req.body;
-
-    const isValid = verifyPayment(razorpay_order_id, razorpay_payment_id, razorpay_signature);
-    if (!isValid) return res.status(400).json({ success: false, message: 'Invalid signature' });
-
-    const Transaction = require('../../models/Transaction');
-    const existingTxn = await Transaction.findOne({ referenceId: razorpay_payment_id });
-    if (existingTxn) {
-      return res.status(200).json({ success: true, message: 'Plan already activated' });
-    }
-
-    const plan = await Plan.findById(planId);
-    if (!plan) return res.status(404).json({ success: false, message: 'Plan not found' });
-
-    const userId = req.user?.id || req.user?._id;
-    const user = await User.findById(userId);
-
-    const { amount } = calculateUpgradeAmount(user.plans, plan.price);
-    const { serviceGstPercentage = 18 } = await getBookingConfig();
-    const paidAmount = Math.ceil(amount * (1 + serviceGstPercentage / 100));
-
-    const validityMonths = plan.validityMonths || (plan.duration ? parseInt(plan.duration) : 1) || 1;
-    const validityDays = plan.validityDays || (validityMonths * 30);
-    const expiry = new Date(Date.now() + validityDays * 24 * 60 * 60 * 1000);
-
-    user.plans = {
-      isActive: true,
-      planId: plan._id,
-      name: plan.name,
-      duration: plan.duration || `${validityMonths} ${validityMonths === 1 ? 'Month' : 'Months'}`,
-      validityMonths: validityMonths,
-      expiry: expiry,
-      price: plan.price
-    };
-
-    await user.save();
-
-    // Log transaction in ledger
-    await Transaction.create({
-      userId: user._id,
-      type: 'payment',
-      amount: paidAmount,
-      paymentMethod: 'razorpay',
-      status: 'completed',
-      description: `Plan subscription purchase: ${plan.name}`,
-      referenceId: razorpay_payment_id,
-      metadata: {
-        planId: plan._id.toString(),
-        orderId: razorpay_order_id,
-        planPrice: plan.price,
-        paidAmount
-      }
-    });
-
-    // Record in daily platform earning tracker
-    recordBookingEarning({
-      date: new Date(),
-      totalRevenue: paidAmount,
-      platformCommission: paidAmount,
-      vendorEarnings: 0,
-      totalGST: Math.round(paidAmount - amount),
-      totalTDS: 0
-    }).catch(err => console.error('[Plan Payment] Earning tracker error:', err));
-
-    res.status(200).json({ success: true, message: 'Plan activated successfully' });
-  } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
-  }
-};
-
 /**
  * Handle server-to-server Razorpay webhooks
  */
@@ -1422,46 +1257,10 @@ const handleRazorpayWebhook = async (req, res) => {
         return res.status(200).json({ received: true });
       }
 
-      // 3. Plan Subscription Webhook Handler
+      // 3. Subscription plans no longer exist. Acknowledge a late webhook for an old plan order so it is
+      // not mistaken for a booking payment; the payment itself must be refunded by hand.
       if (notes.type === 'plan' || receipt.startsWith('PLAN_')) {
-        const planId = notes.planId;
-        const targetUserId = notes.userId;
-        if (planId && targetUserId) {
-          const existingTxn = await Transaction.findOne({ referenceId: paymentId });
-          if (!existingTxn) {
-            const user = await User.findById(targetUserId);
-            const plan = await Plan.findById(planId);
-            if (user && plan) {
-              const validityMonths = plan.validityMonths || (plan.duration ? parseInt(plan.duration, 10) : 1) || 1;
-              const validityDays = plan.validityDays || (validityMonths * 30);
-              const expiry = new Date(Date.now() + validityDays * 24 * 60 * 60 * 1000);
-
-              user.plans = {
-                isActive: true,
-                planId: plan._id,
-                name: plan.name,
-                duration: plan.duration || `${validityMonths} ${validityMonths === 1 ? 'Month' : 'Months'}`,
-                validityMonths,
-                expiry,
-                price: plan.price
-              };
-              await user.save();
-
-              await Transaction.create({
-                userId: user._id,
-                type: 'payment',
-                amount: amountInRupees,
-                paymentMethod: 'razorpay',
-                status: 'completed',
-                description: `Plan subscription purchase: ${plan.name} (via Webhook)`,
-                referenceId: paymentId,
-                metadata: { planId: plan._id.toString(), orderId, planPrice: plan.price, paidAmount: amountInRupees }
-              });
-
-              console.log(`[Razorpay Webhook] Activated plan ${plan.name} for user ${targetUserId}`);
-            }
-          }
-        }
+        console.warn(`[Razorpay Webhook] Payment ${paymentId} was for a removed subscription plan. Refund it manually.`);
         return res.status(200).json({ received: true });
       }
 
@@ -1686,9 +1485,6 @@ module.exports = {
   processRefund,
   getPaymentHistory,
   confirmPayAtHome,
-  createPlanOrder,
-  verifyPlanPayment,
-  getUpgradeDetails,
   handleRazorpayWebhook
 };
 

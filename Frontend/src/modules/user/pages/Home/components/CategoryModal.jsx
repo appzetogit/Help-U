@@ -145,7 +145,7 @@ const CategoryModal = React.memo(({ isOpen, onClose, category, location, cartCou
     }
     const brand = otherPrompt;
     setOtherPrompt(null);
-    // Keep the catalog's Other brand (its services / plan benefits) and remember the typed name
+    // Keep the catalog's Other brand (its services) and remember the typed name
     openBrandServices({ ...brand, customName: name });
   };
 
@@ -192,7 +192,7 @@ const CategoryModal = React.memo(({ isOpen, onClose, category, location, cartCou
         categoryTitle: category?.title || '', // Explicit field
         categoryIcon: toAssetUrl(category?.homeIconUrl || category?.iconUrl || ''), // Explicit field
         // Brand info — stored as sectionTitle/sectionIcon for booking flow
-        sectionId: selectedBrand?.id || selectedBrand?._id || null, // VITAL: Added for plan benefits
+        sectionId: selectedBrand?.id || selectedBrand?._id || null,
         // Typed brand for "Other" reaches the booking (brandName) and the worker's job card
         sectionTitle: selectedBrand?.customName ? `${selectedBrand.customName} (Other)` : (selectedBrand?.title || ''),
         sectionIcon: toAssetUrl(selectedBrand?.iconUrl || selectedBrand?.icon || ''),

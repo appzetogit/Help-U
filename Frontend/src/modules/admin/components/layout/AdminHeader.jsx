@@ -75,7 +75,6 @@ const AdminHeader = ({ onMenuClick }) => {
       { path: '/admin/reports', title: 'Reports', description: 'Analyze platform performance with data insights' },
       { path: '/admin/notifications', title: 'Notifications', description: 'Stay updated with platform activities' },
       { path: '/admin/settings', title: 'Settings', description: 'Configure platform preferences' },
-      { path: '/admin/plans', title: 'Subscription Plans', description: 'Manage service subscription plans' },
       { path: '/admin/services', title: 'Services', description: 'Manage platform service categories' },
       { path: '/admin/settlements/pending', title: 'Pending Settlements', description: 'Review and approve worker cash settlements' },
       { path: '/admin/settlements/withdrawals', title: 'Withdrawal Requests', description: 'Manage worker payout requests' },

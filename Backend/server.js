@@ -260,7 +260,6 @@ app.use('/api/admin', require('./routes/admin-routes/bookingManagement.routes'))
 app.use('/api/admin', require('./routes/admin-routes/paymentManagement.routes'));
 app.use('/api/admin', require('./routes/admin-routes/transactionManagement.routes'));
 app.use('/api/admin', require('./routes/admin-routes/upload.routes'));
-app.use('/api/admin', require('./routes/admin-routes/planManagement.routes'));
 app.use('/api/admin', require('./routes/admin-routes/settings.routes'));
 app.use('/api/admin/coupons', require('./routes/admin-routes/coupon.routes'));
 app.use('/api/admin', require('./routes/admin-routes/reviewManagement.routes'));
@@ -294,7 +293,6 @@ app.use('/api/notifications', require('./routes/notification.routes'));
 
 // Public routes (no authentication required)
 app.use('/api/public', require('./routes/public-routes/catalog.routes'));
-app.use('/api/public', require('./routes/public-routes/plan.routes'));
 app.use('/api/public', require('./routes/public-routes/config.routes'));
 app.use('/api/public', require('./routes/public-routes/landing.routes'));
 app.use('/api/public/login-banners', require('./routes/public-routes/loginBanner.routes'));

@@ -43,7 +43,6 @@ const ADMIN_MODULE_PERMISSIONS = [
   { key: 'addons', label: 'Add-ons', description: 'Manage extra add-on services' },
   { key: 'reports', label: 'Reports', description: 'Access advanced business analytics & reports' },
   { key: 'reviews', label: 'Reviews', description: 'Manage customer ratings and feedbacks' },
-  { key: 'plans', label: 'Plans', description: 'Manage subscription plans and packages' },
   { key: 'coupons', label: 'Coupons', description: 'Create and control coupon codes & discounts' },
   { key: 'settings', label: 'Settings', description: 'Configure system preferences & staff' },
   { key: 'data-export', label: 'Data Export', description: 'Download customer and professional data as Excel or PDF (also needs Users / Workers)' },
@@ -59,13 +58,13 @@ const ADMIN_PERMISSIONS = {
     'dashboard', 'bookings', 'users', 'workers', 'services', 'categories', 'brands', 'reports',
     'reviews', 'notifications', 'content', 'scrap', 'disputes', 'transactions',
     'addons', 'coupons', 'referrals', 'cities', 'payments', 'commission', 'booking_config',
-    'plans', 'settlements', 'withdrawals', 'worker-services', 'worker-parts', 'settings', 'customization'
+    'settlements', 'withdrawals', 'worker-services', 'worker-parts', 'settings', 'customization'
   ],
   [ADMIN_ROLES.SUB_ADMIN]: [], // Controlled dynamically by admin.permissions array
   [ADMIN_ROLES.OPERATIONS_MANAGER]: ['dashboard', 'bookings', 'workers', 'reports', 'notifications', 'disputes', 'booking_config'],
   [ADMIN_ROLES.CUSTOMER_SUPPORT]: ['dashboard', 'bookings', 'users', 'reviews', 'notifications', 'disputes'],
-  [ADMIN_ROLES.FINANCE_MANAGER]: ['dashboard', 'payments', 'settlements', 'withdrawals', 'reports', 'plans', 'commission', 'transactions'],
-  [ADMIN_ROLES.SERVICE_MANAGER]: ['dashboard', 'services', 'categories', 'brands', 'plans', 'addons', 'worker-services', 'worker-parts'],
+  [ADMIN_ROLES.FINANCE_MANAGER]: ['dashboard', 'payments', 'settlements', 'withdrawals', 'reports', 'commission', 'transactions'],
+  [ADMIN_ROLES.SERVICE_MANAGER]: ['dashboard', 'services', 'categories', 'brands', 'addons', 'worker-services', 'worker-parts'],
   [ADMIN_ROLES.WORKER_MANAGER]: ['dashboard', 'workers', 'settlements', 'reports'],
   [ADMIN_ROLES.CONTENT_MANAGER]: ['dashboard', 'content', 'notifications', 'cities']
 };
