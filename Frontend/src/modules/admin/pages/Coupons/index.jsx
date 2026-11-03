@@ -7,7 +7,8 @@ import {
 } from 'react-icons/fi';
 import { toast } from 'react-hot-toast';
 import api from '../../../../services/api';
-import AdminZoneSelect from '../../components/AdminZoneSelect';
+import CouponAreaPicker from './CouponAreaPicker';
+import { areaIsIncomplete, initialAreaMode } from './couponArea';
 import ModalLock from '../../../../components/common/ModalLock';
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
@@ -80,11 +81,20 @@ const CouponModal = ({ coupon, categories, cities, onClose, onSave }) => {
     zones: coupon.zones?.map(z => z._id || z) || []
   } : { ...EMPTY_FORM });
   const [saving, setSaving] = useState(false);
+  const [areaMode, setAreaMode] = useState(() => initialAreaMode(
+    coupon?.cities?.map(c => c._id || c) || [],
+    coupon?.zones?.map(z => z._id || z) || []
+  ));
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    // An empty list means "no limit", so a limited mode with nothing picked would quietly become "everywhere"
+    if (areaIsIncomplete(areaMode, form.cities, form.zones)) {
+      toast.error(`Pick at least one ${areaMode === 'cities' ? 'city' : 'zone'}, or choose Everywhere`);
+      return;
+    }
     setSaving(true);
     try {
       const payload = {
@@ -109,8 +119,6 @@ const CouponModal = ({ coupon, categories, cities, onClose, onSave }) => {
 
   const toggleCategory = (id) =>
     set('categories', form.categories.includes(id) ? form.categories.filter(x => x !== id) : [...form.categories, id]);
-  const toggleCity = (id) =>
-    set('cities', form.cities.includes(id) ? form.cities.filter(x => x !== id) : [...form.cities, id]);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
@@ -253,44 +261,22 @@ const CouponModal = ({ coupon, categories, cities, onClose, onSave }) => {
                         : 'bg-white text-gray-600 border-gray-200 hover:border-blue-400'
                     }`}
                   >
-                    {cat.name}
+                    {cat.title || cat.name}
                   </button>
                 ))}
               </div>
             </div>
           )}
 
-          {/* City restrictions */}
-          {cities.length > 0 && (
-            <div>
-              <label className={lbl}>Restrict to Cities <span className="font-normal text-gray-400">(empty = all cities)</span></label>
-              <div className="flex flex-wrap gap-2 mt-1">
-                {cities.map(city => (
-                  <button key={city._id} type="button" onClick={() => toggleCity(city._id)}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
-                      form.cities.includes(city._id)
-                        ? 'bg-purple-600 text-white border-purple-600'
-                        : 'bg-white text-gray-600 border-gray-200 hover:border-purple-400'
-                    }`}
-                  >
-                    {city.name}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Operating Zone restrictions */}
-          <div>
-            <label className={lbl}>Restrict to Operating Zones <span className="font-normal text-gray-400">(optional - empty = all zones in selected cities)</span></label>
-            <AdminZoneSelect
-              value={form.zones || []}
-              onChange={(val) => set('zones', val)}
-              isMulti={true}
-              cityId={form.cities && form.cities.length === 1 ? form.cities[0] : null}
-              placeholder="Select specific zones (e.g. Indiranagar, Koramangala)..."
-            />
-          </div>
+          {/* Where it works: everywhere, specific cities, or specific zones */}
+          <CouponAreaPicker
+            mode={areaMode}
+            onModeChange={setAreaMode}
+            cities={cities}
+            selectedCities={form.cities || []}
+            selectedZones={form.zones || []}
+            onChange={({ cities: c, zones: z }) => setForm(f => ({ ...f, cities: c, zones: z }))}
+          />
         </form>
 
         {/* Footer */}

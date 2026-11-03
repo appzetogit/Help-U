@@ -32,7 +32,7 @@ const Settings = require('../models/Settings');
 const BookingRequest = require('../models/BookingRequest');
 const { generateAccessToken } = require('../utils/tokenService');
 const { invalidateBookingConfigCache } = require('../utils/bookingConfig');
-const { validateCoupon } = require('../services/couponService');
+const { validateCoupon, getAvailableCoupons } = require('../services/couponService');
 
 let passed = 0;
 let failed = 0;
@@ -189,13 +189,30 @@ const DELHI = { lat: 28.6139, lng: 77.209 }; // outside every zone
 
     await it('a zone-limited coupon is checked against the zone', async () => {
       await Coupon.collection.insertOne({
-        code: 'ZONEONLY', status: 'active', discountType: 'fixed', discountValue: 50, isActive: true,
+        code: 'ZONEONLY', title: 'Zone only', discountType: 'fixed', discountValue: 50, isActive: true,
         zones: [zone._id], cities: [], services: [], categories: [], minOrderAmount: 0,
-        startDate: new Date(Date.now() - 1000), endDate: new Date(Date.now() + 86400000), usageLimit: 0, usageLimitPerUser: 0, usedCount: 0
+        validFrom: new Date(Date.now() - 1000), validUntil: new Date(Date.now() + 86400000), usageLimit: 0, usageLimitPerUser: 0, usedCount: 0
       });
       const without = await validateCoupon('ZONEONLY', { userId: user._id, orderAmount: 500 });
       assert.strictEqual(without.valid, false);
       assert.match(without.reason, /zone/i);
+    });
+
+    await it('a zone-limited coupon is listed inside its zone and hidden everywhere else', async () => {
+      const inside = await getAvailableCoupons({ userId: user._id, orderAmount: 500, zoneId: zone._id });
+      assert.ok(inside.some((c) => c.code === 'ZONEONLY' && c.applicable), 'listed and usable in its zone');
+      const unknown = await getAvailableCoupons({ userId: user._id, orderAmount: 500 });
+      assert.ok(!unknown.some((c) => c.code === 'ZONEONLY'), 'hidden when the zone is unknown');
+      const otherZone = await getAvailableCoupons({ userId: user._id, orderAmount: 500, zoneId: new mongoose.Types.ObjectId() });
+      assert.ok(!otherZone.some((c) => c.code === 'ZONEONLY'), 'hidden for another zone');
+    });
+
+    await it('booking with a zone-limited coupon from inside the zone works (zone is resolved from the address)', async () => {
+      const res = await book(CUSTOMER_SW, { couponCode: 'ZONEONLY' });
+      assert.strictEqual(res.status, 201, JSON.stringify(res.body));
+      const b = await Booking.findById(res.body.data._id);
+      assert.strictEqual(b.couponCode, 'ZONEONLY');
+      assert.strictEqual(b.couponDiscount, 50);
     });
 
     // -------------------------------------------------------------- DISTANCE

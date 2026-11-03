@@ -13,6 +13,7 @@ const { resolveFieldsForCategories } = require('../../utils/detailFields');
 const { expandZoneCategories } = require('../../utils/zoneCategories');
 const { cityScopeQuery, categoryCityFilter } = require('../../utils/cityScope');
 const { zonesInUse } = require('../../utils/dispatchMode');
+const { resolveLocation, locationProblem } = require('../../services/couponService');
 
 /**
  * Helper to resolve zone from query (zoneId, lat, lng, cityId)
@@ -1175,33 +1176,15 @@ const getPublicCategoryCatalog = async (req, res) => {
         { categories: { $exists: false } }
       ]
     };
-    if (cityId) {
-      couponQuery.$and = couponQuery.$and || [];
-      couponQuery.$and.push({
-        $or: [
-          { cities: cityId },
-          { cities: { $size: 0 } },
-          { cities: { $exists: false } }
-        ]
-      });
-    }
-    if (activeZoneId) {
-      couponQuery.$and = couponQuery.$and || [];
-      couponQuery.$and.push({
-        $or: [
-          { zones: activeZoneId },
-          { zones: { $size: 0 } },
-          { zones: { $exists: false } }
-        ]
-      });
-    }
-
     const rawCoupons = await Coupon.find(couponQuery).lean();
+    // City and zone limits are checked here with the same rule checkout uses, so the strip never
+    // advertises a coupon the customer could not apply (including when their zone is not known yet).
+    const location = await resolveLocation({ zoneId: activeZoneId, cityId });
     const validCoupons = rawCoupons.filter(c => {
       if (c.usageLimit && c.usageLimit > 0 && (c.usedCount || 0) >= c.usageLimit) {
         return false;
       }
-      return true;
+      return !locationProblem(c, location);
     });
 
     validCoupons.sort((a, b) => {

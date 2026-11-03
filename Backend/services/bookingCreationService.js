@@ -539,6 +539,8 @@ const placeBooking = async (userId, payload, options = {}) => {
       orderAmount: basePrice,
       categoryId: service.categoryId || category,
       serviceId,
+      // The zone found from the address, not the one the app claims; it also fixes the city
+      zoneId: matchedZone?._id,
       cityId
     });
 

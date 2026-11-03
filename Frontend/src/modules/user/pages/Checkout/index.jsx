@@ -23,6 +23,7 @@ import { getPlans } from '../../services/planService';
 import { userAuthService } from '../../../../services/authService';
 import { useCart } from '../../../../context/CartContext';
 import { useZone } from '../../../../context/ZoneContext';
+import { useCity } from '../../../../context/CityContext';
 import LiveBookingCard from '../../components/booking/LiveBookingCard';
 import ModalLock from '../../../../components/common/ModalLock';
 
@@ -41,6 +42,8 @@ const Checkout = () => {
   const plan = location.state?.plan || null;
   const { fetchCart: fetchCartGlobal, clearCart: clearCartGlobal, removeCategoryItems: removeCategoryGlobal } = useCart();
   const { zoneId, isOutOfZone, detectZone, markOutOfZone } = useZone() || {};
+  const { currentCity } = useCity() || {};
+  const cityId = currentCity?._id || currentCity?.id || undefined;
 
   const [cartItems, setCartItems] = useState([]);
   const [showAddressModal, setShowAddressModal] = useState(false);
@@ -580,6 +583,7 @@ const Checkout = () => {
         bookingType, // 'instant' or 'scheduled'
         serviceId: serviceId,
         zoneId: zoneId || undefined,
+        cityId,
         address: addressObj,
         scheduledDate: finalDate.toISOString(),
         scheduledTime: finalTimeDisplay,
@@ -1139,13 +1143,14 @@ const Checkout = () => {
       orderAmount: itemTotal,
       categoryId: catId,
       serviceId: srvId,
+      cityId,
       zoneId: zoneId || undefined
     }).then(res => {
       if (res?.success && Array.isArray(res.coupons)) {
         setAvailableCoupons(res.coupons);
       }
     }).catch(() => {});
-  }, [itemTotal, cartItems.length, plan, zoneId]);
+  }, [itemTotal, cartItems.length, plan, zoneId, cityId]);
 
   const handleApplyCoupon = async (codeToApply) => {
     const code = (codeToApply || couponInput || '').trim().toUpperCase();
@@ -1163,6 +1168,7 @@ const Checkout = () => {
         orderAmount: itemTotal,
         categoryId: catId,
         serviceId: srvId,
+        cityId,
         zoneId: zoneId || undefined
       });
       if (res.success && res.valid) {
