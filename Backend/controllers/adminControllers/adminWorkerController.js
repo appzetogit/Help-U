@@ -46,6 +46,8 @@ const getAllWorkers = async (req, res) => {
     // Get workers
     const workers = await Worker.find(query)
       .select('-password')
+      // Who referred this professional (the id alone tells an admin nothing)
+      .populate('referredBy', 'name businessName phone referralCode')
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(parseInt(limit));
@@ -79,7 +81,7 @@ const getWorkerDetails = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const worker = await Worker.findById(id).select('-password');
+    const worker = await Worker.findById(id).select('-password').populate('referredBy', 'name businessName phone referralCode');
 
     if (!worker) {
       return res.status(404).json({

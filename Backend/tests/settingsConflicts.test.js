@@ -136,8 +136,9 @@ const slotOn = (daysAhead, hhmm) => {
   await setSettings({ cancellationPenalty: 700, userLateCancelFeeType: 'fixed', userLateCancelFeeValue: 49 });
   p = await feeFor({}); check('never more than the booking amount (₹500)', p.fee === 500, JSON.stringify(p));
   await setSettings({ cancellationPenalty: 21, userLateCancelFeeType: 'fixed', userLateCancelFeeValue: 49 });
-  p = await feeFor({ status: 'visited', visitedAt: new Date(), visitingCharges: 80 }); check('arrived with a ₹80 visiting charge -> ₹80', p.fee === 80 && p.stage === 'arrived', JSON.stringify(p));
-  p = await feeFor({ status: 'visited', visitedAt: new Date(), visitingCharges: 0 }); check('arrived, no visiting charge -> the flat ₹21', p.fee === 21, JSON.stringify(p));
+  // Once the professional has arrived the customer can no longer cancel, so there is no fee to preview
+  const arrived = await request(app).get(`/api/users/bookings/${(await mkBooking({ status: 'visited', visitedAt: new Date(), visitingCharges: 80 }))._id}/cancellation-preview`).set(A);
+  check('once the professional has arrived, cancelling is refused (no fee is offered)', arrived.status === 400 && /already arrived/i.test(arrived.body.message || ''), `${arrived.status} ${arrived.body.message || ''}`);
   await setSettings({ cancellationPenalty: 0, userLateCancelFeeType: 'fixed', userLateCancelFeeValue: 0 });
   p = await feeFor({}); check('everything 0 -> free', p.isFree === true, JSON.stringify(p));
 

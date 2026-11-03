@@ -7,6 +7,30 @@ import Modal from '../UserCategories/components/Modal';
 import adminWorkerService from '../../../../services/adminWorkerService';
 import DataExportButton from '../../components/common/DataExportButton';
 import { getPartnerRegistrationFields } from '../../services/workerService';
+import { downloadFile } from '../../../../utils/downloadFile';
+
+const Chips = ({ items, tone = 'blue' }) => {
+  const list = [...new Set((items || []).map((i) => String(i).trim()).filter(Boolean))];
+  if (list.length === 0) return <span className="text-sm text-gray-500">None chosen</span>;
+  const tones = { blue: 'bg-blue-50 text-blue-700 border-blue-100', purple: 'bg-purple-50 text-purple-700 border-purple-100', gray: 'bg-gray-100 text-gray-700 border-gray-200' };
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {list.map((t) => <span key={t} className={`rounded-full border px-2.5 py-0.5 text-xs font-semibold ${tones[tone]}`}>{t}</span>)}
+    </div>
+  );
+};
+
+/** View (opens the file) and Download (saves it) for one document. */
+const DocActions = ({ url, name }) => (
+  <div className="mt-2 flex flex-wrap items-center gap-4 text-sm font-semibold">
+    <a href={url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 text-gray-600 hover:text-gray-900">
+      <FiEye className="w-4 h-4" /> View
+    </a>
+    <button type="button" onClick={() => downloadFile(url, name)} className="inline-flex items-center gap-2 text-blue-600 hover:text-blue-700">
+      <FiDownload className="w-4 h-4" /> Download
+    </button>
+  </div>
+);
 
 const AllWorkers = () => {
   const [workers, setWorkers] = useState([]);
@@ -75,6 +99,12 @@ const AllWorkers = () => {
           alternatePhone: worker.alternatePhone || null,
           businessName: worker.businessName,
           service: worker.service,
+          // Services the professional chose at sign-up: the service categories, categories and skills they listed
+          categories: Array.isArray(worker.categories) ? worker.categories : [],
+          skills: Array.isArray(worker.skills) ? worker.skills : [],
+          referralCode: worker.referralCode || '',
+          // The referrer comes back as { name, phone, referralCode } (null when nobody referred them)
+          referredBy: worker.referredBy && typeof worker.referredBy === 'object' ? worker.referredBy : null,
           approvalStatus: worker.approvalStatus,
           aadhar: worker.aadhar?.number,
           pan: worker.pan?.number,
@@ -454,6 +484,47 @@ const AllWorkers = () => {
               </div>
             </div>
 
+            {/* Referral: their own code, and who brought them in (if anyone) */}
+            <div className="grid grid-cols-2 gap-4 rounded-xl border border-gray-200 bg-gray-50 p-4">
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-1">Referral code</label>
+                <div className="text-gray-900 font-mono font-semibold" data-testid="worker-referral-code">{selectedWorker.referralCode || 'Not generated'}</div>
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-1">Referred by</label>
+                {selectedWorker.referredBy ? (
+                  <div className="text-gray-900" data-testid="worker-referred-by">
+                    <span className="font-medium">{selectedWorker.referredBy.businessName || selectedWorker.referredBy.name || 'Another professional'}</span>
+                    {selectedWorker.referredBy.phone && <span className="block text-xs text-gray-500">{selectedWorker.referredBy.phone}</span>}
+                    {selectedWorker.referredBy.referralCode && <span className="block text-xs font-mono text-gray-500">Code {selectedWorker.referredBy.referralCode}</span>}
+                  </div>
+                ) : (
+                  <div className="text-gray-500 text-sm" data-testid="worker-referred-by">Not referred by anyone</div>
+                )}
+              </div>
+            </div>
+
+            {/* Services the professional chose at sign-up */}
+            <div className="space-y-3" data-testid="worker-services">
+              <label className="block text-sm font-semibold text-gray-700">Services chosen</label>
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-1">Services</p>
+                <Chips items={Array.isArray(selectedWorker.service) ? selectedWorker.service : [selectedWorker.service]} />
+              </div>
+              {(selectedWorker.categories || []).length > 0 && (
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-1">Categories</p>
+                  <Chips items={selectedWorker.categories} tone="purple" />
+                </div>
+              )}
+              {(selectedWorker.skills || []).length > 0 && (
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-1">Skills</p>
+                  <Chips items={selectedWorker.skills} tone="gray" />
+                </div>
+              )}
+            </div>
+
             <div>
               <label className="block text-sm font-semibold text-gray-700 mb-3">Verification Documents</label>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -465,14 +536,7 @@ const AllWorkers = () => {
                       alt="Aadhar Front"
                       className="w-full h-48 object-cover rounded-lg border-2 border-gray-200"
                     />
-                    <a
-                      href={selectedWorker.documents.aadhar}
-                      download
-                      className="mt-2 inline-flex items-center gap-2 text-sm text-blue-600 hover:text-blue-700"
-                    >
-                      <FiDownload className="w-4 h-4" />
-                      Download
-                    </a>
+                    <DocActions url={selectedWorker.documents.aadhar} name={`${selectedWorker.name} - Aadhar front`} />
                   </div>
                 )}
                 {selectedWorker.documents.aadharBack && (
@@ -483,14 +547,7 @@ const AllWorkers = () => {
                       alt="Aadhar Back"
                       className="w-full h-48 object-cover rounded-lg border-2 border-gray-200"
                     />
-                    <a
-                      href={selectedWorker.documents.aadharBack}
-                      download
-                      className="mt-2 inline-flex items-center gap-2 text-sm text-blue-600 hover:text-blue-700"
-                    >
-                      <FiDownload className="w-4 h-4" />
-                      Download
-                    </a>
+                    <DocActions url={selectedWorker.documents.aadharBack} name={`${selectedWorker.name} - Aadhar back`} />
                   </div>
                 )}
                 {selectedWorker.documents.pan && (
@@ -501,14 +558,7 @@ const AllWorkers = () => {
                       alt="PAN"
                       className="w-full h-48 object-cover rounded-lg border-2 border-gray-200"
                     />
-                    <a
-                      href={selectedWorker.documents.pan}
-                      download
-                      className="mt-2 inline-flex items-center gap-2 text-sm text-blue-600 hover:text-blue-700"
-                    >
-                      <FiDownload className="w-4 h-4" />
-                      Download
-                    </a>
+                    <DocActions url={selectedWorker.documents.pan} name={`${selectedWorker.name} - PAN card`} />
                   </div>
                 )}
 
@@ -534,16 +584,7 @@ const AllWorkers = () => {
                           className="w-full h-48 object-cover rounded-lg border-2 border-gray-200"
                         />
                       )}
-                      <a
-                        href={doc.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        download
-                        className="mt-2 inline-flex items-center gap-2 text-sm text-blue-600 hover:text-blue-700 font-semibold"
-                      >
-                        <FiDownload className="w-4 h-4" />
-                        Download / View
-                      </a>
+                      <DocActions url={doc.url} name={`${selectedWorker.name} - ${fieldLabels[doc.fieldKey] || doc.label || doc.fieldKey || `document ${idx + 1}`}`} />
                     </div>
                   );
                 })}
