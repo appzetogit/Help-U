@@ -14,11 +14,17 @@ import { useCity } from '../../../../context/CityContext';
 import { useConfig } from '../../../../context/ConfigContext';
 import { HiChevronDown } from 'react-icons/hi';
 
-// "Area, City, State, ..." -> "Area, City"
+// "Area, City, State, ..." -> "Area, City" with case-insensitive deduplication
 const getShortLocation = (location) => {
   if (!location || location === '...') return 'Select Location';
   const parts = location.split(',').map(p => p.trim()).filter(Boolean);
-  return parts.slice(0, 2).join(', ') || 'Select Location';
+  const unique = [];
+  for (const part of parts) {
+    if (!unique.some(u => u.toLowerCase() === part.toLowerCase())) {
+      unique.push(part);
+    }
+  }
+  return unique.slice(0, 2).join(', ') || 'Select Location';
 };
 
 const Header = ({ location, onLocationClick, showNotifications = false }) => {

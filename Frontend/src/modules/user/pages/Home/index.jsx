@@ -34,6 +34,8 @@ import HomeSkeleton from './components/HomeSkeleton';
 import OutOfZoneScreen from '../../../../components/common/OutOfZoneScreen';
 import AddressSelectionModal from '../Checkout/components/AddressSelectionModal';
 import { userAuthService } from '../../../../services/authService';
+import flutterBridge from '../../../../utils/flutterBridge';
+import { reverseGeocodeCoords } from '../../../../utils/reverseGeocode';
 import ScrapPromotionCard from './components/ScrapPromotionCard';
 import DebugConsole from '../../components/common/DebugConsole';
 import { getCategoryIllustration } from '../../utils/categoryIcons';
@@ -177,6 +179,7 @@ const Home = () => {
       const newAddress = locationObj.address;
       setAddress(newAddress);
       localStorage.setItem('currentAddress', newAddress);
+      localStorage.setItem('location_is_auto', 'false');
       if (typeof locationObj.lat === 'number' && typeof locationObj.lng === 'number') {
         try { localStorage.setItem('userCoords', JSON.stringify({ lat: locationObj.lat, lng: locationObj.lng })); } catch { /* ignore */ }
         detectZone(locationObj.lat, locationObj.lng);
@@ -252,101 +255,117 @@ const Home = () => {
     setIsAddressModalOpen(false);
   };
 
-  // Auto-detect location on mount
+  // Auto-detect or sync location on mount via Unified Bridge
   useEffect(() => {
-    const autoDetectLocation = async () => {
-      if (navigator.geolocation) {
-        if (address === 'Select Location') {
-          navigator.geolocation.getCurrentPosition(
-            async (position) => {
-              try {
-                const { latitude, longitude } = position.coords;
-                // Cache coordinates so category ETA badges can use them
-                try { localStorage.setItem('userCoords', JSON.stringify({ lat: latitude, lng: longitude })); } catch { /* ignore */ }
-                detectZone(latitude, longitude);
+    let active = true;
 
-                let result = null;
-
-                // 1. Try server-side reverse geocode endpoint (uses backend Google Maps API key, no client referrer restrictions)
-                try {
-                  const backendRes = await api.get('/public/reverse-geocode', {
-                    params: { lat: latitude, lng: longitude, language: mapLanguage || 'en' }
-                  });
-                  if (backendRes.data?.success && backendRes.data?.result) {
-                    result = backendRes.data.result;
-                  }
-                } catch (apiErr) {
-                  // Fallback to direct client fetch
+    const resolveLocation = async () => {
+      // 1. If user is logged in and address is currently "Select Location", check their saved default address first
+      const authToken = localStorage.getItem('accessToken');
+      if (authToken && (!address || address === 'Select Location')) {
+        try {
+          const profile = await userAuthService.getProfile();
+          if (active && profile?.user?.addresses?.length > 0) {
+            const defaultAddr = profile.user.addresses.find(a => a.isDefault) || profile.user.addresses[0];
+            if (defaultAddr) {
+              const addrText = defaultAddr.addressLine1 || defaultAddr.city;
+              if (addrText) {
+                setAddress(addrText);
+                try { localStorage.setItem('currentAddress', addrText); } catch {}
+                if (defaultAddr.city) {
+                  setDetectedCityName(defaultAddr.city);
+                  try { localStorage.setItem('currentCity', defaultAddr.city); } catch {}
                 }
-
-                // 2. Direct client fetch fallback
-                if (!result) {
-                  try {
-                    const apiKey = configuredMapApiKey || import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
-                    const response = await fetch(
-                      `https://maps.googleapis.com/maps/api/geocode/json?latlng=${latitude},${longitude}&key=${apiKey}&language=${mapLanguage || 'en'}`
-                    );
-                    const data = await response.json();
-                    if (data.status === 'OK' && data.results?.length > 0) {
-                      result = data.results[0];
-                    }
-                  } catch (directErr) {
-                    // Ignore direct fetch error
-                  }
+                if (defaultAddr.lat && defaultAddr.lng) {
+                  try { localStorage.setItem('userCoords', JSON.stringify({ lat: defaultAddr.lat, lng: defaultAddr.lng })); } catch {}
+                  detectZone(defaultAddr.lat, defaultAddr.lng);
                 }
-
-                if (result) {
-                  const getComponent = (type) =>
-                    result.address_components?.find(c => c.types?.includes(type))?.long_name || '';
-
-                  const area = getComponent('sublocality_level_1') || getComponent('neighborhood') || getComponent('locality');
-                  const city = getComponent('locality') || getComponent('administrative_area_level_2');
-                  const state = getComponent('administrative_area_level_1');
-
-                  const formattedAddress = `${area ? area + ', ' : ''}${city ? city + ', ' : ''}${state}`;
-                  setAddress(formattedAddress || result.formatted_address);
-                  localStorage.setItem('currentAddress', formattedAddress || result.formatted_address);
-
-                  if (city) {
-                    setDetectedCityName(city);
-                    localStorage.setItem('currentCity', city);
-
-                    // Immediate update of selected city if supported
-                    if (cities && cities.length > 0) {
-                      const matchedCity = cities.find(c =>
-                        c.name.toLowerCase() === city.toLowerCase() ||
-                        c.name.toLowerCase().includes(city.toLowerCase()) ||
-                        city.toLowerCase().includes(c.name.toLowerCase())
-                      );
-                      if (matchedCity) {
-                        selectCity(matchedCity);
-                      } else {
-                        selectCity(null);
-                      }
-                    }
-                  }
-                }
-              } catch (error) {
-                // Silent fail
               }
-            },
-            (error) => {
-              console.log("GPS Error:", error);
-            },
-            {
-              enableHighAccuracy: true,
-              timeout: 5000,
-              maximumAge: 0
             }
-          );
+          }
+        } catch (e) {
+          // Silent fallback to GPS detection
         }
+      }
+
+      // 2. High-Accuracy Location Detection via Unified Bridge (Native Flutter GPS -> Browser High Accuracy -> IP Fallback)
+      try {
+        const pos = await flutterBridge.getCurrentLocation();
+        if (!active || !pos || typeof pos.latitude !== 'number' || typeof pos.longitude !== 'number') return;
+
+        const { latitude, longitude } = pos;
+
+        // Cache coordinates for instant category ETA badges & distance matrix
+        try {
+          localStorage.setItem('userCoords', JSON.stringify({ lat: latitude, lng: longitude }));
+        } catch { /* ignore */ }
+        detectZone(latitude, longitude);
+
+        // Reverse Geocode using Universal Geocoder (Backend Google Maps -> Client Maps -> OSM Fallback)
+        const geocoded = await reverseGeocodeCoords(latitude, longitude, mapLanguage || 'en');
+        if (!active) return;
+
+        // Prefer clean shortLabel (e.g. "Vijay Nagar, Indore"), fallback to formattedAddress
+        const cleanLabel = geocoded.shortLabel || geocoded.formattedAddress;
+        const detectedCity = geocoded.city || pos.city || '';
+
+        // If currently "Select Location" or user is on auto-detected location, update to real-time detected location
+        const isDefaultOrAuto = !address || address === 'Select Location' || localStorage.getItem('location_is_auto') === 'true';
+
+        if (cleanLabel && isDefaultOrAuto) {
+          setAddress(cleanLabel);
+          try {
+            localStorage.setItem('currentAddress', cleanLabel);
+            localStorage.setItem('location_is_auto', 'true');
+          } catch {}
+        }
+
+        if (detectedCity) {
+          setDetectedCityName(detectedCity);
+          try { localStorage.setItem('currentCity', detectedCity); } catch {}
+
+          if (cities && cities.length > 0) {
+            const matchedCity = cities.find(c =>
+              c.name.toLowerCase() === detectedCity.toLowerCase() ||
+              c.name.toLowerCase().includes(detectedCity.toLowerCase()) ||
+              detectedCity.toLowerCase().includes(c.name.toLowerCase())
+            );
+            if (matchedCity) {
+              selectCity(matchedCity);
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('Auto-detect user location error:', err?.message || err);
       }
     };
 
-    autoDetectLocation();
+    resolveLocation();
+
+    // Listen for custom locationUpdate events (from permission checker or address picker)
+    const handleLocationUpdate = async (e) => {
+      if (e.detail?.latitude && e.detail?.longitude) {
+        try {
+          const { latitude, longitude } = e.detail;
+          try { localStorage.setItem('userCoords', JSON.stringify({ lat: latitude, lng: longitude })); } catch {}
+          detectZone(latitude, longitude);
+          const geocoded = await reverseGeocodeCoords(latitude, longitude, mapLanguage || 'en');
+          if (geocoded.shortLabel) {
+            setAddress(geocoded.shortLabel);
+            try { localStorage.setItem('currentAddress', geocoded.shortLabel); } catch {}
+          }
+        } catch (err) {}
+      }
+    };
+    window.addEventListener('locationUpdate', handleLocationUpdate);
 
     // Register FCM token for user to receive push notifications
-    registerFCMToken('user', true).catch(err => {/* Silent fail */ });
+    registerFCMToken('user', true).catch(() => {});
+
+    return () => {
+      active = false;
+      window.removeEventListener('locationUpdate', handleLocationUpdate);
+    };
   }, []);
 
   // Revisits render instantly from the last known data; fresh data loads in the background
