@@ -4,6 +4,7 @@
  */
 
 import { messaging, getToken, onMessage } from '../firebase';
+import api from './api';
 
 const VAPID_KEY = import.meta.env.VITE_FIREBASE_VAPID_KEY;
 
@@ -114,31 +115,46 @@ async function getFCMToken() {
 }
 
 /**
- * Register FCM token with backend
+ * Register this device for push notifications, and say why if it could not.
+ * Resolves to { ok, token, reason, detail }. `reason` is one of:
+ *   unsupported    this browser cannot receive pushes
+ *   app            inside the Help U app, where the app registers the phone itself
+ *   not-configured the web push keys are missing from this build
+ *   denied         notifications are blocked for this site / app in the phone or browser settings
+ *   dismissed      the permission question was closed without an answer
+ *   no-token       Firebase gave no device token
+ *   not-logged-in  there is no signed-in session to attach the device to
+ *   server         the server refused the device
+ *   error          anything else (detail has the message)
  * @param {string} userType - 'user' or 'worker'
  * @param {boolean} forceUpdate - Force token update
- * @returns {Promise<string|null>}
  */
-async function registerFCMToken(userType = 'user', forceUpdate = false) {
+async function registerFCMTokenDetailed(userType = 'user', forceUpdate = false) {
+  const fail = (reason, detail) => {
+    console.warn(`[FCM] This device was not registered for notifications (${reason})`, detail || '');
+    return { ok: false, token: null, reason, detail };
+  };
+
   try {
     const platform = getPlatformType();
     const storageKey = `fcm_token_${userType}_${platform}`;
     const savedToken = localStorage.getItem(storageKey);
     if (savedToken && !forceUpdate) {
-      return savedToken;
+      return { ok: true, token: savedToken, reason: null };
     }
+
+    const canPush = typeof window !== 'undefined' && 'Notification' in window && 'serviceWorker' in navigator;
+    if (!canPush) return fail(isFlutterWebView() ? 'app' : 'unsupported');
+    if (!messaging) return fail('not-configured');
+    if (Notification.permission === 'denied') return fail('denied');
 
     // Request permission
     const hasPermission = await requestNotificationPermission();
-    if (!hasPermission) {
-      return null;
-    }
+    if (!hasPermission) return fail(Notification.permission === 'denied' ? 'denied' : 'dismissed');
 
     // Get token
     const token = await getFCMToken();
-    if (!token) {
-      return null;
-    }
+    if (!token) return fail('no-token');
 
     // Determine API endpoint based on user type
     let endpoint;
@@ -159,9 +175,7 @@ async function registerFCMToken(userType = 'user', forceUpdate = false) {
 
     // Get auth token
     const authToken = localStorage.getItem(authTokenKey);
-    if (!authToken) {
-      return null;
-    }
+    if (!authToken) return fail('not-logged-in');
 
     // Save to backend
     const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
@@ -180,13 +194,44 @@ async function registerFCMToken(userType = 'user', forceUpdate = false) {
 
     if (response.ok) {
       localStorage.setItem(storageKey, token);
-      return token;
-    } else {
-      const error = await response.json();
-      return null;
+      return { ok: true, token, reason: null };
     }
+    return fail('server', `HTTP ${response.status}`);
   } catch (error) {
-    return null;
+    return fail('error', error?.message);
+  }
+}
+
+/**
+ * Register FCM token with backend
+ * @param {string} userType - 'user' or 'worker'
+ * @param {boolean} forceUpdate - Force token update
+ * @returns {Promise<string|null>}
+ */
+async function registerFCMToken(userType = 'user', forceUpdate = false) {
+  const result = await registerFCMTokenDetailed(userType, forceUpdate);
+  return result.token || null;
+}
+
+/**
+ * How many devices the server has registered for this person (counts only).
+ * @param {string} userType - 'user' or 'worker'
+ */
+async function getPushStatus(userType = 'user') {
+  const response = await api.get(`/${userType === 'worker' ? 'workers' : 'users'}/fcm-tokens/status`);
+  return response.data;
+}
+
+/**
+ * Send a test notification to the person's own devices.
+ * @param {string} userType - 'user' or 'worker'
+ */
+async function sendTestPush(userType = 'user') {
+  try {
+    const response = await api.post(`/${userType === 'worker' ? 'workers' : 'users'}/fcm-tokens/test`);
+    return response.data;
+  } catch (error) {
+    return error.response?.data || { success: false, error: 'Could not send the test notification' };
   }
 }
 
@@ -308,6 +353,10 @@ async function initializePushNotifications() {
 export {
   initializePushNotifications,
   registerFCMToken,
+  registerFCMTokenDetailed,
+  getPushStatus,
+  sendTestPush,
+  isFlutterWebView,
   removeFCMToken,
   setupForegroundNotificationHandler,
   requestNotificationPermission,

@@ -54,8 +54,8 @@ export const userPolicy = (config, settings) => {
     },
     {
       key: 'arrived', tone: 'red', icon: 'pin', title: 'Professional arrived',
-      when: 'Once they reach your address', result: visiting > 0 ? `${rupees(visiting)} visiting charge` : '₹149 visiting charge',
-      detail: 'They have reached you, so the visit is charged.'
+      when: 'Once they reach your address', result: 'Cannot be cancelled',
+      detail: `They have reached you, so the visit is charged${visiting > 0 ? ` (${rupees(visiting)})` : ''} and the booking can no longer be cancelled in the app. If something is wrong, please contact support.`
     }
   ].filter(Boolean);
 

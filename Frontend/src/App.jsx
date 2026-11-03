@@ -12,10 +12,14 @@ import { CartProvider } from './context/CartContext';
 import { CityProvider } from './context/CityContext';
 import { ZoneProvider } from './context/ZoneContext';
 import { initializePushNotifications, setupForegroundNotificationHandler } from './services/pushNotificationService';
+import { installKeyboardWatcher } from './utils/keyboardWatcher';
 import { LocationPermissionChecker, MaintenanceGate } from './components/common';
 
 function App() {
   // Initialize push notifications on app load
+  // Hide bottom bars while the on-screen keyboard is up, so they do not ride on top of the form
+  useEffect(() => installKeyboardWatcher(), []);
+
   useEffect(() => {
     initializePushNotifications();
 

@@ -3,7 +3,8 @@ const Booking = require('../../models/Booking');
 const WorkerServiceCatalog = require('../../models/WorkerServiceCatalog');
 const WorkerPartsCatalog = require('../../models/WorkerPartsCatalog');
 const Settings = require('../../models/Settings');
-const { BILL_STATUS, BOOKING_STATUS } = require('../../utils/constants');
+const { BILL_STATUS, BOOKING_STATUS, PAYMENT_STATUS } = require('../../utils/constants');
+const { PAID: PAID_STATUSES } = require('../../utils/bookingTotals');
 const { billLockReason } = require('../../utils/billLock');
 const { issuePaymentCode } = require('../../utils/paymentCode');
 const { resolveCommission, computeWorkerEarnings, toPayoutConfig } = require('../../services/commissionService');
@@ -310,8 +311,26 @@ const createOrUpdateBill = async (req, res) => {
       ? Number(booking.advancePayment?.paidAmount || booking.advancePayment?.requestedAmount || 0)
       : 0;
 
+    // A booking paid online up front has already covered the booking as it was. Remember that amount before the
+    // bill replaces finalAmount, so a bill that grows (repair services, parts) only asks for the difference
+    // instead of the whole bill again.
+    if (!(Number(booking.prepaidAmount) > 0) && !booking.vendorBillId && !booking.billFinalizedAt && !booking.cashCollected
+      && PAID_STATUSES.includes(booking.paymentStatus)) {
+      booking.prepaidAmount = Number(booking.finalAmount) || 0;
+    }
+    const prepaidAmount = Number(booking.prepaidAmount) || 0;
+
     booking.finalAmount = grandTotal;
-    booking.userPayableAmount = Math.max(0, parseFloat((grandTotal - advancePaidAmount).toFixed(2)));
+    booking.userPayableAmount = Math.max(0, parseFloat((grandTotal - advancePaidAmount - prepaidAmount).toFixed(2)));
+    if (prepaidAmount > 0) {
+      // "Paid" means paid in full: a balance owed puts the booking back to pending, and it returns to paid
+      // when the balance is settled (or if the bill comes back down to what was already paid).
+      if (booking.userPayableAmount > 0 && PAID_STATUSES.includes(booking.paymentStatus)) {
+        booking.paymentStatus = PAYMENT_STATUS.PENDING;
+      } else if (booking.userPayableAmount === 0 && booking.paymentStatus === PAYMENT_STATUS.PENDING) {
+        booking.paymentStatus = PAYMENT_STATUS.SUCCESS;
+      }
+    }
     booking.vendorBillId = bill._id;
     // The customer sees the bill only when the worker sends it (opens the Review step); any other
     // save withdraws it until it is sent again.

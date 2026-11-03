@@ -8,6 +8,7 @@ import LogoutConfirm from '../../../../components/common/LogoutConfirm';
 import { workerTheme as themeColors } from '../../../../theme';
 import { workerAuthService } from '../../../../services/authService';
 import { registerFCMToken, removeFCMToken } from '../../../../services/pushNotificationService';
+import PushStatusCard from '../../../../components/common/PushStatusCard';
 import { useLanguage } from '../../../../context/LanguageContext';
 import Header from '../../components/layout/Header';
 
@@ -164,6 +165,8 @@ const Settings = () => {
           }}
         >
           <h3 className="font-bold text-gray-800 mb-4">Notifications</h3>
+
+          <PushStatusCard userType="worker" className="mb-4" />
 
           <div className="space-y-4">
             <div className="flex items-center justify-between">

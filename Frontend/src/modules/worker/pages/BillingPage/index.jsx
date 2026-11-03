@@ -435,7 +435,9 @@ const BillingPage = () => {
     const advancePaidAmount = booking.advancePayment?.status === 'paid'
       ? Number(booking.advancePayment.paidAmount || booking.advancePayment.requestedAmount || 0)
       : 0;
-    const remainingPayableAmount = parseFloat(Math.max(0, finalBillAmount - advancePaidAmount).toFixed(2));
+    // Paid online up front (before this bill): that money already covers part of it
+    const prepaidAmount = Number(booking.totals?.prepaid) || 0;
+    const remainingPayableAmount = parseFloat(Math.max(0, finalBillAmount - advancePaidAmount - prepaidAmount).toFixed(2));
 
     // Worker Earnings estimate
     const workerServiceEarnings = parseFloat(((totalServiceBase * servicePayoutPct) / 100).toFixed(2));
@@ -457,6 +459,7 @@ const BillingPage = () => {
       transportCharges: finalTransportCharges,
       finalBillAmount,
       advancePaidAmount,
+      prepaidAmount,
       remainingPayableAmount,
       totalWorkerEarnings,
       workerServiceEarnings,
@@ -489,7 +492,7 @@ const BillingPage = () => {
   // Once the bill is saved on the server its total is the one the customer pays, so show that
   const billTotal = sentBill?.grandTotal ?? calculations?.finalBillAmount ?? 0;
   const payableNow = sentBill
-    ? Math.max(0, parseFloat((sentBill.grandTotal - (calculations?.advancePaidAmount || 0)).toFixed(2)))
+    ? Math.max(0, parseFloat((sentBill.grandTotal - (calculations?.advancePaidAmount || 0) - (calculations?.prepaidAmount || 0)).toFixed(2)))
     : (calculations?.remainingPayableAmount ?? 0);
 
   useEffect(() => { currentStepRef.current = currentStep; }, [currentStep]);
@@ -868,7 +871,7 @@ const BillingPage = () => {
             );
           })}
         </div>
-        <div className="fixed bottom-0 left-0 right-0 p-4 pb-[max(1rem,var(--safe-bottom))] bg-white/80 backdrop-blur-md border-t border-gray-100 shadow-[0_-4px_20px_rgba(0,0,0,0.05)] z-50 flex gap-3">
+        <div data-hide-on-keyboard className="fixed bottom-0 left-0 right-0 p-4 pb-[max(1rem,var(--safe-bottom))] bg-white/80 backdrop-blur-md border-t border-gray-100 shadow-[0_-4px_20px_rgba(0,0,0,0.05)] z-50 flex gap-3">
           <button onClick={() => setViewMode('timeline')} className="flex-1 py-3.5 bg-white text-gray-700 font-bold rounded-xl border border-gray-200">
             Save & Exit
           </button>
@@ -926,7 +929,7 @@ const BillingPage = () => {
             );
           })}
         </div>
-        <div className="fixed bottom-0 left-0 right-0 p-4 pb-[max(1rem,var(--safe-bottom))] bg-white/80 backdrop-blur-md border-t border-gray-100 shadow-[0_-4px_20px_rgba(0,0,0,0.05)] z-50 flex gap-3">
+        <div data-hide-on-keyboard className="fixed bottom-0 left-0 right-0 p-4 pb-[max(1rem,var(--safe-bottom))] bg-white/80 backdrop-blur-md border-t border-gray-100 shadow-[0_-4px_20px_rgba(0,0,0,0.05)] z-50 flex gap-3">
           <button onClick={() => setViewMode('timeline')} className="flex-1 py-3.5 bg-white text-gray-700 font-bold rounded-xl border border-gray-200">
             Save & Exit
           </button>
@@ -1270,11 +1273,11 @@ const BillingPage = () => {
               <div className="bg-gray-900 px-6 py-6 text-white text-center">
                 <p className="text-gray-400 text-xs font-medium uppercase tracking-widest mb-1">TOTAL INVOICE AMOUNT</p>
                 <h2 className="text-4xl font-black">₹{billTotal.toFixed(2)}</h2>
-                {calculations.advancePaidAmount > 0 && (
+                {(calculations.advancePaidAmount > 0 || calculations.prepaidAmount > 0) && (
                   <div className="mt-4 grid grid-cols-2 gap-3 text-left">
                     <div className="rounded-2xl bg-white/10 px-4 py-3">
-                      <p className="text-[10px] uppercase tracking-widest text-gray-300 mb-1">Advance Paid</p>
-                      <p className="text-lg font-black text-emerald-300">₹{calculations.advancePaidAmount.toFixed(2)}</p>
+                      <p className="text-[10px] uppercase tracking-widest text-gray-300 mb-1">{calculations.prepaidAmount > 0 ? 'Already Paid' : 'Advance Paid'}</p>
+                      <p className="text-lg font-black text-emerald-300">₹{(calculations.advancePaidAmount + calculations.prepaidAmount).toFixed(2)}</p>
                     </div>
                     <div className="rounded-2xl bg-white/10 px-4 py-3">
                       <p className="text-[10px] uppercase tracking-widest text-gray-300 mb-1">Remaining Due</p>
@@ -1507,7 +1510,7 @@ const BillingPage = () => {
       </div>
 
       {/* Fixed Bottom Navigation for Timeline View */}
-      <div className="fixed bottom-0 left-0 right-0 p-4 pb-[max(1rem,var(--safe-bottom))] bg-white/80 backdrop-blur-md border-t border-gray-100 shadow-[0_-4px_20px_rgba(0,0,0,0.05)] z-50 flex gap-3">
+      <div data-hide-on-keyboard className="fixed bottom-0 left-0 right-0 p-4 pb-[max(1rem,var(--safe-bottom))] bg-white/80 backdrop-blur-md border-t border-gray-100 shadow-[0_-4px_20px_rgba(0,0,0,0.05)] z-50 flex gap-3">
         {currentStep === 1 && (
           <button onClick={() => setCurrentStep(2)} className="w-full py-3.5 bg-gray-900 text-white font-bold rounded-xl flex items-center justify-center gap-2 shadow-lg">
             Next: Services <FiArrowRight />

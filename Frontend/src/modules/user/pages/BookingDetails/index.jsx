@@ -32,6 +32,7 @@ import { bookingService } from '../../../../services/bookingService';
 import DetailChips from '../../../../components/common/DetailChips';
 import ServiceOptionsSheet from '../Home/components/ServiceOptionsSheet';
 import RepairServicesCard from './RepairServicesCard';
+import OrderTotals from './OrderTotals';
 import { paymentService } from '../../../../services/paymentService';
 import { walletService } from '../../../../services/walletService';
 import { cartService } from '../../../../services/cartService';
@@ -1399,6 +1400,9 @@ const BookingDetails = () => {
                   ))}
                 </div>
               )}
+
+              {/* 4. Price details: charges, repair services added, GST, total, paid so far and balance */}
+              <OrderTotals booking={booking} />
             </div>
           </section>
 
@@ -1766,7 +1770,7 @@ const BookingDetails = () => {
             )}
 
             {/* Cancel */}
-            {!['cancelled', 'completed', 'work_done', 'in_progress', 'rejected'].includes(booking.status?.toLowerCase()) && (
+            {!['cancelled', 'completed', 'work_done', 'in_progress', 'visited', 'rejected'].includes(booking.status?.toLowerCase()) && (
               <button
                 onClick={handleCancelBooking}
                 className="col-span-2 py-4 rounded-2xl text-red-600 font-bold text-sm bg-red-50 border border-red-100 hover:bg-red-100 transition-colors active:scale-95"

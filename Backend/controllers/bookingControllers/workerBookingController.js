@@ -11,6 +11,7 @@ const { sendNotificationToUser, sendNotificationToWorker } = require('../../serv
 const { resolveCommission, computeWorkerEarnings, toPayoutConfig, describeCommission } = require('../../services/commissionService');
 const { handleWorkerCancellation, remainingCandidates, WORKER_CANCELLABLE_STATUSES } = require('../../services/reassignmentService');
 const { getBookingConfig } = require('../../utils/bookingConfig');
+const { computeBookingTotals } = require('../../utils/bookingTotals');
 const escapeRegex = require('../../utils/escapeRegex');
 const { RescheduleError, describeSlot, assertReschedulable, validateNewSlot, emitBookingUpdated } = require('../../services/rescheduleService');
 
@@ -206,9 +207,15 @@ const getBookingById = async (req, res) => {
       });
     }
 
+    // The running total: what the booking costs now (including repair services the customer added), what has
+    // been paid and what is still to collect. The professional's invoice and amount to collect use this.
+    const { serviceGstPercentage } = await getBookingConfig();
+    const data = booking.toJSON();
+    data.totals = computeBookingTotals(booking, { gstPct: serviceGstPercentage });
+
     res.status(200).json({
       success: true,
-      data: booking
+      data
     });
   } catch (error) {
     console.error('Get booking error:', error);

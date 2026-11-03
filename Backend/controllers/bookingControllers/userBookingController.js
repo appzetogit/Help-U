@@ -5,6 +5,7 @@ const Review = require('../../models/Review');
 const { validationResult } = require('express-validator');
 const { BOOKING_STATUS, PAYMENT_STATUS, USER_CANCELLABLE_STATUSES } = require('../../utils/constants');
 const { claimCancellation, rollbackCancellation, explainRefusal } = require('../../services/bookingCancellation');
+const { computeBookingTotals } = require('../../utils/bookingTotals');
 const { createNotification } = require('../notificationControllers/notificationController');
 const cloudinaryService = require('../../services/cloudinaryService');
 const { placeBooking } = require('../../services/bookingCreationService');
@@ -106,9 +107,13 @@ const getUserBookings = async (req, res) => {
     // Get total count
     const total = await Booking.countDocuments(query);
 
+    // The running total of each booking (repair services the customer added, what was already paid)
+    const { serviceGstPercentage } = await getBookingConfig();
+    const withTotals = (b) => ({ ...b, totals: computeBookingTotals(b, { gstPct: serviceGstPercentage, forCustomer: true }) });
+
     res.status(200).json({
       success: true,
-      data: bookings.map(hideUnsentBill),
+      data: bookings.map(withTotals).map(hideUnsentBill),
       pagination: {
         page: parseInt(page),
         limit: parseInt(limit),
@@ -168,6 +173,10 @@ const getBookingById = async (req, res) => {
     bookingData.customerConfirmationOTP = expectedPaymentCode(booking) || null;
     bookingData.paymentOtp = bookingData.customerConfirmationOTP;
     hideUnsentBill(bookingData);
+
+    // One running total for the order summary: items, repair services added, GST, paid so far, balance due
+    const { serviceGstPercentage } = await getBookingConfig();
+    bookingData.totals = computeBookingTotals(bookingData, { gstPct: serviceGstPercentage, forCustomer: true });
 
     res.status(200).json({
       success: true,

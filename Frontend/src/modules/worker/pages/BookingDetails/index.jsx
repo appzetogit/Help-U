@@ -482,7 +482,11 @@ export default function BookingDetails() {
 
   // Extra Services & Parts from worker bill (if available)
   const allBillServices = bill?.services || [];
-  const services = allBillServices.filter(s => !s.isOriginal);
+  // Before a bill exists, the repair services the customer added still belong on the invoice (priced by the server)
+  const repairFromTotals = !bill
+    ? (booking?.totals?.lines?.repair || []).map(r => ({ name: r.title, price: r.unitPrice, quantity: r.quantity, gstAmount: r.gst, addedByCustomer: true }))
+    : [];
+  const services = bill ? allBillServices.filter(s => !s.isOriginal) : repairFromTotals;
   const originalServiceFromBill = allBillServices.find(s => s.isOriginal);
   const parts = bill?.parts || [];
   const customItems = bill?.customItems || [];
@@ -515,7 +519,10 @@ export default function BookingDetails() {
   const totalGST = originalGST + extraServiceGST + partsGST;
 
   // Final Total from bill or booking
-  const finalTotal = bill?.grandTotal || (booking?.finalAmount || 0);
+  // Without a bill, the running total (it includes repair services the customer added)
+  const finalTotal = bill?.grandTotal || booking?.totals?.total || (booking?.finalAmount || 0);
+  // What is still to collect: the total less any advance or amount paid online earlier
+  const amountToCollect = booking?.totals ? booking.totals.due : (booking?.finalAmount || 0);
 
   // Show the rate actually applied (from the saved bill) instead of a fixed 18%
   const serviceGstPctShown = bill?.payoutConfig?.serviceGstPercentage;
@@ -844,7 +851,10 @@ export default function BookingDetails() {
 
                 {services.map((s, i) => (
                   <div key={i} className="flex justify-between text-gray-600">
-                    <span>{s.name} x {s.quantity}</span>
+                    <span>
+                      {s.name} x {s.quantity}
+                      {s.addedByCustomer && <span className="ml-1.5 rounded bg-teal-50 px-1.5 py-0.5 text-[10px] font-bold uppercase text-teal-700">added by customer</span>}
+                    </span>
                     <span className="font-mono">₹{((parseFloat(s.price) || 0) * (parseFloat(s.quantity) || 1)).toFixed(2)}</span>
                   </div>
                 ))}
@@ -1128,7 +1138,7 @@ export default function BookingDetails() {
                   <div className="flex justify-between items-center">
                     <span className="text-sm text-gray-600">Amount to Collect</span>
                     <span className="text-2xl font-black text-orange-600">
-                      ₹{(booking.finalAmount || parseFloat(booking.price) || 0).toLocaleString()}
+                      ₹{Number(booking.totals ? amountToCollect : (booking.finalAmount || parseFloat(booking.price) || 0)).toLocaleString()}
                     </span>
                   </div>
                   <div className="mt-3 flex items-start gap-2 text-[11px] text-orange-700/80 leading-relaxed">
@@ -1452,7 +1462,7 @@ export default function BookingDetails() {
         isOpen={isOtpModalOpen}
         onClose={() => setIsOtpModalOpen(false)}
         onVerify={(otp) => {
-          const amount = booking.finalAmount || 0;
+          const amount = amountToCollect || 0;
           const extras = booking.workDoneDetails?.items || [];
           handleCashCollectionConfirm(amount, extras, otp);
         }}

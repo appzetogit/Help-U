@@ -4,6 +4,7 @@
  */
 
 const express = require('express');
+const { summarizeDevices, allTokens, testAllowed } = require('../../utils/pushDiagnostics');
 const router = express.Router();
 const { authenticate } = require('../../middleware/authMiddleware');
 const { sendPushNotification } = require('../../services/firebaseAdmin');
@@ -149,43 +150,54 @@ router.delete('/remove-all', authenticate, async (req, res) => {
 
 /**
  * @route   POST /api/workers/fcm-tokens/test
- * @desc    Send test notification to worker (development only)
+ * @desc    Send a test notification to the signed-in worker's own devices (once every few seconds)
  * @access  Private (Worker)
  */
 router.post('/test', authenticate, async (req, res) => {
   try {
-    const vendorId = req.user._id;
-    const worker = await Worker.findById(vendorId);
+    if (!testAllowed(req.user._id)) {
+      return res.status(429).json({ success: false, error: 'Please wait a few seconds before sending another test.' });
+    }
+    const doc = await Worker.findById(req.user._id);
+    if (!doc) return res.status(404).json({ success: false, error: 'Worker not found' });
 
-    if (!worker) {
-      return res.status(404).json({ success: false, error: 'Worker not found' });
+    const tokens = allTokens(doc);
+    if (tokens.length === 0) {
+      return res.json({ success: false, error: 'No device is registered for notifications yet.' });
     }
 
-    const tokens = [...(worker.fcmTokens || []), ...(worker.fcmTokenMobile || [])];
-    const uniqueTokens = [...new Set(tokens)];
-
-    if (uniqueTokens.length === 0) {
-      return res.json({ success: false, error: 'No FCM tokens found for worker' });
-    }
-
-    const response = await sendPushNotification(uniqueTokens, {
-      title: '🔔 Test Notification',
-      body: 'This is a test notification for worker!',
-      data: {
-        type: 'test',
-        link: '/worker/dashboard'
-      }
+    const response = await sendPushNotification(tokens, {
+      title: '🔔 Test notification',
+      body: 'If you can see this, notifications are working on this device.',
+      data: { type: 'test', link: '/worker/dashboard' }
     });
 
     res.json({
       success: true,
       message: 'Test notification sent',
+      devices: tokens.length,
       successCount: response.successCount,
       failureCount: response.failureCount
     });
   } catch (error) {
     console.error('Error sending test notification:', error);
     res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+/**
+ * @route   GET /api/workers/fcm-tokens/status
+ * @desc    How many devices are registered to receive push notifications (counts only, never the tokens)
+ * @access  Private
+ */
+router.get('/status', authenticate, async (req, res) => {
+  try {
+    const doc = await Worker.findById(req.user._id).select('fcmTokens fcmTokenMobile');
+    if (!doc) return res.status(404).json({ success: false, error: 'Worker not found' });
+    res.json({ success: true, ...summarizeDevices(doc) });
+  } catch (error) {
+    console.error('Error reading push status:', error);
+    res.status(500).json({ success: false, error: 'Could not check notification status' });
   }
 });
 

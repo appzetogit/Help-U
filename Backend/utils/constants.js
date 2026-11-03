@@ -118,9 +118,10 @@ const BOOKING_STATUS = {
 };
 
 // Who may cancel a booking, and until when. Enforced on the server (the apps only hide the button).
-//   customer  until the professional starts the work (arriving counts as "before"; the arrival fee applies)
-//   admin     the same, and also while the work is in progress (a support override)
-// From work_done on a booking can only end as completed; a problem is handled as a dispute or refund.
+//   customer  until the professional arrives (free, or the on-the-way fee, as the cancellation policy says)
+//   admin     the same, and also once they have arrived and while the work is in progress (a support override)
+// From arrival on, a customer cannot cancel; and from work_done on nobody can: a booking can only end as completed,
+// and a problem is handled as a dispute or refund.
 const USER_CANCELLABLE_STATUSES = [
   BOOKING_STATUS.SEARCHING,
   BOOKING_STATUS.REQUESTED,
@@ -129,10 +130,9 @@ const USER_CANCELLABLE_STATUSES = [
   BOOKING_STATUS.CONFIRMED,
   BOOKING_STATUS.ACCEPTED,
   BOOKING_STATUS.ASSIGNED,
-  BOOKING_STATUS.JOURNEY_STARTED,
-  BOOKING_STATUS.VISITED
+  BOOKING_STATUS.JOURNEY_STARTED
 ];
-const ADMIN_CANCELLABLE_STATUSES = [...USER_CANCELLABLE_STATUSES, BOOKING_STATUS.IN_PROGRESS];
+const ADMIN_CANCELLABLE_STATUSES = [...USER_CANCELLABLE_STATUSES, BOOKING_STATUS.VISITED, BOOKING_STATUS.IN_PROGRESS];
 
 // Payment Status
 const PAYMENT_STATUS = {

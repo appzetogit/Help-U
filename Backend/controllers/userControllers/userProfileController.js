@@ -173,7 +173,7 @@ const getCheckoutData = async (req, res) => {
 
     // Fetch all 3 in parallel
     const [user, cart, settings] = await Promise.all([
-      User.findById(userId).select('addresses phone name'),
+      User.findById(userId).select('addresses phone name wallet.penalty'),
       Cart.findOne({ userId }).populate('items.serviceId', 'title iconUrl slug').populate('items.categoryId', 'title slug'),
       Settings.findOne({ type: 'global' }).select('visitedCharges serviceGstPercentage partsGstPercentage')
     ]);
@@ -193,6 +193,8 @@ const getCheckoutData = async (req, res) => {
         phone: user.phone,
         addresses: user.addresses || []
       },
+      // A cancellation fee still owed from an earlier booking: it is added to the next booking's bill
+      pendingPenalty: Math.max(0, Number(user.wallet?.penalty) || 0),
       cartItems: await enrichCartItems(cart ? cart.items : []),
       settings: settings || { visitedCharges: 149, serviceGstPercentage: 18, partsGstPercentage: 18 }
     });

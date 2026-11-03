@@ -56,6 +56,8 @@ const explainRefusal = (status) => {
       return 'Cannot cancel completed booking';
     case BOOKING_STATUS.WORK_DONE:
       return 'The work on this booking is already finished, so it can no longer be cancelled. If something is wrong, please raise a dispute.';
+    case BOOKING_STATUS.VISITED:
+      return 'Your professional has already arrived, so this booking can no longer be cancelled. If there is a problem, please contact support.';
     case BOOKING_STATUS.IN_PROGRESS:
       return 'The work on this booking has already started, so it can no longer be cancelled. If there is a problem, please contact support.';
     case BOOKING_STATUS.REJECTED:

@@ -385,6 +385,14 @@ html.has-modal [data-bottom-nav] {
   display: none !important;
 }
 
+/* Bars fixed to the bottom (the navigation bar, and a page's "Next" bar when it is marked data-hide-on-keyboard) are
+   hidden while the on-screen keyboard is up, otherwise they ride on top of it and cover the form (see
+   utils/keyboardWatcher.js). The nav's height is re-measured when it comes back, so the page padding follows. */
+html.keyboard-open [data-bottom-nav],
+html.keyboard-open [data-hide-on-keyboard] {
+  display: none !important;
+}
+
 /* Pages are `min-h-screen`, and the layout also pads the bottom for the fixed nav. Together that is
    taller than the screen, so even a one-item page scrolled. Inside a nav layout a "full-height" page
    means the visible area above the nav; the padding then brings the total to exactly one screen.

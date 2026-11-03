@@ -85,7 +85,7 @@ const daysFromNow = (d) => new Date(Date.now() + d * 24 * 60 * 60 * 1000);
     const statusOf = async (id) => (await Booking.findById(id).lean()).status;
 
     console.log('\n[Customer: when a cancel is allowed]');
-    for (const status of USER_CANCELLABLE_STATUSES.filter((s) => ['confirmed', 'assigned', 'journey_started', 'visited'].includes(s))) {
+    for (const status of USER_CANCELLABLE_STATUSES.filter((s) => ['confirmed', 'assigned', 'journey_started'].includes(s))) {
       await it(`allowed while "${status}"`, async () => {
         const id = await makeBooking(status);
         const res = await cancel(id);
@@ -99,7 +99,7 @@ const daysFromNow = (d) => new Date(Date.now() + d * 24 * 60 * 60 * 1000);
     }
 
     console.log('\n[Customer: when a cancel is refused]');
-    for (const status of ['in_progress', 'work_done', 'completed', 'cancelled', 'rejected']) {
+    for (const status of ['visited', 'in_progress', 'work_done', 'completed', 'cancelled', 'rejected']) {
       await it(`refused once "${status}", and nothing changes`, async () => {
         const id = await makeBooking(status, { paymentStatus: 'success', paymentMethod: 'wallet' });
         const before = await wallet();
@@ -117,6 +117,8 @@ const daysFromNow = (d) => new Date(Date.now() + d * 24 * 60 * 60 * 1000);
       assert.match((await cancel(done)).body.message, /finished.*dispute/i);
       const working = await makeBooking('in_progress');
       assert.match((await cancel(working)).body.message, /already started/i);
+      const arrived = await makeBooking('visited');
+      assert.match((await cancel(arrived)).body.message, /already arrived/i);
     });
 
     console.log('\n[Money is paid back once]');
@@ -183,6 +185,16 @@ const daysFromNow = (d) => new Date(Date.now() + d * 24 * 60 * 60 * 1000);
       assert.strictEqual(b.cancelledBy, 'admin');
       assert.strictEqual(await wallet(), before + amount);
       assert.strictEqual(b.paymentStatus, 'refunded');
+    });
+
+    await it('support can still cancel after the professional has arrived (a support override), refunding the customer', async () => {
+      const id = await makeBooking('visited', { vendorId: workerId, paymentStatus: 'success', paymentMethod: 'wallet' });
+      const amount = (await Booking.findById(id).lean()).finalAmount;
+      const before = await wallet();
+      const res = await adminCancel(id);
+      assert.strictEqual(res.status, 200, JSON.stringify(res.body));
+      assert.strictEqual(await statusOf(id), 'cancelled');
+      assert.strictEqual(await wallet(), before + amount);
     });
 
     for (const status of ['work_done', 'completed', 'cancelled']) {
@@ -268,14 +280,14 @@ const daysFromNow = (d) => new Date(Date.now() + d * 24 * 60 * 60 * 1000);
       assert.strictEqual(await statusOf(id), 'cancelled', 'the cancellation stands');
     });
 
-    await it('a customer cancel and a professional status update at once always end consistently', async () => {
+    await it('a customer cancel and the professional arriving at the same moment always end consistently', async () => {
       for (let i = 0; i < 4; i += 1) {
-        const id = await makeBooking('visited', { vendorId: workerId });
-        const [c, w] = await Promise.all([cancel(id), workerSetStatus(id, 'in_progress')]);
+        const id = await makeBooking('journey_started', { vendorId: workerId });
+        const [c, w] = await Promise.all([cancel(id), workerSetStatus(id, 'visited')]);
         const final = await statusOf(id);
         assert.ok(!(c.status === 200 && w.status === 200), `both succeeded (${c.status}/${w.status})`);
         if (c.status === 200) assert.strictEqual(final, 'cancelled', 'cancelled stays cancelled');
-        else assert.strictEqual(final, 'in_progress', 'the customer was refused once the work started');
+        else assert.strictEqual(final, 'visited', 'the customer was refused once the professional had arrived');
       }
     });
   } finally {

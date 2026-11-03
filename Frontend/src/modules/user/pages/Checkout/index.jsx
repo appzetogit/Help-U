@@ -70,6 +70,8 @@ const Checkout = () => {
 
   const [selectedTime, setSelectedTime] = useState(null);
   const [visitedFee, setVisitedFee] = useState(0); // replaced by the admin's value once settings load
+  // A cancellation fee still owed from an earlier booking; it is added to this booking's bill
+  const [pendingFee, setPendingFee] = useState(0);
   const [gstPercentage, setGstPercentage] = useState(18);
   const [bookingType, setBookingType] = useState('instant'); // 'instant' | 'scheduled'
   const [issuePhotos, setIssuePhotos] = useState([]); // optional photos of the problem, see IssuePhotosPicker
@@ -148,6 +150,7 @@ const Checkout = () => {
         if (response.success) {
           // Set Config
           setVisitedFee(response.settings?.visitedCharges ?? 0);
+          setPendingFee(Math.max(0, Number(response.pendingPenalty) || 0));
           setGstPercentage(response.settings?.serviceGstPercentage ?? 18);
 
           // Set Addresses
@@ -999,7 +1002,7 @@ const Checkout = () => {
   };
 
   const effectiveCouponDiscount = itemTotal === 0 ? 0 : Math.min(couponDiscount, itemTotal);
-  const totalAmount = Math.max(0, itemTotal + taxesAndFee + finalVisitedFee + extrasBase + extrasTax - recurringDiscount - recurringTaxCut - effectiveCouponDiscount);
+  const totalAmount = Math.max(0, itemTotal + taxesAndFee + finalVisitedFee + extrasBase + extrasTax - recurringDiscount - recurringTaxCut - effectiveCouponDiscount) + pendingFee;
   const amountToPay = totalAmount;
 
   const displayTax = taxesAndFee + extrasTax - recurringTaxCut;
@@ -1478,6 +1481,14 @@ const Checkout = () => {
               <div className="flex justify-between items-center">
                 <span className="text-sm text-slate-500">Convenience Fee</span>
                 <span className="text-sm font-medium text-slate-700">₹{displayFee.toLocaleString('en-IN')}</span>
+              </div>
+            )}
+
+            {/* A cancellation fee carried over from an earlier cancelled booking */}
+            {pendingFee > 0 && (
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-slate-500">Earlier cancellation fee</span>
+                <span className="text-sm font-medium text-slate-700">₹{pendingFee.toLocaleString('en-IN')}</span>
               </div>
             )}
 

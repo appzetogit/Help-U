@@ -292,6 +292,13 @@ const bookingSchema = new mongoose.Schema({
     type: Number,
     default: 0
   },
+  // What the customer had already paid online, up front, when the final bill was first made. The bill can grow
+  // (repair services, parts), and only the difference is still due.
+  prepaidAmount: {
+    type: Number,
+    default: 0,
+    min: 0
+  },
   // Reference to WorkerBill (single source of truth for earnings/commission)
   vendorBillId: {
     type: mongoose.Schema.Types.ObjectId,

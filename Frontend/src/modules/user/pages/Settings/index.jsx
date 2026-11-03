@@ -7,6 +7,7 @@ import LogoutConfirm from '../../../../components/common/LogoutConfirm';
 import { themeColors } from '../../../../theme';
 import { userAuthService } from '../../../../services/authService';
 import { registerFCMToken, removeFCMToken } from '../../../../services/pushNotificationService';
+import PushStatusCard from '../../../../components/common/PushStatusCard';
 import { useLanguage } from '../../../../context/LanguageContext';
 import BottomNav from '../../components/layout/BottomNav';
 
@@ -137,6 +138,8 @@ const Settings = () => {
         {/* Notifications & Reminders Section */}
         <div className="mb-6">
           <h2 className="text-base font-bold text-black mb-4">Notifications & reminders</h2>
+
+          <PushStatusCard userType="user" className="mb-3" />
 
           <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
             {/* Push Notifications */}

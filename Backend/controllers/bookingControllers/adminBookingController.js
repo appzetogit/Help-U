@@ -6,6 +6,8 @@ const escapeRegex = require('../../utils/escapeRegex');
 const adminAssignment = require('../../services/adminAssignmentService');
 const { STATUS_GROUPS, statusCondition, buildBookingSearch, endOfDay } = require('../../utils/bookingFilters');
 const bookingFeed = require('../../services/bookingNotificationFeed');
+const { computeBookingTotals } = require('../../utils/bookingTotals');
+const { getBookingConfig } = require('../../utils/bookingConfig');
 const { OPEN_STATUSES } = adminAssignment;
 
 /**
@@ -135,9 +137,10 @@ const getBookingById = async (req, res) => {
       });
     }
 
+    const { serviceGstPercentage } = await getBookingConfig();
     res.status(200).json({
       success: true,
-      data: withActions(booking)
+      data: { ...withActions(booking), totals: computeBookingTotals(booking, { gstPct: serviceGstPercentage }) }
     });
   } catch (error) {
     console.error('Get booking error:', error);

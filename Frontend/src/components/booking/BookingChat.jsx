@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { FiArrowLeft, FiSend, FiImage, FiLock, FiCheck } from 'react-icons/fi';
+import { FiArrowLeft, FiSend, FiImage, FiLock, FiCheck, FiClock, FiAlertCircle, FiRefreshCw, FiX } from 'react-icons/fi';
 import { toast } from 'react-hot-toast';
 import bookingFeaturesService from '../../services/bookingFeaturesService';
 import { compressImage, fileToBase64 } from '../../utils/imageCompression';
@@ -10,6 +10,33 @@ const NAVY = '#163B66';
 
 const timeOf = (d) => new Date(d).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit' });
 const dayOf = (d) => new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+
+/**
+ * A photo in a message. Shows a placeholder with a spinner until the picture has loaded, so a slow connection
+ * never looks like "nothing arrived", and says so if it cannot be loaded.
+ */
+const ChatImage = ({ url, onOpen }) => {
+  const [state, setState] = useState('loading'); // loading | ready | error
+
+  return (
+    <button type="button" onClick={() => state === 'ready' && onOpen(url)} className="relative block mb-1" aria-label="Open photo">
+      {state !== 'ready' && (
+        <div className="flex h-44 w-56 max-w-full items-center justify-center rounded-xl bg-gray-200/80 text-xs text-gray-500">
+          {state === 'loading'
+            ? <div className="h-6 w-6 animate-spin rounded-full border-2 border-gray-400 border-t-transparent" role="status" aria-label="Loading photo" />
+            : 'Photo unavailable'}
+        </div>
+      )}
+      <img
+        src={url}
+        alt="Shared"
+        onLoad={() => setState('ready')}
+        onError={() => setState('error')}
+        className={`rounded-xl max-h-60 object-cover ${state === 'ready' ? '' : 'hidden'}`}
+      />
+    </button>
+  );
+};
 
 /**
  * Full-screen chat between the customer and the professional on a booking.
@@ -25,6 +52,8 @@ const BookingChat = ({ role, bookingId, isOpen, onClose }) => {
   const [hasMore, setHasMore] = useState(false);
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
+  // Messages shown the moment they are sent, before the server has confirmed them: sending, or failed (retry)
+  const [pending, setPending] = useState([]);
   const [viewImage, setViewImage] = useState(null);
   const listRef = useRef(null);
   const fileRef = useRef(null);
@@ -110,47 +139,73 @@ const BookingChat = ({ role, bookingId, isOpen, onClose }) => {
     };
   }, [isOpen, bookingId, role]);
 
-  const send = async ({ message, image }) => {
-    if (sending) return;
+  const upsertPending = (item) =>
+    setPending((prev) => (prev.some((p) => p.tempId === item.tempId) ? prev.map((p) => (p.tempId === item.tempId ? { ...p, ...item } : p)) : [...prev, item]));
+
+  const dropPending = (tempId) =>
+    setPending((prev) => {
+      const gone = prev.find((p) => p.tempId === tempId);
+      if (gone?.preview) URL.revokeObjectURL(gone.preview);
+      return prev.filter((p) => p.tempId !== tempId);
+    });
+
+  /**
+   * Sends one message. It appears in the list straight away (a photo with a spinner on it while it is prepared and
+   * uploaded) and is replaced by the real message once the server has it. If it fails it stays, marked "Not sent",
+   * with Retry, so a photo is never silently lost.
+   */
+  const deliver = async (item) => {
+    if (sending) return false;
     setSending(true);
+    upsertPending({ ...item, status: 'sending', createdAt: item.createdAt || new Date().toISOString() });
+    stickToBottom.current = true;
+    scrollToBottom();
     try {
-      const res = await bookingFeaturesService.sendChatMessage(role, bookingId, { message, image });
+      let image = item.image;
+      if (!image && item.file) {
+        const compressed = await compressImage(item.file, { maxWidth: 1280, maxHeight: 1280, quality: 0.8, mimeType: 'image/jpeg' });
+        image = await fileToBase64(compressed);
+      }
+      const res = await bookingFeaturesService.sendChatMessage(role, bookingId, { message: item.message || undefined, image });
       if (res.success && res.data) {
         setMessages((prev) => (prev.some((m) => m._id === res.data._id) ? prev : [...prev, res.data]));
+        dropPending(item.tempId);
         stickToBottom.current = true;
         scrollToBottom();
         return true;
       }
+      upsertPending({ tempId: item.tempId, status: 'failed' });
     } catch (error) {
       toast.error(error.response?.data?.message || 'Message not sent');
       if (error.response?.data?.code === 'CHAT_CLOSED') load();
+      upsertPending({ tempId: item.tempId, status: 'failed' });
     } finally {
       setSending(false);
     }
     return false;
   };
 
+  const newTempId = () => `tmp-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+
   const handleSendText = async (e) => {
     e?.preventDefault();
     const message = text.trim();
-    if (!message) return;
-    const ok = await send({ message });
-    if (ok) setText('');
+    if (!message || sending) return;
+    setText('');
+    await deliver({ tempId: newTempId(), message });
   };
 
   const handleImage = async (e) => {
     const file = e.target.files?.[0];
     e.target.value = '';
-    if (!file || !file.type.startsWith('image/')) return;
-    try {
-      const compressed = await compressImage(file, { maxWidth: 1280, maxHeight: 1280, quality: 0.8, mimeType: 'image/jpeg' });
-      const dataUrl = await fileToBase64(compressed);
-      await send({ image: dataUrl, message: text.trim() || undefined });
-      setText('');
-    } catch {
-      toast.error('Could not send the photo');
-    }
+    if (!file || !file.type.startsWith('image/') || sending) return;
+    const caption = text.trim();
+    setText('');
+    // Show the picture immediately (from the file itself), while it is being prepared and uploaded
+    await deliver({ tempId: newTempId(), message: caption, file, preview: URL.createObjectURL(file) });
   };
+
+  const retry = (item) => deliver(item);
 
   if (!isOpen) return null;
 
@@ -229,9 +284,7 @@ const BookingChat = ({ role, bookingId, isOpen, onClose }) => {
                       style={mine ? { backgroundColor: NAVY } : undefined}
                     >
                       {m.attachments?.map((a) => (
-                        <button key={a.url} type="button" onClick={() => setViewImage(a.url)} className="block mb-1">
-                          <img src={a.url} alt="Shared" className="rounded-xl max-h-60 object-cover" loading="lazy" />
-                        </button>
+                        <ChatImage key={a.url} url={a.url} onOpen={setViewImage} />
                       ))}
                       {m.message && <p className="text-sm whitespace-pre-line break-words">{m.message}</p>}
                       <p className={`text-[10px] mt-0.5 flex items-center gap-1 justify-end ${mine ? 'text-white/70' : 'text-gray-400'}`}>
@@ -248,6 +301,40 @@ const BookingChat = ({ role, bookingId, isOpen, onClose }) => {
                 </React.Fragment>
               );
             })}
+
+            {pending.map((p) => (
+              <div key={p.tempId} className="flex justify-end" data-testid="pending-message">
+                <div
+                  className={`max-w-[78%] rounded-2xl rounded-br-md px-3 py-2 shadow-sm text-white ${p.status === 'failed' ? 'ring-2 ring-red-400' : ''}`}
+                  style={{ backgroundColor: NAVY, opacity: p.status === 'sending' ? 0.9 : 1 }}
+                >
+                  {p.preview && (
+                    <div className="relative mb-1">
+                      <img src={p.preview} alt="Photo being sent" className={`rounded-xl max-h-60 object-cover ${p.status === 'sending' ? 'opacity-70' : ''}`} />
+                      {p.status === 'sending' && (
+                        <div className="absolute inset-0 flex items-center justify-center rounded-xl bg-black/25">
+                          <div className="h-8 w-8 animate-spin rounded-full border-2 border-white border-t-transparent" role="status" aria-label="Sending photo" />
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  {p.message && <p className="text-sm whitespace-pre-line break-words">{p.message}</p>}
+                  {p.status === 'sending' ? (
+                    <p className="text-[10px] mt-0.5 flex items-center gap-1 justify-end text-white/80"><FiClock className="w-3 h-3" /> Sending…</p>
+                  ) : (
+                    <div className="mt-1 flex items-center justify-end gap-2 text-[11px]">
+                      <span className="flex items-center gap-1 font-semibold text-red-200"><FiAlertCircle className="w-3 h-3" /> Not sent</span>
+                      <button type="button" onClick={() => retry(p)} disabled={sending} className="flex items-center gap-1 rounded-full bg-white/20 px-2 py-0.5 font-semibold hover:bg-white/30 disabled:opacity-50">
+                        <FiRefreshCw className="w-3 h-3" /> Retry
+                      </button>
+                      <button type="button" onClick={() => dropPending(p.tempId)} className="flex items-center gap-1 rounded-full bg-white/10 px-2 py-0.5 hover:bg-white/20" aria-label="Remove unsent message">
+                        <FiX className="w-3 h-3" />
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
           </>
         )}
       </div>

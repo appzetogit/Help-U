@@ -12,6 +12,7 @@ import { getCategoryIllustration } from '../../utils/categoryIcons';
 import ChatButton from '../../../../components/booking/ChatButton';
 import RescheduleModal from '../../components/booking/RescheduleModal';
 import useBookingConfig from '../../../../hooks/useBookingConfig';
+import { cancelledSummary, isEnded } from '../../../../utils/bookingAmounts';
 import { canRescheduleBooking } from '../../../../utils/reschedule';
 
 const PAGE_SIZE = 10;
@@ -85,7 +86,10 @@ const BookingCard = ({ booking, onOpen, onReschedule }) => {
   // e.g. "Bajaj · Split": the answers the customer gave, shown under the service
   const answers = [...new Set((booking.bookedItems || []).flatMap(item => (item.details || []).map(d => d.value)).filter(Boolean))];
   const professional = booking.vendorId?.businessName || booking.vendorId?.name;
-  const amount = booking.finalAmount || booking.totalAmount || 0;
+  const ended = isEnded(booking.status);
+  const money = ended ? cancelledSummary(booking) : null;
+  const totals = booking.totals;
+  const amount = totals?.total ?? (booking.finalAmount || booking.totalAmount || 0);
   const time = booking.scheduledTime || booking.timeSlot?.start;
   const bookingRef = booking.bookingNumber || String(booking._id || booking.id || '').slice(-8).toUpperCase();
   const canReschedule = canRescheduleBooking(booking, bookingConfig);
@@ -168,7 +172,22 @@ const BookingCard = ({ booking, onOpen, onReschedule }) => {
       <div className="mt-4 flex items-end justify-between gap-3">
         <div className="min-w-0">
           <p className="text-[11px] text-gray-500">#{bookingRef}</p>
-          <p className="text-[18px] font-bold text-ink leading-tight">₹{Number(amount).toLocaleString('en-IN')}</p>
+          {ended ? (
+            <>
+              <p className="text-[16px] font-bold text-ink leading-tight">{money.headline}</p>
+              <p className="text-[11px] text-gray-500 line-clamp-1">{money.fee > 0 && money.refunded === 0 ? 'Added to your next booking' : 'Cancelled booking'}</p>
+            </>
+          ) : (
+            <>
+              <p className="text-[18px] font-bold text-ink leading-tight">
+                ₹{Number(amount).toLocaleString('en-IN')}
+                {totals?.estimated && <span className="ml-1.5 text-[10px] font-bold uppercase text-teal-600">estimate</span>}
+              </p>
+              {totals && totals.paid > 0 && !totals.paidInFull && (
+                <p className="text-[11px] font-semibold text-orange-600">₹{Number(totals.due).toLocaleString('en-IN')} to pay · ₹{Number(totals.paid).toLocaleString('en-IN')} paid</p>
+              )}
+            </>
+          )}
         </div>
         <div className="flex items-center gap-2">
           {canReschedule && (
