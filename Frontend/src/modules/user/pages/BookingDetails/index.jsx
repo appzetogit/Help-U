@@ -382,7 +382,9 @@ const BookingDetails = () => {
             toast.error(response.message || 'Failed to cancel booking');
           }
         } catch (error) {
-          toast.error('Failed to cancel booking. Please try again.');
+          // Show the server's reason (for example "the work has already started") rather than a generic error
+          toast.error(error?.response?.data?.message || 'Failed to cancel booking. Please try again.');
+          loadBooking();
         }
       }
     });
@@ -1764,7 +1766,7 @@ const BookingDetails = () => {
             )}
 
             {/* Cancel */}
-            {!['cancelled', 'completed', 'work_done'].includes(booking.status?.toLowerCase()) && (
+            {!['cancelled', 'completed', 'work_done', 'in_progress', 'rejected'].includes(booking.status?.toLowerCase()) && (
               <button
                 onClick={handleCancelBooking}
                 className="col-span-2 py-4 rounded-2xl text-red-600 font-bold text-sm bg-red-50 border border-red-100 hover:bg-red-100 transition-colors active:scale-95"

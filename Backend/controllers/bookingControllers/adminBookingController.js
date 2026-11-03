@@ -1,6 +1,7 @@
 const Booking = require('../../models/Booking');
 const { validationResult } = require('express-validator');
-const { BOOKING_STATUS, PAYMENT_STATUS } = require('../../utils/constants');
+const { BOOKING_STATUS, PAYMENT_STATUS, ADMIN_CANCELLABLE_STATUSES } = require('../../utils/constants');
+const { claimCancellation, rollbackCancellation, explainRefusal } = require('../../services/bookingCancellation');
 const escapeRegex = require('../../utils/escapeRegex');
 const adminAssignment = require('../../services/adminAssignmentService');
 const { OPEN_STATUSES } = adminAssignment;
@@ -147,20 +148,27 @@ const cancelBooking = async (req, res) => {
       });
     }
 
-    if (booking.status === BOOKING_STATUS.CANCELLED) {
-      return res.status(400).json({
-        success: false,
-        message: 'Booking is already cancelled'
-      });
+    // Support can cancel up to and including work in progress; a finished booking can only be disputed.
+    if (!ADMIN_CANCELLABLE_STATUSES.includes(booking.status)) {
+      return res.status(400).json({ success: false, message: explainRefusal(booking.status) });
     }
 
-    if (booking.status === BOOKING_STATUS.COMPLETED) {
-      return res.status(400).json({
-        success: false,
-        message: 'Cannot cancel completed booking'
-      });
+    // Claim the cancellation in one conditional update before any money moves, so a booking that was
+    // completed or cancelled in the meantime is never refunded or overwritten.
+    const reason = cancellationReason || 'Cancelled by admin';
+    const previous = await claimCancellation(booking._id, {
+      allowedStatuses: ADMIN_CANCELLABLE_STATUSES,
+      by: 'admin',
+      reason,
+      extra: { awaitingAdmin: false }
+    });
+    if (!previous) {
+      const current = await Booking.findById(booking._id).select('status').lean();
+      return res.status(400).json({ success: false, message: explainRefusal(current?.status) });
     }
 
+    let refundedNow = 0;
+    try {
     // Process refund if booking was paid
     const isPaid = [PAYMENT_STATUS.SUCCESS, 'paid'].includes(booking.paymentStatus);
     const advancePaid = booking.advancePayment?.status === 'paid' ? Number(booking.advancePayment?.paidAmount || 0) : 0;
@@ -180,8 +188,7 @@ const cancelBooking = async (req, res) => {
         description: `Admin cancellation refund for booking #${booking.bookingNumber}`
       }).catch(() => null);
 
-      booking.refundedAmount = (booking.refundedAmount || 0) + totalToRefund;
-      booking.paymentStatus = PAYMENT_STATUS.REFUNDED;
+      refundedNow = totalToRefund;
     }
 
     // Restore coupon usage if applicable
@@ -205,15 +212,21 @@ const cancelBooking = async (req, res) => {
       ).catch(err => console.error('[AdminCancelBooking] Failed to reset worker availability:', err.message));
     }
 
-    // Update booking
-    booking.status = BOOKING_STATUS.CANCELLED;
-    booking.awaitingAdmin = false;
-    booking.cancelledAt = new Date();
-    booking.cancelledBy = 'admin';
-    booking.$locals.actor = 'admin';
-    booking.cancellationReason = cancellationReason || 'Cancelled by admin';
+    } catch (effectError) {
+      // Put the booking back (including its place in the admin queue) so the cancel can be retried
+      await rollbackCancellation(booking._id, previous, { by: 'admin', restore: { awaitingAdmin: !!previous.awaitingAdmin } }).catch((rbErr) =>
+        console.error(`[AdminCancelBooking] Could not roll back booking ${booking._id}:`, rbErr.message));
+      throw effectError;
+    }
 
-    await booking.save();
+    // Record the refund on the booking (the status itself was already set by the claim above)
+    const finalBooking = refundedNow > 0
+      ? await Booking.findOneAndUpdate(
+        { _id: booking._id },
+        { $set: { refundedAmount: (booking.refundedAmount || 0) + refundedNow, paymentStatus: PAYMENT_STATUS.REFUNDED } },
+        { new: true, actor: 'admin' }
+      )
+      : await Booking.findById(booking._id);
 
     const { createNotification } = require('../notificationControllers/notificationController');
     if (booking.userId) {
@@ -240,7 +253,7 @@ const cancelBooking = async (req, res) => {
     res.status(200).json({
       success: true,
       message: 'Booking cancelled successfully',
-      data: booking
+      data: finalBooking || booking
     });
   } catch (error) {
     console.error('Cancel booking error:', error);

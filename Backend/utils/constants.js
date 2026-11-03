@@ -117,6 +117,23 @@ const BOOKING_STATUS = {
   REJECTED: 'rejected'
 };
 
+// Who may cancel a booking, and until when. Enforced on the server (the apps only hide the button).
+//   customer  until the professional starts the work (arriving counts as "before"; the arrival fee applies)
+//   admin     the same, and also while the work is in progress (a support override)
+// From work_done on a booking can only end as completed; a problem is handled as a dispute or refund.
+const USER_CANCELLABLE_STATUSES = [
+  BOOKING_STATUS.SEARCHING,
+  BOOKING_STATUS.REQUESTED,
+  BOOKING_STATUS.AWAITING_PAYMENT,
+  BOOKING_STATUS.PENDING,
+  BOOKING_STATUS.CONFIRMED,
+  BOOKING_STATUS.ACCEPTED,
+  BOOKING_STATUS.ASSIGNED,
+  BOOKING_STATUS.JOURNEY_STARTED,
+  BOOKING_STATUS.VISITED
+];
+const ADMIN_CANCELLABLE_STATUSES = [...USER_CANCELLABLE_STATUSES, BOOKING_STATUS.IN_PROGRESS];
+
 // Payment Status
 const PAYMENT_STATUS = {
   PENDING: 'pending',
@@ -197,6 +214,8 @@ module.exports = {
   TOKEN_TYPES,
   WORKER_STATUS,
   BOOKING_STATUS,
+  USER_CANCELLABLE_STATUSES,
+  ADMIN_CANCELLABLE_STATUSES,
   PAYMENT_STATUS,
   SERVICE_STATUS,
   BILL_STATUS,

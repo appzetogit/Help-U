@@ -3,7 +3,8 @@ const Booking = require('../../models/Booking');
 const Worker = require('../../models/Worker');
 const Review = require('../../models/Review');
 const { validationResult } = require('express-validator');
-const { BOOKING_STATUS, PAYMENT_STATUS } = require('../../utils/constants');
+const { BOOKING_STATUS, PAYMENT_STATUS, USER_CANCELLABLE_STATUSES } = require('../../utils/constants');
+const { claimCancellation, rollbackCancellation, explainRefusal } = require('../../services/bookingCancellation');
 const { createNotification } = require('../notificationControllers/notificationController');
 const cloudinaryService = require('../../services/cloudinaryService');
 const { placeBooking } = require('../../services/bookingCreationService');
@@ -281,8 +282,8 @@ const getCancellationPreview = async (req, res) => {
     if (!booking) {
       return res.status(404).json({ success: false, message: 'Booking not found' });
     }
-    if ([BOOKING_STATUS.CANCELLED, BOOKING_STATUS.COMPLETED].includes(booking.status)) {
-      return res.status(400).json({ success: false, message: `This booking is already ${booking.status}` });
+    if (!USER_CANCELLABLE_STATUSES.includes(booking.status)) {
+      return res.status(400).json({ success: false, message: explainRefusal(booking.status) });
     }
 
     const { fee, isFree, stage, freeUntil, windowHours } = await resolveUserCancellation(booking);
@@ -320,19 +321,10 @@ const cancelBooking = async (req, res) => {
       });
     }
 
-    // Check if booking can be cancelled
-    if (booking.status === BOOKING_STATUS.CANCELLED) {
-      return res.status(400).json({
-        success: false,
-        message: 'Booking is already cancelled'
-      });
-    }
-
-    if (booking.status === BOOKING_STATUS.COMPLETED) {
-      return res.status(400).json({
-        success: false,
-        message: 'Cannot cancel completed booking'
-      });
+    // A customer can cancel until the work starts. From then on the booking can only be completed;
+    // a problem is handled as a dispute. (The same rule is enforced again, atomically, below.)
+    if (!USER_CANCELLABLE_STATUSES.includes(booking.status)) {
+      return res.status(400).json({ success: false, message: explainRefusal(booking.status) });
     }
 
     // --- REFUND & CANCELLATION FEE LOGIC ---
@@ -368,6 +360,24 @@ const cancelBooking = async (req, res) => {
       refundMessage = 'Booking cancelled successfully.';
     }
 
+    // Claim the cancellation first, in one conditional update. If the booking was completed (or the work
+    // started) since it was loaded, or another cancel got there first, nothing below runs, so no refund,
+    // fee or coupon change is ever made for a booking that is not actually cancelled.
+    const cancelReason = cancellationReason || 'Cancelled by user';
+    const previous = await claimCancellation(booking._id, {
+      allowedStatuses: USER_CANCELLABLE_STATUSES,
+      by: 'user',
+      reason: cancelReason,
+      filter: { userId },
+      extra: { cancellationFee }
+    });
+    if (!previous) {
+      const current = await Booking.findById(booking._id).select('status').lean();
+      return res.status(400).json({ success: false, message: explainRefusal(current?.status) });
+    }
+
+    let refundedNow = 0;
+    try {
     // Update User Wallet
     if (refundAmount > 0 || (cancellationFee > 0 && totalPaid === 0)) {
       const User = require('../../models/User');
@@ -390,8 +400,7 @@ const cancelBooking = async (req, res) => {
           balanceAfter: user.wallet.balance
         });
 
-        booking.refundedAmount = (booking.refundedAmount || 0) + refundAmount;
-        booking.paymentStatus = PAYMENT_STATUS.REFUNDED;
+        refundedNow = refundAmount;
       }
 
       // 2. Process Cancellation Fee (Add to Penalty Bucket if Unpaid)
@@ -424,15 +433,21 @@ const cancelBooking = async (req, res) => {
       ).catch(err => console.error('[CancelBooking] Failed to reset worker availability:', err.message));
     }
 
-    // Update booking status
-    booking.status = BOOKING_STATUS.CANCELLED;
-    booking.cancelledAt = new Date();
-    booking.cancelledBy = 'user';
-    booking.cancellationFee = cancellationFee;
-    booking.$locals.actor = 'user';
-    booking.cancellationReason = cancellationReason || 'Cancelled by user';
+    } catch (effectError) {
+      // The money side failed part-way: put the booking back so the customer can simply try again
+      await rollbackCancellation(booking._id, previous, { by: 'user' }).catch((rbErr) =>
+        console.error(`[CancelBooking] Could not roll back booking ${booking._id}:`, rbErr.message));
+      throw effectError;
+    }
 
-    await booking.save();
+    // Record the refund on the booking (the status itself was already set by the claim above)
+    const finalBooking = refundedNow > 0
+      ? await Booking.findOneAndUpdate(
+        { _id: booking._id },
+        { $set: { refundedAmount: (booking.refundedAmount || 0) + refundedNow, paymentStatus: PAYMENT_STATUS.REFUNDED } },
+        { new: true, actor: 'user' }
+      )
+      : await Booking.findById(booking._id);
 
     // Send notification to user
     await createNotification({
@@ -472,7 +487,7 @@ const cancelBooking = async (req, res) => {
     res.status(200).json({
       success: true,
       message: refundMessage || 'Booking cancelled successfully',
-      data: booking
+      data: finalBooking || booking
     });
   } catch (error) {
     console.error('Cancel booking error:', error);

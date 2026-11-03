@@ -668,17 +668,29 @@ const updateBookingStatus = async (req, res) => {
         [BOOKING_STATUS.CONFIRMED]: [BOOKING_STATUS.ASSIGNED, BOOKING_STATUS.JOURNEY_STARTED, BOOKING_STATUS.IN_PROGRESS, BOOKING_STATUS.CANCELLED],
         [BOOKING_STATUS.ASSIGNED]: [BOOKING_STATUS.JOURNEY_STARTED, BOOKING_STATUS.VISITED, BOOKING_STATUS.IN_PROGRESS, BOOKING_STATUS.CANCELLED],
         [BOOKING_STATUS.JOURNEY_STARTED]: [BOOKING_STATUS.VISITED, BOOKING_STATUS.IN_PROGRESS, BOOKING_STATUS.CANCELLED],
-        [BOOKING_STATUS.VISITED]: [BOOKING_STATUS.IN_PROGRESS, BOOKING_STATUS.WORK_DONE, BOOKING_STATUS.CANCELLED],
-        [BOOKING_STATUS.IN_PROGRESS]: [BOOKING_STATUS.WORK_DONE, BOOKING_STATUS.COMPLETED, BOOKING_STATUS.CANCELLED],
-        [BOOKING_STATUS.WORK_DONE]: [BOOKING_STATUS.COMPLETED, BOOKING_STATUS.CANCELLED]
+        [BOOKING_STATUS.VISITED]: [BOOKING_STATUS.IN_PROGRESS, BOOKING_STATUS.WORK_DONE],
+        [BOOKING_STATUS.IN_PROGRESS]: [BOOKING_STATUS.WORK_DONE, BOOKING_STATUS.COMPLETED],
+        [BOOKING_STATUS.WORK_DONE]: [BOOKING_STATUS.COMPLETED]
       };
 
       if (!validTransitions[booking.status]?.includes(status)) {
+        // Past arrival a job is never "cancelled" with a bare status change: that would skip the refund,
+        // the customer's fee and the coupon, and could undo finished work. It goes through support.
+        if (status === BOOKING_STATUS.CANCELLED) {
+          return res.status(400).json({
+            success: false,
+            message: 'This job can no longer be cancelled from the app. Please contact support.'
+          });
+        }
         return res.status(400).json({
           success: false,
           message: `Invalid status transition from ${booking.status} to ${status}`
         });
       }
+
+      // Save only if the booking is still in the status this change was based on. If the customer cancelled
+      // (or anything else moved it) in the meantime, the save is refused instead of overwriting that.
+      booking.$where = { status: booking.status };
 
       // Marking work done needs photo proof of the finished work, whichever route is used
       if (status === BOOKING_STATUS.WORK_DONE
@@ -761,6 +773,13 @@ const updateBookingStatus = async (req, res) => {
       data: booking
     });
   } catch (error) {
+    // Mongoose reports a save whose booking changed underneath it as either of these
+    if (['DocumentNotFoundError', 'VersionError'].includes(error?.name)) {
+      return res.status(409).json({
+        success: false,
+        message: 'This booking was just updated by someone else, for example the customer cancelled it. Please refresh to see its current status.'
+      });
+    }
     console.error('Update booking status error:', error);
     res.status(500).json({
       success: false,
