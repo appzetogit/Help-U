@@ -1237,8 +1237,8 @@ export const ServiceWizard = ({
                   Step 1: Category Selection Guide (Admin Help)
                 </div>
                 <p className="text-blue-900/80 leading-relaxed">
-                  <strong>Yeh kis liye hai?</strong> Yeh service kis main category me aati hai (jaise <em>AC Repair</em>, <em>Salon Luxe</em>, <em>Home Deep Cleaning</em>).<br/>
-                  <strong>Brands Mode vs Standard:</strong> Agar category me alag-alag companies hain (jaise <em>LG, Samsung, Whirlpool</em>), toh Category "Brands Mode" me hoti hai. Normal services ke liye "Standard" mode hota hai.
+                  <strong>What is this for?</strong> The main category this service belongs to (for example <em>AC Repair</em>, <em>Salon Luxe</em>, <em>Home Deep Cleaning</em>).<br/>
+                  <strong>Brands Mode vs Standard:</strong> If the category has different companies (for example <em>LG, Samsung, Whirlpool</em>), the category uses "Brands Mode". Ordinary services use "Standard" mode.
                 </p>
               </div>
 
@@ -1388,8 +1388,8 @@ export const ServiceWizard = ({
                   Step 2: Sub-category Guide (Admin Help)
                 </div>
                 <p className="text-blue-900/80 leading-relaxed">
-                  <strong>Yeh kis liye hai?</strong> Category ke andar services ko alag tabs/pills me group karne ke liye (jaise <em>Waxing, Facial, Pedicure</em>).<br/>
-                  Agar category simple hai aur sub-categories ki zaroorat nahi hai, toh <strong>"No sub-category"</strong> select karein.
+                  <strong>What is this for?</strong> Groups the services inside a category into separate tabs or pills (for example <em>Waxing, Facial, Pedicure</em>).<br/>
+                  If the category is simple and does not need sub-categories, select <strong>"No sub-category"</strong>.
                 </p>
               </div>
 
@@ -1806,7 +1806,7 @@ export const ServiceWizard = ({
                       <FiImage className="text-blue-600" /> Service Images & Banner Gallery
                     </h4>
                     <p className="text-[11px] text-gray-500">
-                      <strong>Admin Tip:</strong> Pehli image (Primary) customer catalog card par thumbnail banegi. Baaki sabhi images User App ke 'View Details' sheet me <strong>swipeable banner carousel</strong> me show hongi!
+                      <strong>Admin Tip:</strong> The first image (Primary) becomes the thumbnail on the customer's catalog card. All the other images appear in the <strong>swipeable banner carousel</strong> of the 'View Details' sheet in the User App.
                     </p>
                   </div>
 
@@ -2097,8 +2097,8 @@ export const ServiceWizard = ({
                   Why Adding Exclusions Prevents On-Site Customer Disputes:
                 </div>
                 <p className="text-amber-900/85">
-                  <strong>Inclusions</strong> batata hai ki is price me worker kya-kya kaam karega (e.g. deep chemical jet wash, cooling coil clean).<br/>
-                  <strong>Exclusions</strong> batata hai ki kya covered <u>NAHI</u> hai (e.g. spare parts cost, new copper piping, gas charging). Exclusions pehle se clearly likhne se customer ko pehle se pata rehta hai aur technician ke customer ke ghar pahuchne par koi price dispute ya misunderstanding nahi hoti!
+                  <strong>Inclusions</strong> says what work the professional will do for this price (e.g. deep chemical jet wash, cooling coil clean).<br/>
+                  <strong>Exclusions</strong> says what is <u>NOT</u> covered (e.g. spare parts cost, new copper piping, gas charging). Writing the exclusions clearly up front means the customer knows in advance, so there is no price dispute or misunderstanding when the technician arrives.
                 </p>
               </div>
 
@@ -2108,10 +2108,10 @@ export const ServiceWizard = ({
                 <div className="bg-white p-4 rounded-xl border border-gray-200 space-y-3 shadow-2xs">
                   <div>
                     <h4 className="text-xs font-bold text-emerald-800 uppercase tracking-wider flex items-center gap-1.5">
-                      <FiCheckCircle className="text-emerald-600" /> What's Included (Shamil Hai)
+                      <FiCheckCircle className="text-emerald-600" /> What's Included
                     </h4>
                     <p className="text-[11px] text-gray-500 mt-0.5">
-                      Customer ko batayein ki is booking me worker kya-kya kaam karega (e.g. Foam jet wash, coil cleaning).
+                      Describe the work the service provider will perform for this booking (e.g. foam jet wash, coil cleaning).
                     </p>
                   </div>
 
@@ -2156,10 +2156,10 @@ export const ServiceWizard = ({
                 <div className="bg-white p-4 rounded-xl border border-gray-200 space-y-3 shadow-2xs">
                   <div>
                     <h4 className="text-xs font-bold text-rose-800 uppercase tracking-wider flex items-center gap-1.5">
-                      <FiAlertCircle className="text-rose-600" /> What's Excluded (Shamil Nahi Hai)
+                      <FiAlertCircle className="text-rose-600" /> What's Excluded
                     </h4>
                     <p className="text-[11px] text-gray-500 mt-0.5">
-                      Jo kaam is price me nahi aayega wo yahan likhein taaki customer-worker me vivaad na ho (e.g. Spare parts extra charge).
+                      List work that is not covered by this price, so the customer and professional do not disagree later (e.g. spare parts at extra charge).
                     </p>
                   </div>
 
@@ -2271,7 +2271,7 @@ export const ServiceWizard = ({
                           Turn ON when bundling 2+ services together at a special price (e.g., Waxing + Facial Combo). This shows a prominent 'PACKAGE' badge and package customization view on the user app.
                         </p>
                         <p className="text-[10px] text-purple-700/80 leading-relaxed">
-                          <strong>User App par kya hoga?</strong> Customer app par rich combo card show hoga jisme top green/purple package banner, inclusions breakdown aur "Edit your package" option aayega.
+                          <strong>What appears in the User App?</strong> A highlighted package card will appear in the customer app featuring a package banner, inclusions breakdown, and an "Edit your package" customisation option.
                         </p>
                       </div>
                       <div className="shrink-0">

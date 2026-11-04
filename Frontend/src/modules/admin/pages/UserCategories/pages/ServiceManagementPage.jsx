@@ -128,17 +128,23 @@ const ServiceManagementPage = ({ selectedCity: propCity }) => {
 
   // ─── LOAD HEALTH METRICS ──────────────────────────────────────────────
   // The cards follow the selected city so they agree with the list under them.
+  // For every list on this page: if a newer request has started, an older answer is dropped instead of overwriting it
+  // (this is what made the cards, tab counts and lists disagree, differently on each refresh)
+  const healthRequest = useRef(0);
+  const servicesRequest = useRef(0);
+
   const loadHealth = useCallback(async () => {
+    const requestId = ++healthRequest.current;
     try {
       setLoadingHealth(true);
       const res = await catalogHealthService.getHealth({ cityId: selectedCity || undefined });
-      if (res?.success) {
+      if (requestId === healthRequest.current && res?.success) {
         setHealthData(res);
       }
     } catch (err) {
       console.error("Health fetch error:", err);
     } finally {
-      setLoadingHealth(false);
+      if (requestId === healthRequest.current) setLoadingHealth(false);
     }
   }, [selectedCity]);
 
@@ -182,16 +188,27 @@ const ServiceManagementPage = ({ selectedCity: propCity }) => {
     loadHealth();
   }, [loadHealth]);
 
+  // Latest refreshers, so an update event can reload the cards and the list (they are defined further down)
+  const refreshRef = useRef(null);
+
   // Listen for category updates across components
   useEffect(() => {
     const handleCategoryUpdate = async () => {
       try {
-        const catRes = await categoryService.getAll({ parentId: "all", ...(selectedCity ? { cityId: selectedCity } : {}) });
-        if (catRes?.success) {
-          setAllCategories(catRes.categories || []);
-        }
+        const cityParams = selectedCity ? { cityId: selectedCity } : {};
+        const [catRes, brandRes] = await Promise.allSettled([
+          categoryService.getAll({ parentId: "all", ...cityParams }),
+          brandService.getAll(cityParams),
+        ]);
+        if (catRes.status === "fulfilled" && catRes.value?.success) setAllCategories(catRes.value.categories || []);
+        if (brandRes.status === "fulfilled" && brandRes.value?.success) setBrands(brandRes.value.brands || []);
       } catch (err) {
         console.error("Categories update error:", err);
+      }
+      // The cards and the services list move with the catalog too
+      if (refreshRef.current) {
+        refreshRef.current.loadHealth();
+        refreshRef.current.fetchServices();
       }
     };
 
@@ -312,6 +329,7 @@ const ServiceManagementPage = ({ selectedCity: propCity }) => {
 
   // ─── FETCH SERVICES ───────────────────────────────────────────────────
   const fetchServices = useCallback(async () => {
+    const requestId = ++servicesRequest.current;
     setLoadingServices(true);
     setServicesError(null);
     try {
@@ -339,6 +357,7 @@ const ServiceManagementPage = ({ selectedCity: propCity }) => {
         pageNo += 1;
       } while (pageNo <= pages && pageNo <= 25);
 
+      if (requestId !== servicesRequest.current) return; // a newer request replaced this one
       if (failedMessage && all.length === 0) {
         setServices([]);
         setServicesError(failedMessage);
@@ -346,17 +365,22 @@ const ServiceManagementPage = ({ selectedCity: propCity }) => {
         setServices(all);
       }
     } catch (err) {
+      if (requestId !== servicesRequest.current) return;
       console.error("Services fetch error:", err);
       setServicesError(err?.response?.data?.message || err.message || "Failed to load services");
       toast.error("Failed to load services");
     } finally {
-      setLoadingServices(false);
+      if (requestId === servicesRequest.current) setLoadingServices(false);
     }
   }, [selectedCity, selectedStatus, selectedPublishStatus, selectedCategory]);
 
   useEffect(() => {
     fetchServices();
   }, [fetchServices]);
+
+  useEffect(() => {
+    refreshRef.current = { loadHealth, fetchServices };
+  });
 
   // ─── NEEDS ATTENTION IDS MAP ──────────────────────────────────────────
   const needsAttentionMap = useMemo(() => {
@@ -1748,7 +1772,7 @@ const ServiceManagementPage = ({ selectedCity: propCity }) => {
 
       {/* ─── TAB 3: SECTIONS AND BRANDS ───────────────────────────────── */}
       {activeTab === "brands" && (
-        <BrandsListView selectedCity={selectedCity} onRefreshHealth={loadHealth} initialCategory={brandCategoryPreset} />
+        <BrandsListView selectedCity={selectedCity} onRefreshHealth={loadHealth} onBrandsLoaded={setBrands} initialCategory={brandCategoryPreset} />
       )}
 
       {/* ─── TAB 4: DRAFT AND ARCHIVE ─────────────────────────────────── */}

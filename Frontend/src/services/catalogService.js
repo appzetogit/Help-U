@@ -19,6 +19,8 @@ export const invalidatePublicCatalog = () => {
   apiCache.invalidatePrefix('public:');
   lastHomeData.clear();
   lastHomeTimestamps.clear();
+  // Tell every open admin catalog view that something changed, so counts and lists refresh together
+  if (typeof window !== 'undefined') window.dispatchEvent(new Event('adminUserAppCatalogUpdated'));
 };
 
 /**

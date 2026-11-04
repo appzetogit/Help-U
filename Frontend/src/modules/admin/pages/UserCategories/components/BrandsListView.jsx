@@ -19,13 +19,14 @@ import Modal from "./Modal";
 import ToggleSwitch from "./ToggleSwitch";
 import { slugify, toAssetUrl } from "../utils";
 
-const BrandsListView = ({ selectedCity, onRefreshHealth, initialCategory = "" }) => {
+const BrandsListView = ({ selectedCity, onRefreshHealth, onBrandsLoaded, initialCategory = "" }) => {
   const [brands, setBrands] = useState([]);
   const [categories, setCategories] = useState([]);
   // Every category and sub-category (all cities): names for a brand's categories, and "everything under a
   // category" for the filter. `categories` above stays the city's top-level list used by the pickers.
   const [allCats, setAllCats] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [search, setSearch] = useState("");
   const [selectedCategoryFilter, setSelectedCategoryFilter] = useState(initialCategory || "all");
 
@@ -52,31 +53,70 @@ const BrandsListView = ({ selectedCity, onRefreshHealth, initialCategory = "" })
     loading: false,
   });
 
-  const fetchData = useCallback(async () => {
-    try {
-      setLoading(true);
-      const params = {};
-      if (selectedCity) params.cityId = selectedCity;
-      const [brandRes, catRes, allRes] = await Promise.all([
-        brandService.getAll(params),
-        categoryService.getAll(params),
-        categoryService.getAll({ parentId: "all", includeDeleted: true }).catch(() => null),
-      ]);
+  // The newest request wins: an older, slower answer must never overwrite a newer one
+  const requestRef = useRef(0);
 
-      if (allRes?.success) setAllCats(allRes.categories || []);
-      if (brandRes?.success) setBrands(brandRes.brands || []);
-      if (catRes?.success) setCategories(catRes.categories || []);
-    } catch (err) {
-      console.error("Brands fetch error:", err);
+  const fetchData = useCallback(async () => {
+    const requestId = ++requestRef.current;
+    setLoading(true);
+    const params = {};
+    if (selectedCity) params.cityId = selectedCity;
+    // Each request stands alone: the brands show even if a category request fails (they used to be thrown away
+    // together, which left the tab saying "58" and the list saying "none")
+    const [brandRes, catRes, allRes] = await Promise.allSettled([
+      brandService.getAll(params),
+      categoryService.getAll(params),
+      categoryService.getAll({ parentId: "all", includeDeleted: true }),
+    ]);
+    if (requestId !== requestRef.current) return;
+
+    const ok = (r) => r.status === "fulfilled" && r.value?.success;
+    if (ok(brandRes)) {
+      const list = brandRes.value.brands || [];
+      setBrands(list);
+      setLoadError(false);
+      if (onBrandsLoaded) onBrandsLoaded(list);
+    } else {
+      setLoadError(true);
+      console.error("Brands fetch error:", brandRes.reason || brandRes.value);
       toast.error("Failed to load brands and sections");
-    } finally {
-      setLoading(false);
     }
-  }, [selectedCity]);
+    if (ok(allRes)) setAllCats(allRes.value.categories || []);
+    if (ok(catRes)) setCategories(catRes.value.categories || []);
+    setLoading(false);
+  }, [selectedCity, onBrandsLoaded]);
 
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  // A brand or section created elsewhere (for example in the Add Service wizard) appears here straight away
+  useEffect(() => {
+    const refresh = () => fetchData();
+    window.addEventListener("adminUserAppCatalogUpdated", refresh);
+    return () => window.removeEventListener("adminUserAppCatalogUpdated", refresh);
+  }, [fetchData]);
+
+  // Every live category and sub-category, for choosing where a section or brand belongs: sub-categories shown under
+  // their parent as "Parent › Child". (Only the selected city's top-level list was offered before.)
+  const pickerCategories = useMemo(() => {
+    const live = (allCats.length ? allCats : categories).filter((c) => c && c.status !== "deleted" && c.status !== "archived");
+    const idOf = (c) => String(c.id || c._id);
+    const parentOf = (c) => {
+      const p = typeof c.parentId === "object" ? c.parentId?._id || c.parentId?.id : c.parentId;
+      return p ? String(p) : null;
+    };
+    const byTitle = (a, b) => String(a.title || "").localeCompare(String(b.title || ""));
+    const tops = live.filter((c) => !parentOf(c)).sort(byTitle);
+    const out = [];
+    tops.forEach((t) => {
+      out.push({ id: idOf(t), label: t.title });
+      live.filter((c) => parentOf(c) === idOf(t)).sort(byTitle).forEach((child) => out.push({ id: idOf(child), label: `${t.title} › ${child.title}` }));
+    });
+    // Sub-categories whose parent is missing from the list still need to be choosable
+    live.filter((c) => parentOf(c) && !tops.some((t) => idOf(t) === parentOf(c))).sort(byTitle).forEach((c) => out.push({ id: idOf(c), label: c.title }));
+    return out;
+  }, [allCats, categories]);
 
   // Filtered brands
   const filteredBrands = useMemo(() => {
@@ -407,11 +447,33 @@ const BrandsListView = ({ selectedCity, onRefreshHealth, initialCategory = "" })
               </div>
             ))}
           </div>
+        ) : loadError && brands.length === 0 ? (
+          <div className="p-12 text-center">
+            <h3 className="text-sm font-bold text-gray-700">Could not load sections and brands</h3>
+            <p className="text-xs text-gray-500 mt-1">Check your connection and try again.</p>
+            <button type="button" onClick={fetchData} className="mt-3 rounded-lg bg-blue-600 px-4 py-1.5 text-xs font-bold text-white">Try again</button>
+          </div>
         ) : filteredBrands.length === 0 ? (
           <div className="p-12 text-center">
             <FiTag className="w-10 h-10 text-gray-300 mx-auto mb-2" />
             <h3 className="text-sm font-bold text-gray-700">No sections or brands found</h3>
-            <p className="text-xs text-gray-400 mt-1">Try resetting filter or add a new brand.</p>
+            <p className="text-xs text-gray-400 mt-1">
+              {brands.length > 0
+                ? "No items match your search or selected category filter."
+                : "No brands or sections have been created yet."}
+            </p>
+            {brands.length > 0 && (selectedCategoryFilter !== "all" || search) && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedCategoryFilter("all");
+                  setSearch("");
+                }}
+                className="mt-3 px-3 py-1.5 bg-blue-50 text-blue-600 hover:bg-blue-100 rounded-lg text-xs font-semibold"
+              >
+                Show all {brands.length} sections & brands
+              </button>
+            )}
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -630,9 +692,9 @@ const BrandsListView = ({ selectedCity, onRefreshHealth, initialCategory = "" })
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-blue-500 focus:outline-none"
               >
                 <option value="">-- Choose Category --</option>
-                {categories.map((c) => (
-                  <option key={c.id || c._id} value={c.id || c._id}>
-                    {c.title}
+                {pickerCategories.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.label}
                   </option>
                 ))}
               </select>

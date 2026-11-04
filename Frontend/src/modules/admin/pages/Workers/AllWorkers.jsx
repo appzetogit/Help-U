@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { FiCheck, FiX, FiEye, FiSearch, FiFilter, FiDownload, FiLoader, FiPower, FiTrash2 } from 'react-icons/fi';
+import { FiCheck, FiX, FiEye, FiSearch, FiFilter, FiDownload, FiLoader, FiPower, FiTrash2, FiFileText } from 'react-icons/fi';
 import { toast } from 'react-hot-toast';
 import CardShell from '../UserCategories/components/CardShell';
 import Modal from '../UserCategories/components/Modal';
@@ -24,7 +24,7 @@ const Chips = ({ items, tone = 'blue' }) => {
 const DocActions = ({ url, name }) => (
   <div className="mt-2 flex flex-wrap items-center gap-4 text-sm font-semibold">
     <a href={url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 text-gray-600 hover:text-gray-900">
-      <FiEye className="w-4 h-4" /> View
+      <FiEye className="w-4 h-4" /> View Document
     </a>
     <button type="button" onClick={() => downloadFile(url, name)} className="inline-flex items-center gap-2 text-blue-600 hover:text-blue-700">
       <FiDownload className="w-4 h-4" /> Download
