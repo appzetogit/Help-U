@@ -153,7 +153,9 @@ const IssuePhotosPicker = ({ photos, setPhotos, videos = [], setVideos, config =
   const remove = (setter) => (id) => {
     setter((prev) => {
       const target = prev.find((p) => p.id === id);
-      if (target?.preview) URL.revokeObjectURL(target.preview);
+      if (target?.preview && String(target.preview).startsWith('blob:')) {
+        URL.revokeObjectURL(target.preview);
+      }
       return prev.filter((p) => p.id !== id);
     });
   };
