@@ -94,3 +94,4 @@ export const clearPersistedCheckoutMedia = (category = null) => {
     console.error('Failed to clear checkout media:', err);
   }
 };
+

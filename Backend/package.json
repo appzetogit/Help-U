@@ -4,8 +4,8 @@
   "description": "Backend API for Help-U platform",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js",
-    "dev": "nodemon server.js",
+    "start": "node init && node server.js",
+    "dev": "node init && nodemon server.js",
     "test": "node tests/runAllCatalogTests.js",
     "test:catalog": "node tests/runAllCatalogTests.js",
     "test:validators": "node tests/validators.test.js",
