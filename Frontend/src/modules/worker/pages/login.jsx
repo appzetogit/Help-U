@@ -6,6 +6,7 @@ import { themeColors } from '../../../theme';
 import { sendOTP, verifyLogin } from '../services/authService';
 import Logo from '../../../components/common/Logo';
 import FloatingLoginBanners from '../../../components/common/FloatingLoginBanners';
+import { cleanIndianPhoneNumber } from '../../../utils/phoneUtils';
 
 import { z } from "zod";
 
@@ -255,9 +256,15 @@ const WorkerLogin = () => {
                     id="phone"
                     name="phone"
                     type="tel"
+                    inputMode="numeric"
+                    autoComplete="tel-national tel"
                     required
                     value={phoneNumber}
-                    onChange={(e) => setPhoneNumber(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                    onChange={(e) => setPhoneNumber(cleanIndianPhoneNumber(e.target.value))}
+                    onInput={(e) => {
+                      const cleaned = cleanIndianPhoneNumber(e.target.value);
+                      if (cleaned !== phoneNumber) setPhoneNumber(cleaned);
+                    }}
                     className="block w-full pl-24 pr-4 py-3.5 bg-slate-50/70 hover:bg-slate-50 focus:bg-white text-slate-900 font-medium placeholder-slate-400 text-[15px] border border-slate-200/90 rounded-2xl outline-none transition-all duration-200 focus:border-[#163B66] focus:ring-4 focus:ring-[#163B66]/10 shadow-[0_1px_2px_rgba(0,0,0,0.02)]"
                     placeholder="98765 43210"
                   />

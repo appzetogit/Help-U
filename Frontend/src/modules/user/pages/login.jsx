@@ -8,6 +8,7 @@ import Logo from '../../../components/common/Logo';
 import LogoLoader from '../../../components/common/LogoLoader';
 import FloatingLoginBanners from '../../../components/common/FloatingLoginBanners';
 import DebugConsole from '../components/common/DebugConsole';
+import { cleanIndianPhoneNumber } from '../../../utils/phoneUtils';
 
 import { z } from "zod";
 
@@ -254,14 +255,19 @@ const Login = () => {
                     ref={phoneInputRef}
                     type="tel"
                     inputMode="numeric"
-                    autoComplete="tel"
+                    autoComplete="tel-national tel"
                     id="phone"
+                    name="phone"
                     className="block w-full pl-24 pr-4 py-3.5 bg-slate-50/70 hover:bg-slate-50 focus:bg-white text-slate-900 font-medium placeholder-slate-400 text-[15px] border border-slate-200/90 rounded-2xl outline-none transition-all duration-200 focus:border-[#163B66] focus:ring-4 focus:ring-[#163B66]/10 shadow-[0_1px_2px_rgba(0,0,0,0.02)]"
                     placeholder="98765 43210"
                     value={phoneNumber}
                     onChange={(e) => {
-                      const val = e.target.value.replace(/\D/g, '');
-                      if (val.length <= 10) setPhoneNumber(val);
+                      const cleaned = cleanIndianPhoneNumber(e.target.value);
+                      setPhoneNumber(cleaned);
+                    }}
+                    onInput={(e) => {
+                      const cleaned = cleanIndianPhoneNumber(e.target.value);
+                      if (cleaned !== phoneNumber) setPhoneNumber(cleaned);
                     }}
                   />
                 </div>
