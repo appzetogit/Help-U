@@ -503,8 +503,11 @@ exports.assignPickup = async (req, res) => {
     }
 
     const { vendorId, pickupDate, pickupSlot } = req.body;
-    const worker = vendorId ? await Worker.findOne({ _id: vendorId, approvalStatus: 'approved' }).select('name') : null;
+    const worker = vendorId ? await Worker.findOne({ _id: vendorId, approvalStatus: 'approved' }).select('name isScrapOpted') : null;
     if (!worker) return res.status(400).json({ success: false, message: 'Choose an approved professional.' });
+    if (!worker.isScrapOpted) {
+      return res.status(400).json({ success: false, message: 'The selected professional has not opted in for scrap pickups.' });
+    }
 
     const when = new Date(pickupDate);
     if (!pickupDate || Number.isNaN(when.getTime())) {

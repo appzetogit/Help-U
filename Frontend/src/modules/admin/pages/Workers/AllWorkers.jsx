@@ -119,6 +119,7 @@ const AllWorkers = () => {
           customDocuments: worker.customDocuments || [],
           createdAt: worker.createdAt,
           isActive: worker.isActive,
+          isScrapOpted: Boolean(worker.isScrapOpted),
           serviceRange: worker.settings?.serviceRange ?? null,
           address: worker.address
         }));
@@ -480,6 +481,12 @@ const AllWorkers = () => {
                 <label className="block text-sm font-semibold text-gray-700 mb-1">Home Map Location</label>
                 <div className={`text-sm font-medium ${selectedWorker.address?.lat && selectedWorker.address?.lng ? 'text-green-600' : 'text-amber-600'}`}>
                   {selectedWorker.address?.lat && selectedWorker.address?.lng ? 'Coordinates Saved' : 'No Coordinates (Uses Platform Radius)'}
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-1">Scrap Pickup</label>
+                <div className={`text-sm font-semibold inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg ${selectedWorker.isScrapOpted ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-gray-100 text-gray-600'}`}>
+                  <span>♻️</span> {selectedWorker.isScrapOpted ? 'Opted In' : 'Not Opted In'}
                 </div>
               </div>
             </div>

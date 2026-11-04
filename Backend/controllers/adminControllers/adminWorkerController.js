@@ -28,6 +28,9 @@ const getAllWorkers = async (req, res) => {
     if (isActive !== undefined) {
       query.isActive = isActive === 'true';
     }
+    if (req.query.isScrapOpted !== undefined) {
+      query.isScrapOpted = req.query.isScrapOpted === 'true' || req.query.isScrapOpted === true;
+    }
 
     // Search by name, email, phone, or business name
     if (search) {
@@ -515,6 +518,40 @@ const toggleWorkerStatus = async (req, res) => {
 };
 
 /**
+ * Toggle worker scrap opt-in status (Admin control)
+ */
+const toggleWorkerScrapOptIn = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { isScrapOpted } = req.body;
+
+    const worker = await Worker.findById(id);
+
+    if (!worker) {
+      return res.status(404).json({
+        success: false,
+        message: 'Worker not found'
+      });
+    }
+
+    worker.isScrapOpted = Boolean(isScrapOpted);
+    await worker.save();
+
+    res.status(200).json({
+      success: true,
+      message: `Worker scrap opt-in ${worker.isScrapOpted ? 'enabled' : 'disabled'} successfully`,
+      data: worker
+    });
+  } catch (error) {
+    console.error('Toggle worker scrap opt-in error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to update worker scrap opt-in status'
+    });
+  }
+};
+
+/**
  * Delete worker
  */
 const deleteWorker = async (req, res) => {
@@ -554,6 +591,7 @@ module.exports = {
   getAllWorkerBookings,
   getWorkerPaymentsSummary,
   toggleWorkerStatus,
+  toggleWorkerScrapOptIn,
   deleteWorker
 };
 

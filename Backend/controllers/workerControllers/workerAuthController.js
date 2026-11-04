@@ -190,7 +190,7 @@ const register = async (req, res) => {
     }
 
     // verificationToken handling
-    const { name, email, verificationToken, aadhar, pan, gstin, referralCode, service, customFields, customDocuments } = req.body;
+    const { name, email, verificationToken, aadhar, pan, gstin, referralCode, service, customFields, customDocuments, isScrapOpted } = req.body;
     let phone = req.body.phone;
 
     if (verificationToken) {
@@ -384,6 +384,7 @@ const register = async (req, res) => {
     const defaultWallet = Number.isFinite(globalSettings?.vendorCashLimit) ? { cashLimit: globalSettings.vendorCashLimit } : undefined;
 
     const resolvedGstin = gstin ? gstin.trim().toUpperCase() : (customFields?.gstin ? String(customFields.gstin).trim().toUpperCase() : '');
+    const resolvedIsScrapOpted = isScrapOpted === true || isScrapOpted === 'true';
 
     const worker = await Worker.create({
       name, email, phone,
@@ -396,6 +397,7 @@ const register = async (req, res) => {
       },
       pan: { number: panNumber, document: panUrl },
       gstin: resolvedGstin,
+      isScrapOpted: resolvedIsScrapOpted,
       otherDocuments: otherUrls,
       customFields: customFields || {},
       customDocuments: resolvedCustomDocs,

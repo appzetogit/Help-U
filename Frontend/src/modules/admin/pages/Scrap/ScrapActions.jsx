@@ -24,7 +24,7 @@ export const PickupModal = ({ item, onClose, onDone }) => {
 
   useEffect(() => {
     let active = true;
-    getAllWorkers({ approvalStatus: 'approved', limit: 200 })
+    getAllWorkers({ approvalStatus: 'approved', isScrapOpted: true, limit: 200 })
       .then((res) => { if (active) setWorkers(res.data || []); })
       .catch(() => { if (active) { setWorkers([]); toast.error('Could not load professionals'); } });
     return () => { active = false; };
@@ -53,14 +53,25 @@ export const PickupModal = ({ item, onClose, onDone }) => {
       <form onSubmit={save} className="space-y-4 overflow-y-auto p-5">
         <p className="rounded-lg bg-gray-50 p-3 text-xs text-gray-700"><span className="font-bold">{item.title}</span><br />{item.userId?.name || 'Customer'}</p>
         <div>
-          <label className={labelClass}>Professional</label>
+          <label className={labelClass}>Scrap Professional</label>
           {workers === null ? (
             <div className="flex items-center gap-2 text-xs text-gray-500"><FiLoader className="animate-spin" /> Loading…</div>
           ) : (
-            <select className={inputClass} value={vendorId} onChange={(e) => setVendorId(e.target.value)} required>
-              <option value="">Select a professional</option>
-              {workers.map((w) => <option key={w._id} value={w._id}>{w.name}{w.phone ? ` · ${w.phone}` : ''}</option>)}
-            </select>
+            <>
+              <select className={inputClass} value={vendorId} onChange={(e) => setVendorId(e.target.value)} required>
+                <option value="">{workers.length > 0 ? `Select a professional (${workers.length} opted in)` : 'No scrap professionals available'}</option>
+                {workers.map((w) => <option key={w._id} value={w._id}>{w.name}{w.phone ? ` · ${w.phone}` : ''}</option>)}
+              </select>
+              {workers.length === 0 ? (
+                <p className="mt-1 text-[11px] text-amber-600">
+                  ⚠️ No professionals have opted in for scrap pickups yet. Partners can opt in from their app profile or signup.
+                </p>
+              ) : (
+                <p className="mt-1 text-[11px] text-gray-500">
+                  Showing only professionals who have opted in for scrap pickups.
+                </p>
+              )}
+            </>
           )}
         </div>
         <div className="grid grid-cols-2 gap-3">

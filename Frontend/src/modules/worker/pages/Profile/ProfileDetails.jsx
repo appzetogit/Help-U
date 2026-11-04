@@ -35,6 +35,7 @@ const ProfileDetails = () => {
     otherDocuments: [],
     customDocuments: [],
     customFields: {},
+    isScrapOpted: false,
   });
 
   const [previewDoc, setPreviewDoc] = useState(null);
@@ -93,6 +94,7 @@ const ProfileDetails = () => {
             otherDocuments: storedData.otherDocuments || [],
             customDocuments: storedData.customDocuments || [],
             customFields: storedData.customFields || {},
+            isScrapOpted: Boolean(storedData.isScrapOpted),
           }));
         }
 
@@ -126,6 +128,7 @@ const ProfileDetails = () => {
             otherDocuments: apiData.otherDocuments || [],
             customDocuments: apiData.customDocuments || [],
             customFields: apiData.customFields || {},
+            isScrapOpted: Boolean(apiData.isScrapOpted),
           };
 
           setProfile(prev => ({ ...prev, ...newProfile }));
@@ -294,6 +297,19 @@ const ProfileDetails = () => {
                   )}
                 </div>
               </div>
+            </div>
+
+            <div className="mt-4 pt-4 border-t border-gray-100 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="text-base">♻️</span>
+                <div>
+                  <p className="text-xs font-bold text-gray-800">Scrap Pickup Service</p>
+                  <p className="text-[11px] text-gray-500">Collect recyclable scrap in your area</p>
+                </div>
+              </div>
+              <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${profile.isScrapOpted ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-gray-100 text-gray-500'}`}>
+                {profile.isScrapOpted ? 'Opted In' : 'Not Opted In'}
+              </span>
             </div>
           </div>
 

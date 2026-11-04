@@ -58,6 +58,7 @@ const EditProfile = () => {
     panDocument: '', // URL (PAN Card)
     otherDocuments: [], // URLs
     serviceRange: '', // optional: empty = use the platform radius
+    isScrapOpted: false,
   });
 
   const [photoPreview, setPhotoPreview] = useState(null);
@@ -192,6 +193,7 @@ const EditProfile = () => {
             panDocument: v.panDocument || (v.pan && v.pan.document) || '',
             otherDocuments: v.otherDocuments || [],
             serviceRange: v.settings?.serviceRange ?? '',
+            isScrapOpted: Boolean(v.isScrapOpted),
           });
 
           // Update local storage
@@ -226,6 +228,7 @@ const EditProfile = () => {
               panDocument: storedData.panDocument || (storedData.pan && storedData.pan.document) || '',
               otherDocuments: storedData.otherDocuments || [],
               serviceRange: storedData.settings?.serviceRange ?? storedData.serviceRange ?? '',
+              isScrapOpted: Boolean(storedData.isScrapOpted),
             });
           }
         }
@@ -414,7 +417,8 @@ const EditProfile = () => {
         aadharDocument: aadharUrl,
         aadharBackDocument: aadharBackUrl,
         panDocument: panUrl,
-        serviceRange: formData.serviceRange === '' ? null : Number(formData.serviceRange)
+        serviceRange: formData.serviceRange === '' ? null : Number(formData.serviceRange),
+        isScrapOpted: Boolean(formData.isScrapOpted)
       };
 
       try {
@@ -725,6 +729,35 @@ const EditProfile = () => {
               )}
             </div>
           )}
+
+          {/* Scrap Pickup Opt-in Section */}
+          <div className="rounded-2xl border border-emerald-100 bg-emerald-50/50 p-4 transition-all">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex-1">
+                <div className="flex items-center gap-2">
+                  <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-emerald-100 text-xs font-bold text-emerald-700">
+                    ♻️
+                  </span>
+                  <h4 className="text-sm font-bold text-gray-900">Opt in for Scrap Pickups</h4>
+                  <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-800">
+                    Extra Earning
+                  </span>
+                </div>
+                <p className="mt-1 text-xs text-gray-600 leading-relaxed">
+                  Collect scrap from customers in your area and earn an extra payout per pickup. Requires a weighing scale and transport vehicle.
+                </p>
+              </div>
+              <label className="relative inline-flex cursor-pointer items-center shrink-0 mt-0.5" aria-label="Toggle scrap pickup opt-in">
+                <input
+                  type="checkbox"
+                  checked={Boolean(formData.isScrapOpted)}
+                  onChange={(e) => setFormData(prev => ({ ...prev, isScrapOpted: e.target.checked }))}
+                  className="peer sr-only"
+                />
+                <div className="h-6 w-11 rounded-full bg-gray-200 peer-focus:outline-none peer-checked:bg-emerald-600 after:absolute after:left-[2px] after:top-[2px] after:h-5 after:w-5 after:rounded-full after:border after:border-gray-300 after:bg-white after:transition-all after:content-[''] peer-checked:after:translate-x-full peer-checked:after:border-white"></div>
+              </label>
+            </div>
+          </div>
 
           {/* Verification Documents Section */}
           <div className="space-y-5 pt-2">

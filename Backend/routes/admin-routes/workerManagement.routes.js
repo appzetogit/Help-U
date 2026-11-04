@@ -14,6 +14,7 @@ const {
   getAllWorkerBookings,
   getWorkerPaymentsSummary,
   toggleWorkerStatus,
+  toggleWorkerScrapOptIn,
   deleteWorker
 } = require('../../controllers/adminControllers/adminWorkerController');
 const { exportWorkers } = require('../../controllers/adminControllers/dataExportController');
@@ -35,6 +36,7 @@ router.post('/workers/:id/approve', authenticate, isAdmin, requirePermission('wo
 router.post('/workers/:id/reject', authenticate, isAdmin, requirePermission('workers'), rejectWorkerValidation, rejectWorker);
 router.post('/workers/:id/suspend', authenticate, isAdmin, requirePermission('workers'), suspendWorker);
 router.patch('/workers/:id/status', authenticate, isAdmin, requirePermission('workers'), toggleWorkerStatus); // New
+router.patch('/workers/:id/scrap-opt-in', authenticate, isAdmin, requirePermission('workers'), toggleWorkerScrapOptIn);
 router.delete('/workers/:id', authenticate, isAdmin, requirePermission('workers'), deleteWorker); // New
 router.get('/workers/:id/bookings', authenticate, isAdmin, requirePermission('workers'), getWorkerBookings);
 router.get('/workers/:id/earnings', authenticate, isAdmin, requirePermission('workers'), getWorkerEarnings);

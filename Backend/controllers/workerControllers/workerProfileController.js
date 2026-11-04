@@ -124,6 +124,9 @@ const updateProfile = async (req, res) => {
     // Update fields
     if (name) worker.name = name.trim();
     if (businessName !== undefined) worker.businessName = businessName ? businessName.trim() : null;
+    if (req.body.isScrapOpted !== undefined) {
+      worker.isScrapOpted = req.body.isScrapOpted === true || req.body.isScrapOpted === 'true';
+    }
     if (alternatePhone !== undefined) {
       worker.alternatePhone = alternatePhone ? alternatePhone.trim() : '';
     }

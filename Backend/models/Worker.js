@@ -85,6 +85,12 @@ const workerSchema = new mongoose.Schema({
     uppercase: true,
     default: ''
   },
+  // Scrap pickup opt-in: only workers who opt in can be assigned scrap collections
+  isScrapOpted: {
+    type: Boolean,
+    default: false,
+    index: true
+  },
   otherDocuments: [{
     type: String // Cloudinary URLs
   }],

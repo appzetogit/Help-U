@@ -46,6 +46,7 @@ const WorkerSignup = () => {
     pan: '',
     service: [],
     referralCode: '',
+    isScrapOpted: false,
     documents: []
   });
   const [fieldErrors, setFieldErrors] = useState({});
@@ -487,6 +488,7 @@ const WorkerSignup = () => {
           aadhar: formData.aadhar.trim(),
           pan: formData.pan.trim(),
           service: Array.isArray(formData.service) ? formData.service : [],
+          isScrapOpted: Boolean(formData.isScrapOpted),
           aadharDocument: aadharDoc,
           aadharBackDocument: aadharBackDoc,
           panDocument: panDoc,
@@ -587,6 +589,7 @@ const WorkerSignup = () => {
         aadhar: formData.aadhar,
         pan: formData.pan,
         service: formData.service,
+        isScrapOpted: Boolean(formData.isScrapOpted),
         aadharDocument: aadharDoc,
         aadharBackDocument: aadharBackDoc,
         panDocument: panDoc,
@@ -1111,6 +1114,35 @@ const WorkerSignup = () => {
                 {helpNote(core.service_categories)}
               </div>
               )}
+
+              {/* Scrap Pickup Opt-in Toggle */}
+              <div className="relative z-10 animate-fade-in rounded-2xl border border-emerald-100 bg-emerald-50/50 p-4 transition-all" style={{ animationDelay: '0.7s' }}>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="flex h-6 w-6 items-center justify-center rounded-lg bg-emerald-100 text-xs font-bold text-emerald-700">
+                        ♻️
+                      </span>
+                      <h4 className="text-sm font-bold text-gray-900">Opt in for Scrap Pickups</h4>
+                      <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-800">
+                        Optional · Extra Earning
+                      </span>
+                    </div>
+                    <p className="mt-1 text-xs text-gray-600 leading-relaxed">
+                      Collect scrap from customers in your area and earn an extra payout per pickup. Requires a weighing scale and transport vehicle.
+                    </p>
+                  </div>
+                  <label className="relative inline-flex cursor-pointer items-center shrink-0 mt-0.5" aria-label="Toggle scrap pickup opt-in">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(formData.isScrapOpted)}
+                      onChange={(e) => setFormData(prev => ({ ...prev, isScrapOpted: e.target.checked }))}
+                      className="peer sr-only"
+                    />
+                    <div className="h-6 w-11 rounded-full bg-gray-200 peer-focus:outline-none peer-checked:bg-emerald-600 after:absolute after:left-[2px] after:top-[2px] after:h-5 after:w-5 after:rounded-full after:border after:border-gray-300 after:bg-white after:transition-all after:content-[''] peer-checked:after:translate-x-full peer-checked:after:border-white"></div>
+                  </label>
+                </div>
+              </div>
 
               {/* Terms & Conditions / Privacy Policy Checkbox */}
               <div className="relative z-10 animate-fade-in pt-1" style={{ animationDelay: '0.75s' }}>

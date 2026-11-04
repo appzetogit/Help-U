@@ -16,6 +16,7 @@ export const getAllWorkers = async (params = {}) => {
     if (params.search) queryParams.append('search', params.search);
     if (params.approvalStatus) queryParams.append('approvalStatus', params.approvalStatus);
     if (params.isActive !== undefined) queryParams.append('isActive', params.isActive);
+    if (params.isScrapOpted !== undefined) queryParams.append('isScrapOpted', params.isScrapOpted);
     if (params.page) queryParams.append('page', params.page);
     if (params.limit) queryParams.append('limit', params.limit);
 
