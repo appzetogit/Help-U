@@ -25,6 +25,11 @@ import { useZone } from '../../../../context/ZoneContext';
 import { useCity } from '../../../../context/CityContext';
 import LiveBookingCard from '../../components/booking/LiveBookingCard';
 import ModalLock from '../../../../components/common/ModalLock';
+import {
+  loadPersistedCheckoutMedia,
+  savePersistedCheckoutMedia,
+  clearPersistedCheckoutMedia
+} from '../../utils/checkoutMediaStorage';
 
 const toAssetUrl = (url) => {
   if (!url) return '';
@@ -37,7 +42,19 @@ const toAssetUrl = (url) => {
 const Checkout = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const category = location.state?.category || null;
+  // Preserve category across page refresh so the filtered category view doesn't revert unexpectedly
+  const [activeCategory, setActiveCategory] = useState(() => {
+    return location.state?.category || sessionStorage.getItem('helpu_checkout_category') || null;
+  });
+
+  useEffect(() => {
+    if (location.state?.category) {
+      setActiveCategory(location.state.category);
+      sessionStorage.setItem('helpu_checkout_category', location.state.category);
+    }
+  }, [location.state?.category]);
+
+  const category = activeCategory;
   const { fetchCart: fetchCartGlobal, clearCart: clearCartGlobal, removeCategoryItems: removeCategoryGlobal } = useCart();
   const { zoneId, isOutOfZone, detectZone, markOutOfZone } = useZone() || {};
   const { currentCity } = useCity() || {};
@@ -74,9 +91,18 @@ const Checkout = () => {
   const [pendingFee, setPendingFee] = useState(0);
   const [gstPercentage, setGstPercentage] = useState(18);
   const [bookingType, setBookingType] = useState('instant'); // 'instant' | 'scheduled'
-  const [issuePhotos, setIssuePhotos] = useState([]); // optional photos of the problem, see IssuePhotosPicker
-  const [issueVideos, setIssueVideos] = useState([]); // optional short videos of the problem
+  const [issuePhotos, setIssuePhotos] = useState(() => loadPersistedCheckoutMedia('photos', category));
+  const [issueVideos, setIssueVideos] = useState(() => loadPersistedCheckoutMedia('videos', category));
   const [searchInfo, setSearchInfo] = useState(null); // live worker-search details for WorkerSearchModal
+
+  // Persist completed issue photos & videos across page refreshes
+  useEffect(() => {
+    savePersistedCheckoutMedia('photos', issuePhotos, category);
+  }, [issuePhotos, category]);
+
+  useEffect(() => {
+    savePersistedCheckoutMedia('videos', issueVideos, category);
+  }, [issueVideos, category]);
 
   // Admin-configured checkout extras
   const bookingConfig = useBookingConfig();
@@ -256,6 +282,11 @@ const Checkout = () => {
     }
   };
 
+  const cleanupCheckoutMedia = () => {
+    clearPersistedCheckoutMedia(category);
+    sessionStorage.removeItem('helpu_checkout_category');
+  };
+
   const handleRemoveItem = async (itemId) => {
     try {
       const response = await cartService.removeItem(itemId);
@@ -264,6 +295,9 @@ const Checkout = () => {
         // Refresh global cart badge
         fetchCartGlobal();
         loadCart();
+        if (cartItems.length <= 1) {
+          cleanupCheckoutMedia();
+        }
       } else {
         toast.error(response.message || 'Failed to remove item');
       }
@@ -370,6 +404,7 @@ const Checkout = () => {
         setTimeout(() => {
           setShowWorkerModal(false);
           if (totalAmount === 0 || itemTotal === 0) {
+            cleanupCheckoutMedia();
             navigate(`/user/booking-confirmation/${bookingRequest._id}`, {
               replace: true
             });
@@ -617,6 +652,7 @@ const Checkout = () => {
       // Nobody could be alerted automatically, but the booking is not lost: our team picks a
       // professional by hand. Take the customer to the booking, where they will see it get assigned.
       if (bookingResponse.sentToAdmin) {
+        cleanupCheckoutMedia();
         setSearchingWorkers(false);
         setShowWorkerModal(false);
         toast.success("Booking placed! Our team is arranging a professional and will notify you shortly.", { duration: 5000 });
@@ -635,6 +671,7 @@ const Checkout = () => {
       } else if (bookingType === 'scheduled' && !isEmergency) {
         // A future booking stays open for workers for hours, so don't hold the customer on a
         // countdown: confirm it and take them to the booking, where they'll see it get accepted.
+        cleanupCheckoutMedia();
         setSearchingWorkers(false);
         setShowWorkerModal(false);
         toast.success("Booking placed! We'll notify you as soon as a professional accepts.", { duration: 4000 });
@@ -730,6 +767,7 @@ const Checkout = () => {
               } catch (error) {
               }
 
+              cleanupCheckoutMedia();
               // Navigate to booking confirmation
               navigate(`/user/booking-confirmation/${bookingRequest._id}`, {
                 replace: true
@@ -785,6 +823,7 @@ const Checkout = () => {
           }
           setCartItems([]);
         } catch (error) {}
+        cleanupCheckoutMedia();
         navigate(`/user/booking-confirmation/${bookingRequest._id}`, { replace: true });
       } else {
         toast.error(response.message || 'Failed to process wallet payment');
@@ -814,6 +853,7 @@ const Checkout = () => {
           setCartItems([]);
         } catch (error) {
         }
+        cleanupCheckoutMedia();
         // Navigate to booking confirmation
         navigate(`/user/booking-confirmation/${bookingRequest._id}`, {
           replace: true

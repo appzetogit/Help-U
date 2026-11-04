@@ -8,6 +8,7 @@ import PageHeader from '../../components/layout/PageHeader';
 import { getCategoryIllustration } from '../../utils/categoryIcons';
 import ItemDetailsForm from './ItemDetailsForm';
 import { configService } from '../../../../services/configService';
+import { clearPersistedCheckoutMedia } from '../../utils/checkoutMediaStorage';
 
 const formatINR = (value) => `₹${Math.round(value || 0).toLocaleString('en-IN')}`;
 
@@ -153,6 +154,7 @@ const Cart = () => {
       const response = await removeCategoryItems(category);
       if (response.success) {
         toast.success('Category items removed');
+        clearPersistedCheckoutMedia(category);
       } else {
         toast.error(response.message || 'Failed to remove category items');
       }
@@ -167,6 +169,9 @@ const Cart = () => {
       const response = await removeItem(itemId);
       if (response.success) {
         toast.success('Item removed from cart');
+        if (cartItems.length <= 1) {
+          clearPersistedCheckoutMedia();
+        }
       } else {
         toast.error(response.message || 'Failed to remove item');
       }

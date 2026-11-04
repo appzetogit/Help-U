@@ -9,6 +9,15 @@ import ModalLock from '../../../../../components/common/ModalLock';
 
 const newId = () => `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
+const toAssetUrl = (url) => {
+  if (!url) return '';
+  if (url.startsWith('blob:') || url.startsWith('data:')) return url;
+  const clean = url.replace('/api/upload', '/upload');
+  if (clean.startsWith('http://') || clean.startsWith('https://')) return clean;
+  const base = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000').replace(/\/api$/, '');
+  return `${base}${clean.startsWith('/') ? '' : '/'}${clean}`;
+};
+
 // Reads a video's length in the browser so an over-long clip is refused
 // before it is uploaded. Resolves null when the browser cannot tell.
 const readVideoDuration = (file) => new Promise((resolve) => {
@@ -168,7 +177,7 @@ const IssuePhotosPicker = ({ photos, setPhotos, videos = [], setVideos, config =
       <div className="grid grid-cols-5 gap-2">
         {videos.map((video) => (
           <div key={video.id} className="relative aspect-square rounded-lg overflow-hidden bg-gray-900 border border-gray-200">
-            <video src={video.preview || video.url} className="w-full h-full object-cover opacity-80" muted playsInline preload="metadata" />
+            <video src={toAssetUrl(video.preview || video.url)} className="w-full h-full object-cover opacity-80" muted playsInline preload="metadata" />
             <FiVideo className="absolute bottom-1 left-1 w-3.5 h-3.5 text-white" />
             {video.status === 'uploading' && (
               <div className="absolute inset-0 bg-black/50 flex flex-col items-center justify-center">
@@ -190,7 +199,7 @@ const IssuePhotosPicker = ({ photos, setPhotos, videos = [], setVideos, config =
 
         {photos.map((photo) => (
           <div key={photo.id} className="relative aspect-square rounded-lg overflow-hidden bg-gray-100 border border-gray-200">
-            <img src={photo.preview || photo.url} alt="Problem" className="w-full h-full object-cover" />
+            <img src={toAssetUrl(photo.preview || photo.url)} alt="Problem" className="w-full h-full object-cover" />
             {photo.status === 'uploading' && (
               <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
                 <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
