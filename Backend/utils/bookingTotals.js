@@ -73,8 +73,9 @@ const computeBookingTotals = (booking, { gstPct = 18, forCustomer = false } = {}
     ? round2(num(booking.prepaidAmount))
     : (PAID.includes(booking.paymentStatus) && !hasBill && !paidInFull ? round2(num(booking.finalAmount)) : 0);
 
+  const isEnded = [BOOKING_STATUS.CANCELLED, BOOKING_STATUS.REJECTED].includes(booking.status);
   const paid = paidInFull ? total : round2(Math.min(total, advancePaid + prepaid));
-  const due = round2(Math.max(0, total - paid));
+  const due = isEnded ? 0 : round2(Math.max(0, total - paid));
 
   return {
     hasBill,

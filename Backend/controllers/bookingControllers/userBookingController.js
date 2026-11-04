@@ -341,27 +341,37 @@ const cancelBooking = async (req, res) => {
     const { fee: cancellationFee, stage } = await resolveUserCancellation(booking);
     let refundMessage = '';
 
-    const isPaid = [PAYMENT_STATUS.SUCCESS, 'paid'].includes(booking.paymentStatus);
+    const isPaid = [PAYMENT_STATUS.SUCCESS, 'paid', 'collected_by_vendor', 'collected_by_worker'].includes(booking.paymentStatus);
     const advancePaid = booking.advancePayment?.status === 'paid'
       ? Number(booking.advancePayment.paidAmount || booking.advancePayment.requestedAmount || 0)
       : 0;
-    const totalPaid = (isPaid ? Number(booking.finalAmount || 0) : 0) + advancePaid;
+    const prepaid = Number(booking.prepaidAmount || 0);
+    const finalPaid = isPaid ? Number(booking.finalAmount || 0) : 0;
+    const totalPaid = Math.max(advancePaid + prepaid, advancePaid + finalPaid);
 
-    const isWalletOrOnline = ['wallet', 'razorpay', 'upi', 'card', 'online', 'Qr online'].includes(booking.paymentMethod)
-      || (advancePaid > 0 && ['wallet', 'razorpay', 'online'].includes(booking.advancePayment?.paymentMethod));
-    const stageLabel = { journey: 'journey start', arrived: 'professional arrival', late: 'the free cancellation period ended' }[stage];
+    const stageLabel = { journey: 'journey start', arrived: 'professional arrival', late: 'the free cancellation period ended' }[stage] || 'scheduled slot';
+
+    const feeCovered = cancellationFee > 0 && totalPaid >= cancellationFee;
+    const unpaidFee = cancellationFee > 0 ? Math.max(0, cancellationFee - totalPaid) : 0;
 
     if (cancellationFee > 0) {
-      if (totalPaid > 0 && isWalletOrOnline) {
-        // User paid upfront/advance -> Refund (Total Paid - Fee)
-        refundAmount = Math.max(0, totalPaid - cancellationFee);
-        refundMessage = `Booking cancelled after ${stageLabel}. Refund of ₹${refundAmount} initiated (Cancellation Fee: ₹${cancellationFee} deducted).`;
+      if (totalPaid > 0) {
+        if (totalPaid >= cancellationFee) {
+          refundAmount = totalPaid - cancellationFee;
+          if (refundAmount > 0) {
+            refundMessage = `Booking cancelled after ${stageLabel}. Refund of ₹${refundAmount} initiated (Cancellation Fee: ₹${cancellationFee} deducted).`;
+          } else {
+            refundMessage = `Booking cancelled after ${stageLabel}. Your cancellation fee of ₹${cancellationFee} was covered by your advance/payment. No amount is due.`;
+          }
+        } else {
+          refundAmount = 0;
+          refundMessage = `Booking cancelled after ${stageLabel}. ₹${totalPaid} paid was applied to your cancellation fee of ₹${cancellationFee}. The remaining ₹${unpaidFee} will be charged on your next booking.`;
+        }
       } else {
-        // User hasn't paid (e.g. COD or pending) -> Add Penalty to Wallet for Next Booking
         refundAmount = 0;
         refundMessage = `Booking cancelled after ${stageLabel}. A cancellation fee of ₹${cancellationFee} has been added to your account and will be charged on your next booking.`;
       }
-    } else if (totalPaid > 0 && isWalletOrOnline) {
+    } else if (totalPaid > 0) {
       refundAmount = totalPaid;
       refundMessage = `Booking cancelled successfully. Full refund of ₹${refundAmount} initiated to your wallet.`;
     } else {
@@ -378,7 +388,10 @@ const cancelBooking = async (req, res) => {
       by: 'user',
       reason: cancelReason,
       filter: { userId },
-      extra: { cancellationFee }
+      extra: {
+        cancellationFee,
+        feeCovered: feeCovered || (cancellationFee === 0)
+      }
     });
     if (!previous) {
       const current = await Booking.findById(booking._id).select('status').lean();
@@ -388,7 +401,7 @@ const cancelBooking = async (req, res) => {
     let refundedNow = 0;
     try {
     // Update User Wallet
-    if (refundAmount > 0 || (cancellationFee > 0 && totalPaid === 0)) {
+    if (refundAmount > 0 || unpaidFee > 0) {
       const User = require('../../models/User');
       const Transaction = require('../../models/Transaction');
 
@@ -412,10 +425,10 @@ const cancelBooking = async (req, res) => {
         refundedNow = refundAmount;
       }
 
-      // 2. Process Cancellation Fee (Add to Penalty Bucket if Unpaid)
-      if (cancellationFee > 0 && totalPaid === 0) {
-        user.wallet.penalty = (user.wallet.penalty || 0) + cancellationFee;
-        console.log(`[CancelBooking] Added penalty of ₹${cancellationFee} to user ${userId}. Total Penalty: ${user.wallet.penalty}`);
+      // 2. Process Cancellation Fee (Add unpaid deficit to Penalty Bucket if any)
+      if (unpaidFee > 0) {
+        user.wallet.penalty = (user.wallet.penalty || 0) + unpaidFee;
+        console.log(`[CancelBooking] Added penalty of ₹${unpaidFee} to user ${userId}. Total Penalty: ${user.wallet.penalty}`);
       }
 
       await user.save();
@@ -449,11 +462,19 @@ const cancelBooking = async (req, res) => {
       throw effectError;
     }
 
-    // Record the refund on the booking (the status itself was already set by the claim above)
-    const finalBooking = refundedNow > 0
+    // Record the refund/settlement on the booking (the status itself was already set by the claim above)
+    const bookingUpdate = {};
+    if (refundedNow > 0) {
+      bookingUpdate.refundedAmount = (booking.refundedAmount || 0) + refundedNow;
+      bookingUpdate.paymentStatus = PAYMENT_STATUS.REFUNDED;
+    } else if (feeCovered) {
+      bookingUpdate.paymentStatus = PAYMENT_STATUS.FEE_SETTLED;
+    }
+
+    const finalBooking = Object.keys(bookingUpdate).length > 0
       ? await Booking.findOneAndUpdate(
         { _id: booking._id },
-        { $set: { refundedAmount: (booking.refundedAmount || 0) + refundedNow, paymentStatus: PAYMENT_STATUS.REFUNDED } },
+        { $set: bookingUpdate },
         { new: true, actor: 'user' }
       )
       : await Booking.findById(booking._id);

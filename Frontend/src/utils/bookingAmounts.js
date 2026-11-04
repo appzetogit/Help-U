@@ -16,16 +16,31 @@ export const cancelledSummary = (booking) => {
   const fee = Number(booking?.cancellationFee) || 0;
   const refunded = Number(booking?.refundedAmount) || 0;
 
+  const advancePaid = booking?.advancePayment?.status === 'paid'
+    ? Number(booking?.advancePayment?.paidAmount || booking?.advancePayment?.requestedAmount || 0)
+    : 0;
+  const prepaid = Number(booking?.prepaidAmount || 0);
+  const isPaid = ['success', 'paid', 'collected_by_vendor', 'collected_by_worker'].includes(String(booking?.paymentStatus || '').toLowerCase());
+  const finalAmt = isPaid ? Number(booking?.finalAmount || 0) : 0;
+  const totalPaid = Math.max(advancePaid + prepaid, advancePaid + finalAmt, Number(booking?.totals?.paid || 0));
+
+  const feeCovered = booking?.feeCovered === true ||
+    String(booking?.paymentStatus || '').toLowerCase() === 'fee_settled' ||
+    (fee > 0 && totalPaid >= fee);
+
   if (refunded > 0 && fee > 0) {
-    return { headline: `Refunded ${inr(refunded)}`, detail: `Your ${inr(fee)} cancellation fee was deducted from the refund.`, fee, refunded };
+    return { headline: `Refunded ${inr(refunded)}`, detail: `Your ${inr(fee)} cancellation fee was deducted from the refund.`, fee, refunded, feeSettled: true };
   }
   if (refunded > 0) {
-    return { headline: `Refunded ${inr(refunded)}`, detail: 'The full amount went back to your wallet.', fee, refunded };
+    return { headline: `Refunded ${inr(refunded)}`, detail: 'The full amount went back to your wallet.', fee, refunded, feeSettled: true };
+  }
+  if (feeCovered && fee > 0) {
+    return { headline: 'Fee Settled', detail: `Your ${inr(fee)} cancellation fee was covered by your payment. No amount is due.`, fee, refunded, feeSettled: true };
   }
   if (fee > 0) {
-    return { headline: `Fee ${inr(fee)}`, detail: `A ${inr(fee)} cancellation fee applies. It will be added to your next booking.`, fee, refunded };
+    return { headline: `Fee ${inr(fee)}`, detail: `A ${inr(fee)} cancellation fee applies. It will be added to your next booking.`, fee, refunded, feeSettled: false };
   }
-  return { headline: 'No charge', detail: 'Nothing is due for this booking.', fee, refunded };
+  return { headline: 'No charge', detail: 'Nothing is due for this booking.', fee, refunded, feeSettled: true };
 };
 
 export { inr };

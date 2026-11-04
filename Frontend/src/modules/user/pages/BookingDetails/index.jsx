@@ -160,7 +160,7 @@ const BookingDetails = () => {
 
   // Handle Payment Modal Visibility - Auto-open on new payment request from worker
   useEffect(() => {
-    if (!booking) return;
+    if (!booking || ['cancelled', 'rejected'].includes(booking.status?.toLowerCase())) return;
     
     const isPaymentDone = booking.paymentStatus === 'success' || booking.cashCollected === true;
     const isAdvancePaid = booking.advancePayment?.status === 'paid';
@@ -1015,7 +1015,7 @@ const BookingDetails = () => {
           <RepairServicesCard booking={booking} onSaved={loadBooking} />
 
           {/* Advance Payment Requested Card */}
-          {booking.advancePayment?.status === 'requested' && (
+          {!['cancelled', 'rejected'].includes(booking.status?.toLowerCase()) && booking.advancePayment?.status === 'requested' && (
             <div className="relative overflow-hidden rounded-3xl shadow-lg border border-amber-200 mb-6 active:scale-[0.99] transition-all">
               <div className="absolute inset-0 bg-gradient-to-br from-amber-500 via-orange-500 to-amber-600 opacity-95"></div>
               <div className="relative z-10 p-6 text-white">
@@ -1410,7 +1410,7 @@ const BookingDetails = () => {
           <BookingExtrasCard booking={booking} showDetails={false} title="Your Requests" />
 
           {/* Payment Summary - Only show if payment is completed/collected OR if a payment request is active (Work Done) */}
-          {(['work_done', 'completed'].includes(booking.status?.toLowerCase()) || booking.paymentStatus === 'success' || booking.cashCollected) && (
+          {!['cancelled', 'rejected'].includes(booking.status?.toLowerCase()) && (['work_done', 'completed'].includes(booking.status?.toLowerCase()) || booking.paymentStatus === 'success' || booking.cashCollected) && (
             <section className="bg-white rounded-3xl shadow-[0_4px_20px_rgb(0,0,0,0.03)] border border-gray-100 overflow-hidden">
             <div className="p-5">
               <div className="flex items-center gap-2 mb-4 pb-2 border-b border-gray-100">

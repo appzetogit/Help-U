@@ -143,7 +143,8 @@ const PAYMENT_STATUS = {
   REFUNDED: 'refunded',
   COLLECTED_BY_WORKER: 'collected_by_vendor',
   COLLECTED_BY_WORKER_LEGACY: 'collected by worker',
-  PLAN_COVERED: 'plan_covered' // For plan_benefit bookings until bill is finalized
+  PLAN_COVERED: 'plan_covered', // For plan_benefit bookings until bill is finalized
+  FEE_SETTLED: 'fee_settled'
 };
 
 // Service Status

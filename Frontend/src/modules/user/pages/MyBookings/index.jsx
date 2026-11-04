@@ -175,7 +175,11 @@ const BookingCard = ({ booking, onOpen, onReschedule }) => {
           {ended ? (
             <>
               <p className="text-[16px] font-bold text-ink leading-tight">{money.headline}</p>
-              <p className="text-[11px] text-gray-500 line-clamp-1">{money.fee > 0 && money.refunded === 0 ? 'Added to your next booking' : 'Cancelled booking'}</p>
+              <p className="text-[11px] text-gray-500 line-clamp-1">
+                {money.fee > 0 && money.refunded === 0 && !money.feeSettled
+                  ? 'Added to your next booking'
+                  : 'Cancelled booking'}
+              </p>
             </>
           ) : (
             <>
