@@ -35,13 +35,15 @@ const DocActions = ({ url, name }) => (
 const AllWorkers = () => {
   const [workers, setWorkers] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [filterStatus, setFilterStatus] = useState('all'); // 'all', 'pending', 'approved', 'rejected'
+  const [filterStatus, setFilterStatus] = useState(() => new URLSearchParams(window.location.search).get('status') || 'all'); // 'all', 'pending', 'approved', 'rejected'
   const [searchQuery, setSearchQuery] = useState(() => new URLSearchParams(window.location.search).get('search') || '');
   // The header search opens this list with ?search=…; follow it when it changes
   const [urlParams] = useSearchParams();
   useEffect(() => {
     const fromUrl = urlParams.get('search');
     if (fromUrl !== null) setSearchQuery(fromUrl);
+    const fromStatus = urlParams.get('status');
+    if (fromStatus) setFilterStatus(fromStatus);
   }, [urlParams]);
 
   const [selectedWorker, setSelectedWorker] = useState(null);
@@ -256,18 +258,42 @@ const AllWorkers = () => {
       >
         {/* Stats Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-3">
+          <button
+            type="button"
+            onClick={() => setFilterStatus('pending')}
+            className={`border rounded-xl p-3 text-left transition-all ${
+              filterStatus === 'pending'
+                ? 'bg-yellow-100 border-yellow-400 ring-2 ring-yellow-400/30'
+                : 'bg-yellow-50 border-yellow-200 hover:border-yellow-300'
+            }`}
+          >
             <div className="text-[10px] font-bold text-yellow-700 uppercase tracking-wider mb-1">Pending</div>
             <div className="text-xl font-bold text-yellow-900">{pendingCount}</div>
-          </div>
-          <div className="bg-green-50 border border-green-200 rounded-xl p-3">
+          </button>
+          <button
+            type="button"
+            onClick={() => setFilterStatus('approved')}
+            className={`border rounded-xl p-3 text-left transition-all ${
+              filterStatus === 'approved'
+                ? 'bg-green-100 border-green-400 ring-2 ring-green-400/30'
+                : 'bg-green-50 border-green-200 hover:border-green-300'
+            }`}
+          >
             <div className="text-[10px] font-bold text-green-700 uppercase tracking-wider mb-1">Approved</div>
             <div className="text-xl font-bold text-green-900">{approvedCount}</div>
-          </div>
-          <div className="bg-red-50 border border-red-200 rounded-xl p-3">
+          </button>
+          <button
+            type="button"
+            onClick={() => setFilterStatus('rejected')}
+            className={`border rounded-xl p-3 text-left transition-all ${
+              filterStatus === 'rejected'
+                ? 'bg-red-100 border-red-400 ring-2 ring-red-400/30'
+                : 'bg-red-50 border-red-200 hover:border-red-300'
+            }`}
+          >
             <div className="text-[10px] font-bold text-red-700 uppercase tracking-wider mb-1">Rejected</div>
             <div className="text-xl font-bold text-red-900">{rejectedCount}</div>
-          </div>
+          </button>
         </div>
 
         {/* Search and Filter */}
@@ -288,12 +314,19 @@ const AllWorkers = () => {
                 <button
                   key={status}
                   onClick={() => setFilterStatus(status)}
-                  className={`px-3 py-2 rounded-lg text-xs font-bold capitalize transition-all whitespace-nowrap ${filterStatus === status
+                  className={`px-3 py-2 rounded-lg text-xs font-bold capitalize transition-all whitespace-nowrap flex items-center gap-1.5 ${filterStatus === status
                     ? 'bg-blue-600 text-white shadow-sm'
                     : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                     }`}
                 >
-                  {status}
+                  <span>{status}</span>
+                  {status === 'pending' && pendingCount > 0 && (
+                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full leading-none flex items-center justify-center ${
+                      filterStatus === 'pending' ? 'bg-white text-blue-600' : 'bg-red-500 text-white'
+                    }`}>
+                      {pendingCount}
+                    </span>
+                  )}
                 </button>
               ))}
             </div>

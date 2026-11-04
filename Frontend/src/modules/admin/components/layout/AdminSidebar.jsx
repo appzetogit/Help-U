@@ -224,6 +224,20 @@ const AdminSidebar = ({ isOpen, onClose }) => {
     return 0;
   };
 
+  const childBadgeFor = (parentTitle, childTitle) => {
+    if (parentTitle === "Workers" && childTitle === "All Workers") {
+      return { count: counts.workers, tone: "red" };
+    }
+    if (parentTitle === "Bookings" && childTitle === "All Bookings") {
+      return { count: counts.bookings, tone: "red" };
+    }
+    if (parentTitle === "Settlements") {
+      if (childTitle === "Pending") return { count: counts.pendingSettlements, tone: "red" };
+      if (childTitle === "Withdrawals") return { count: counts.withdrawals, tone: "orange" };
+    }
+    return null;
+  };
+
   const renderMenuItem = (item) => {
     const Icon = iconMap[item.title] || FiHome;
     const hasChildren = item.children && item.children.length > 0;
@@ -266,6 +280,7 @@ const AdminSidebar = ({ isOpen, onClose }) => {
                   const isChildActive =
                     location.pathname === childRoute ||
                     (childRoute !== item.route && location.pathname.startsWith(childRoute + "/"));
+                  const childBadge = childBadgeFor(item.title, child);
 
                   return (
                     <button
@@ -276,8 +291,7 @@ const AdminSidebar = ({ isOpen, onClose }) => {
                         ${isChildActive ? "bg-slate-700 text-white font-medium" : "text-slate-400 hover:bg-slate-700/60 hover:text-slate-100"}`}
                     >
                       <span className="truncate"><Highlight text={child} query={query} /></span>
-                      {item.title === "Settlements" && child === "Pending" && <CountBadge count={counts.pendingSettlements} />}
-                      {item.title === "Settlements" && child === "Withdrawals" && <CountBadge count={counts.withdrawals} tone="orange" />}
+                      {childBadge && <CountBadge count={childBadge.count} tone={childBadge.tone} />}
                     </button>
                   );
                 })}

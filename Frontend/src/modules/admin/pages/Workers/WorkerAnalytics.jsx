@@ -453,9 +453,16 @@ const WorkerAnalytics = () => {
               </button>
               <button
                 onClick={() => setActiveTab('pending')}
-                className={`px-3 py-1.5 rounded-lg transition-all ${activeTab === 'pending' ? 'bg-white shadow-xs text-purple-600' : 'hover:text-slate-900'}`}
+                className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 ${activeTab === 'pending' ? 'bg-white shadow-xs text-purple-600' : 'hover:text-slate-900'}`}
               >
-                Pending
+                <span>Pending</span>
+                {pendingCount > 0 && (
+                  <span className={`text-[10px] font-bold px-1.5 py-0.2 rounded-full ${
+                    activeTab === 'pending' ? 'bg-purple-100 text-purple-700' : 'bg-red-500 text-white'
+                  }`}>
+                    {pendingCount}
+                  </span>
+                )}
               </button>
             </div>
 
