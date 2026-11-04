@@ -139,6 +139,26 @@ export const register = async (workerData) => {
 };
 
 /**
+ * Validate a partner referral code
+ * @param {string} code - Referral code to check
+ * @returns {Promise<Object>} { success, valid, referrerName, message }
+ */
+export const validateReferralCode = async (code) => {
+  try {
+    const clean = String(code || '').trim().toUpperCase();
+    if (!clean) return { success: false, valid: false, message: 'Please enter a referral code' };
+    const response = await api.get(`/workers/auth/validate-referral/${encodeURIComponent(clean)}`);
+    return response.data;
+  } catch (error) {
+    return {
+      success: false,
+      valid: false,
+      message: error.response?.data?.message || 'Failed to validate referral code'
+    };
+  }
+};
+
+/**
  * Fetch dynamic active registration fields and document upload options
  */
 export const getPartnerRegistrationFields = async () => {

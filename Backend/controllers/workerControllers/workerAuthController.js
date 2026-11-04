@@ -184,7 +184,7 @@ const register = async (req, res) => {
     if (validErrors.length > 0) {
       return res.status(400).json({
         success: false,
-        message: 'Validation failed',
+        message: validErrors[0].msg || 'Validation failed',
         errors: validErrors
       });
     }
@@ -249,13 +249,48 @@ const register = async (req, res) => {
       }
     }
 
+    // Validate GSTIN format if provided
+    const GSTIN_REGEX = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
+    const rawGstin = gstin ? String(gstin).trim().toUpperCase() : (customFields?.gstin ? String(customFields.gstin).trim().toUpperCase() : '');
+    const gstinField = activeRegistrationFields.find(f => f.fieldKey === 'gstin');
+    if (gstinField?.isRequired && !rawGstin) {
+      return res.status(400).json({
+        success: false,
+        message: 'GSTIN Number is required'
+      });
+    }
+    if (rawGstin && !GSTIN_REGEX.test(rawGstin)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid GSTIN format. Example: 22AAAAA0000A1Z5 (15 characters)'
+      });
+    }
+
     // Check referral code if provided
     let referrer = null;
-    if (rule('referral_code').active && referralCode && referralCode.trim()) {
+    const cleanReferralCode = referralCode ? String(referralCode).trim().toUpperCase() : '';
+    if (rule('referral_code').active && cleanReferralCode) {
       referrer = await Worker.findOne({ 
-        referralCode: referralCode.trim().toUpperCase(),
-        phone: { $ne: phone } // Cannot refer oneself
+        referralCode: cleanReferralCode
       });
+      if (!referrer) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid referral code. Please enter a valid code or leave it blank.'
+        });
+      }
+      if (referrer.phone === phone) {
+        return res.status(400).json({
+          success: false,
+          message: 'You cannot use your own referral code.'
+        });
+      }
+      if (referrer.isActive === false || referrer.approvalStatus === 'rejected') {
+        return res.status(400).json({
+          success: false,
+          message: 'This referral code belongs to an inactive or rejected account.'
+        });
+      }
     }
 
     // Upload documents
@@ -427,6 +462,7 @@ const register = async (req, res) => {
         name: worker.name,
         email: worker.email,
         phone: worker.phone,
+        gstin: worker.gstin,
         approvalStatus: worker.approvalStatus,
         referralCode: worker.referralCode
       }
@@ -639,11 +675,54 @@ const refreshToken = async (req, res) => {
   }
 };
 
+/**
+ * Validate a referral code before registration
+ * GET /api/workers/auth/validate-referral/:code
+ */
+const validateReferralCode = async (req, res) => {
+  try {
+    const rawCode = req.params.code || req.query.code;
+    const code = String(rawCode || '').trim().toUpperCase();
+    if (!code) {
+      return res.status(400).json({ success: false, valid: false, message: 'Referral code is required' });
+    }
+    const referrer = await Worker.findOne({ referralCode: code })
+      .select('name businessName phone approvalStatus isActive')
+      .lean();
+
+    if (!referrer) {
+      return res.status(200).json({
+        success: true,
+        valid: false,
+        message: 'Invalid referral code. No worker found with this code.'
+      });
+    }
+
+    if (referrer.isActive === false || referrer.approvalStatus === 'rejected') {
+      return res.status(200).json({
+        success: true,
+        valid: false,
+        message: 'This referral code belongs to an inactive or rejected account.'
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      valid: true,
+      referrerName: referrer.businessName || referrer.name || 'Service Partner'
+    });
+  } catch (error) {
+    console.error('Validate referral code error:', error);
+    return res.status(500).json({ success: false, message: 'Failed to validate referral code' });
+  }
+};
+
 module.exports = {
   sendOTP,
   verifyLogin,
   register,
   login,
   logout,
-  refreshToken
+  refreshToken,
+  validateReferralCode
 };

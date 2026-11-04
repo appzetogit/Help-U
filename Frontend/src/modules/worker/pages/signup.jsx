@@ -4,7 +4,7 @@ import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { FiUser, FiMail, FiPhone, FiFileText, FiUpload, FiX, FiArrowRight, FiChevronLeft, FiCheckCircle, FiCamera, FiGift, FiBriefcase, FiChevronDown, FiSearch, FiCheck } from 'react-icons/fi';
 import { toast } from 'react-hot-toast';
 import { themeColors } from '../../../theme';
-import { register, sendOTP as sendWorkerOTP, getPartnerRegistrationFields } from '../services/authService';
+import { register, sendOTP as sendWorkerOTP, getPartnerRegistrationFields, validateReferralCode } from '../services/authService';
 import LogoLoader from '../../../components/common/LogoLoader';
 import Logo from '../../../components/common/Logo';
 import { compressImage } from '../../../utils/imageCompression';
@@ -64,6 +64,8 @@ const WorkerSignup = () => {
   const [customDocPreview, setCustomDocPreview] = useState({});
   const [uploadingCustomDocs, setUploadingCustomDocs] = useState({});
   const [customFieldErrors, setCustomFieldErrors] = useState({});
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
+  const [referralState, setReferralState] = useState({ checking: false, valid: null, message: '', referrerName: '' });
 
 
   // Refs for auto-focus
@@ -238,8 +240,31 @@ const WorkerSignup = () => {
     });
   };
 
+  const handleReferralBlur = async () => {
+    const code = formData.referralCode?.trim().toUpperCase();
+    if (!code) {
+      setReferralState({ checking: false, valid: null, message: '', referrerName: '' });
+      if (fieldErrors.referralCode) setFieldErrors(p => ({ ...p, referralCode: '' }));
+      return;
+    }
+    setReferralState(p => ({ ...p, checking: true }));
+    const res = await validateReferralCode(code);
+    if (res && res.valid) {
+      setReferralState({ checking: false, valid: true, message: '', referrerName: res.referrerName || 'Service Partner' });
+      if (fieldErrors.referralCode) setFieldErrors(p => ({ ...p, referralCode: '' }));
+    } else {
+      const msg = res?.message || 'Invalid referral code';
+      setReferralState({ checking: false, valid: false, message: msg, referrerName: '' });
+      setFieldErrors(p => ({ ...p, referralCode: msg }));
+    }
+  };
+
   const handleCustomFieldChange = (fieldKey, value) => {
-    setCustomFields(prev => ({ ...prev, [fieldKey]: value }));
+    let cleanValue = value;
+    if (fieldKey === 'gstin') {
+      cleanValue = value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 15);
+    }
+    setCustomFields(prev => ({ ...prev, [fieldKey]: cleanValue }));
     if (customFieldErrors[fieldKey]) {
       setCustomFieldErrors(prev => ({ ...prev, [fieldKey]: '' }));
     }
@@ -392,6 +417,57 @@ const WorkerSignup = () => {
     if (core.service_categories.active && core.service_categories.required && (!Array.isArray(formData.service) || formData.service.length === 0)) {
       setFieldErrors(prev => ({ ...prev, service: 'Please select at least one service category' }));
       toast.error('Please select at least one service category');
+      return;
+    }
+
+    // GSTIN format validation (if entered or required)
+    const GSTIN_REGEX = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
+    const rawGstinVal = customFields.gstin ? String(customFields.gstin).trim().toUpperCase() : '';
+    const gstinField = dynamicTextFields.find(f => f.fieldKey === 'gstin');
+    if (gstinField?.isRequired && !rawGstinVal) {
+      setCustomFieldErrors(prev => ({ ...prev, gstin: 'GSTIN Number is required' }));
+      toast.error('GSTIN Number is required');
+      return;
+    }
+    if (rawGstinVal && !GSTIN_REGEX.test(rawGstinVal)) {
+      setCustomFieldErrors(prev => ({ ...prev, gstin: 'Invalid GSTIN format (e.g. 22AAAAA0000A1Z5)' }));
+      toast.error('Invalid GSTIN format. Example: 22AAAAA0000A1Z5 (15 characters)');
+      return;
+    }
+
+    // Referral code validation (must be valid if provided)
+    const rawRefCode = formData.referralCode ? formData.referralCode.trim().toUpperCase() : '';
+    if (core.referral_code.active && rawRefCode) {
+      if (referralState.valid === false) {
+        setFieldErrors(prev => ({ ...prev, referralCode: referralState.message || 'Invalid referral code' }));
+        toast.error(referralState.message || 'Invalid referral code. Please check or leave empty.');
+        return;
+      }
+      if (referralState.valid !== true) {
+        setIsLoading(true);
+        try {
+          const check = await validateReferralCode(rawRefCode);
+          if (!check || !check.valid) {
+            setIsLoading(false);
+            const msg = check?.message || 'Invalid referral code';
+            setReferralState({ checking: false, valid: false, message: msg, referrerName: '' });
+            setFieldErrors(prev => ({ ...prev, referralCode: msg }));
+            toast.error(msg);
+            return;
+          }
+          setReferralState({ checking: false, valid: true, message: '', referrerName: check.referrerName });
+        } catch {
+          setIsLoading(false);
+          toast.error('Could not verify referral code');
+          return;
+        }
+      }
+    }
+
+    // Terms & Privacy Policy Acceptance
+    if (!acceptedTerms) {
+      setFieldErrors(prev => ({ ...prev, terms: 'Please agree to the Terms & Conditions and Privacy Policy' }));
+      toast.error('Please accept the Terms & Conditions and Privacy Policy');
       return;
     }
 
@@ -716,12 +792,36 @@ const WorkerSignup = () => {
                         type="text"
                         name="referralCode"
                         value={formData.referralCode}
-                        onChange={(e) => setFormData(p => ({ ...p, referralCode: e.target.value.toUpperCase().trim() }))}
-                        className="block w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-xl focus:ring-2 focus:ring-offset-2 transition-all duration-300 outline-none hover:border-gray-400 uppercase font-semibold text-gray-800 tracking-wider placeholder:normal-case placeholder:font-normal placeholder:tracking-normal"
-                        style={{ '--tw-ring-color': brandColor }}
+                        onChange={(e) => {
+                          setFormData(p => ({ ...p, referralCode: e.target.value.toUpperCase().trim() }));
+                          setReferralState({ checking: false, valid: null, message: '', referrerName: '' });
+                          if (fieldErrors.referralCode) setFieldErrors(p => ({ ...p, referralCode: '' }));
+                        }}
+                        onBlur={handleReferralBlur}
+                        className={`block w-full pl-10 pr-10 py-2.5 border rounded-xl focus:ring-2 focus:ring-offset-2 transition-all duration-300 outline-none uppercase font-semibold text-gray-800 tracking-wider placeholder:normal-case placeholder:font-normal placeholder:tracking-normal ${
+                          fieldErrors.referralCode || referralState.valid === false
+                            ? 'border-red-500 focus:ring-red-400'
+                            : referralState.valid === true
+                              ? 'border-emerald-500 focus:ring-emerald-400 bg-emerald-50/20'
+                              : 'border-gray-300 hover:border-gray-400'
+                        }`}
+                        style={{ '--tw-ring-color': fieldErrors.referralCode ? '#EF4444' : brandColor }}
                         placeholder={core.referral_code.placeholder}
                       />
+                      <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+                        {referralState.checking && <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-[#347989]" />}
+                        {referralState.valid === true && <FiCheck className="w-4 h-4 text-emerald-600" />}
+                        {referralState.valid === false && <FiX className="w-4 h-4 text-red-500" />}
+                      </div>
                     </div>
+                    {fieldErrors.referralCode && (
+                      <p className="text-xs text-red-500 mt-1 font-medium">{fieldErrors.referralCode}</p>
+                    )}
+                    {referralState.valid === true && (
+                      <p className="text-xs text-emerald-600 mt-1 font-medium flex items-center gap-1">
+                        <FiCheck className="w-3.5 h-3.5" /> Referred by {referralState.referrerName}
+                      </p>
+                    )}
                     {helpNote(core.referral_code)}
                   </div>
                   )}
@@ -768,18 +868,26 @@ const WorkerSignup = () => {
                               ) : (
                                 <input
                                   type={field.type === 'number' ? 'number' : 'text'}
+                                  maxLength={field.fieldKey === 'gstin' ? 15 : undefined}
                                   value={customFields[field.fieldKey] || ''}
                                   onChange={(e) => handleCustomFieldChange(field.fieldKey, e.target.value)}
-                                  placeholder={field.placeholder || `Enter ${field.label}`}
+                                  placeholder={field.fieldKey === 'gstin' ? '22AAAAA0000A1Z5' : (field.placeholder || `Enter ${field.label}`)}
                                   className={`block w-full pl-10 pr-4 py-2.5 border rounded-xl focus:ring-2 focus:ring-offset-2 transition-all duration-300 outline-none ${
+                                    field.fieldKey === 'gstin' ? 'uppercase font-mono tracking-wider' : ''
+                                  } ${
                                     err ? 'border-red-500 focus:ring-red-400' : 'border-gray-300 hover:border-gray-400'
                                   }`}
                                   style={{ '--tw-ring-color': err ? '#EF4444' : brandColor }}
                                 />
                               )}
                             </div>
-                            {err && <p className="text-xs text-red-500 mt-1 font-medium">{err}</p>}
-                            {field.helpText && <p className="text-[11px] text-gray-400 mt-0.5">{field.helpText}</p>}
+                            {err ? (
+                              <p className="text-xs text-red-500 mt-1 font-medium">{err}</p>
+                            ) : field.fieldKey === 'gstin' ? (
+                              <p className="text-[10px] text-gray-400 mt-0.5">15 alphanumeric characters (e.g. 22AAAAA0000A1Z5)</p>
+                            ) : field.helpText ? (
+                              <p className="text-[11px] text-gray-400 mt-0.5">{field.helpText}</p>
+                            ) : null}
                           </div>
                         );
                       })}
@@ -1004,6 +1112,37 @@ const WorkerSignup = () => {
               </div>
               )}
 
+              {/* Terms & Conditions / Privacy Policy Checkbox */}
+              <div className="relative z-10 animate-fade-in pt-1" style={{ animationDelay: '0.75s' }}>
+                <label className="flex items-start gap-2.5 cursor-pointer text-xs text-gray-600 select-none">
+                  <input
+                    type="checkbox"
+                    checked={acceptedTerms}
+                    onChange={(e) => {
+                      setAcceptedTerms(e.target.checked);
+                      if (e.target.checked && fieldErrors.terms) {
+                        setFieldErrors(prev => ({ ...prev, terms: null }));
+                      }
+                    }}
+                    className="mt-0.5 h-4 w-4 rounded border-gray-300 text-[#347989] focus:ring-[#347989] cursor-pointer"
+                  />
+                  <span>
+                    I agree to the{' '}
+                    <Link to="/worker/terms" target="_blank" rel="noopener noreferrer" className="font-semibold text-[#347989] hover:underline">
+                      Terms & Conditions
+                    </Link>{' '}
+                    and{' '}
+                    <Link to="/worker/privacy-policy" target="_blank" rel="noopener noreferrer" className="font-semibold text-[#347989] hover:underline">
+                      Privacy Policy
+                    </Link>{' '}
+                    <span className="text-red-500">*</span>
+                  </span>
+                </label>
+                {fieldErrors.terms && (
+                  <p className="text-xs text-red-500 pl-6.5 mt-1 font-medium">{fieldErrors.terms}</p>
+                )}
+              </div>
+
               <div className="relative z-0 animate-stagger-3 animate-fade-in">
                 <button
                   type="submit"
@@ -1111,6 +1250,18 @@ const WorkerSignup = () => {
             Login here
           </Link>
         </p>
+
+        {/* Partner Support Link */}
+        <div className="mt-4 text-center text-xs text-gray-500 relative z-10 animate-fade-in animate-stagger-4 flex items-center justify-center gap-1.5 flex-wrap">
+          <span>Need help with partner registration?</span>
+          <a
+            href="mailto:support@help-u.in"
+            className="font-semibold hover:underline"
+            style={{ color: brandColor }}
+          >
+            Contact Partner Support
+          </a>
+        </div>
       </div >
     </div >
   );
