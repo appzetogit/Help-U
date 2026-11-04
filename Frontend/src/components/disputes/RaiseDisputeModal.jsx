@@ -9,6 +9,29 @@ import ModalLock from '../common/ModalLock';
 
 const NAVY = '#163B66';
 
+const DEFAULT_CUSTOMER_DISPUTE_REASONS = [
+  'Service not completed',
+  'Poor quality of work',
+  'Overcharged / billing issue',
+  'Professional misbehaved',
+  'Damage to property',
+  'Professional did not arrive',
+  'Payment issue',
+  'Other'
+];
+
+const DEFAULT_WORKER_DISPUTE_REASONS = [
+  'Customer unavailable / Not at location',
+  'Customer refused to pay',
+  'Customer misbehaved / Inappropriate behavior',
+  'Incorrect address / Location unreachable',
+  'Scope mismatch / Extra work demanded',
+  'Customer cancelled at doorstep',
+  'Safety or security concern',
+  'Payment or settlement issue',
+  'Other'
+];
+
 /**
  * Form to raise a dispute on a booking.
  * info: response of GET /disputes/booking/:id (reasons, maxEvidence, amountPaid)
@@ -21,6 +44,10 @@ const RaiseDisputeModal = ({ role, bookingId, info, isOpen, onClose, onRaised })
   const [submitting, setSubmitting] = useState(false);
 
   if (!isOpen) return null;
+
+  const reasonsList = (info?.reasons && info.reasons.length > 0)
+    ? info.reasons
+    : (role === 'worker' ? DEFAULT_WORKER_DISPUTE_REASONS : DEFAULT_CUSTOMER_DISPUTE_REASONS);
 
   const amountPaid = info?.amountPaid || 0;
 
@@ -73,7 +100,7 @@ const RaiseDisputeModal = ({ role, bookingId, info, isOpen, onClose, onRaised })
           <div>
             <label className="text-xs font-bold text-gray-500 uppercase">What went wrong?</label>
             <div className="mt-2 flex flex-wrap gap-2">
-              {(info?.reasons || []).map((r) => (
+              {reasonsList.map((r) => (
                 <button
                   type="button"
                   key={r}
@@ -94,7 +121,7 @@ const RaiseDisputeModal = ({ role, bookingId, info, isOpen, onClose, onRaised })
               value={description}
               onChange={(e) => setDescription(e.target.value.slice(0, 2000))}
               rows={4}
-              placeholder="Tell us what happened, with as much detail as you can"
+              placeholder={role === 'worker' ? 'Tell us what went wrong with this booking or customer, with as much detail as you can' : 'Tell us what happened, with as much detail as you can'}
               className="mt-1 w-full p-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-slate-300"
             />
             <p className="text-[10px] text-gray-400 text-right">{description.length}/2000</p>

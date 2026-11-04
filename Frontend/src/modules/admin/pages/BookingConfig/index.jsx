@@ -62,7 +62,7 @@ const TAB_GROUPS = [
 
 const groupOfKey = (key) => {
   if (/^(dispatchMode|searchRadius|maxSearchTime|waveDuration|assignment|wave\d|autoReassign|maxReassignments|isAdminAssignment|escalateToAdmin|adminAssign|isWorkerServiceRadius|workerServiceRadius|isEmergency|emergency)/.test(key)) return 'dispatch';
-  if (/^(userFreeCancel|userLateCancel|cancellationPenalty|workerFreeCancel|workerLateCancel|isDispute|disputeWindow|maxDisputeEvidence|disputeReasons|isChat|chat)/.test(key)) return 'policies';
+  if (/^(userFreeCancel|userLateCancel|cancellationPenalty|workerFreeCancel|workerLateCancel|isDispute|disputeWindow|maxDisputeEvidence|disputeReasons|workerDisputeReasons|isChat|chat)/.test(key)) return 'policies';
   if (/^(minWithdrawal|wallet|scrap)/.test(key)) return 'money';
   return 'flow';
 };
@@ -123,6 +123,7 @@ const BookingConfig = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [newReason, setNewReason] = useState('');
+  const [newWorkerReason, setNewWorkerReason] = useState('');
   const [query, setQuery] = useState('');
   // Remember the tab in the address (#money, ...) so a refresh or a shared link lands on it
   const [tab, setTab] = useState(() => {
@@ -246,6 +247,14 @@ const BookingConfig = () => {
     if ((config.disputeReasons || []).includes(r)) return toast.error('That reason already exists');
     set('disputeReasons')([...(config.disputeReasons || []), r]);
     setNewReason('');
+  };
+
+  const addWorkerReason = () => {
+    const r = newWorkerReason.trim();
+    if (!r) return;
+    if ((config.workerDisputeReasons || []).includes(r)) return toast.error('That reason already exists');
+    set('workerDisputeReasons')([...(config.workerDisputeReasons || []), r]);
+    setNewWorkerReason('');
   };
 
   return (
@@ -726,10 +735,41 @@ const BookingConfig = () => {
                     value={newReason}
                     onChange={(e) => setNewReason(e.target.value.slice(0, 100))}
                     onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addReason(); } }}
-                    placeholder="Add a reason"
+                    placeholder="Add a customer reason"
                     className={inputClass}
                   />
                   <Button variant="secondary" onClick={addReason}><FiPlus /> Add</Button>
+                </div>
+              </div>
+              <div className="mt-6 border-t border-gray-100 pt-4">
+                <span className="text-xs font-semibold text-gray-700">Reasons professionals / vendors can choose</span>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {(config.workerDisputeReasons || []).map((r) => (
+                    <span key={r} className="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-gray-50 px-3 py-1 text-xs font-medium text-gray-700">
+                      {r}
+                      <button
+                        type="button"
+                        aria-label={`Remove ${r}`}
+                        onClick={() => {
+                          if ((config.workerDisputeReasons || []).length <= 1) return toast.error('Keep at least one reason');
+                          set('workerDisputeReasons')(config.workerDisputeReasons.filter((x) => x !== r));
+                        }}
+                        className="text-gray-400 hover:text-red-500"
+                      >
+                        <FiX className="h-3 w-3" />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+                <div className="mt-2 flex max-w-md gap-2">
+                  <input
+                    value={newWorkerReason}
+                    onChange={(e) => setNewWorkerReason(e.target.value.slice(0, 100))}
+                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addWorkerReason(); } }}
+                    placeholder="Add a vendor reason"
+                    className={inputClass}
+                  />
+                  <Button variant="secondary" onClick={addWorkerReason}><FiPlus /> Add</Button>
                 </div>
               </div>
             </Card>

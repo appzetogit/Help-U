@@ -40,6 +40,29 @@ const DISPUTABLE_STATUSES = [
   BOOKING_STATUS.CANCELLED
 ];
 
+const DEFAULT_CUSTOMER_DISPUTE_REASONS = [
+  'Service not completed',
+  'Poor quality of work',
+  'Overcharged / billing issue',
+  'Professional misbehaved',
+  'Damage to property',
+  'Professional did not arrive',
+  'Payment issue',
+  'Other'
+];
+
+const DEFAULT_WORKER_DISPUTE_REASONS = [
+  'Customer unavailable / Not at location',
+  'Customer refused to pay',
+  'Customer misbehaved / Inappropriate behavior',
+  'Incorrect address / Location unreachable',
+  'Scope mismatch / Extra work demanded',
+  'Customer cancelled at doorstep',
+  'Safety or security concern',
+  'Payment or settlement issue',
+  'Other'
+];
+
 /**
  * What the customer has actually paid on a booking, in rupees.
  */
@@ -160,12 +183,20 @@ const raiseDispute = async ({ bookingId, party, actorId, actorName, reason, desc
   const cleanReason = String(reason || '').trim();
   const cleanDescription = String(description || '').trim();
 
-  if (!config.disputeReasons.includes(cleanReason)) {
+  const allowedReasons = party === 'worker'
+    ? ((config.workerDisputeReasons && config.workerDisputeReasons.length > 0) ? config.workerDisputeReasons : DEFAULT_WORKER_DISPUTE_REASONS)
+    : ((config.disputeReasons && config.disputeReasons.length > 0) ? config.disputeReasons : DEFAULT_CUSTOMER_DISPUTE_REASONS);
+
+  if (!allowedReasons.includes(cleanReason)) {
     throw new DisputeError('Please choose a reason from the list');
   }
   if (cleanDescription.length < 10) {
     throw new DisputeError('Please describe the problem in at least 10 characters');
   }
+
+  const isHighPriority = party === 'worker'
+    ? ['Safety or security concern', 'Customer misbehaved / Inappropriate behavior'].includes(cleanReason)
+    : ['Damage to property', 'Professional misbehaved'].includes(cleanReason);
 
   const paid = amountPaidOn(booking);
   const dispute = await Dispute.create({
@@ -179,7 +210,7 @@ const raiseDispute = async ({ bookingId, party, actorId, actorName, reason, desc
     evidence: sanitizeEvidence(evidence, config.maxDisputeEvidence),
     requestedRefund: party === 'user' ? Math.min(Math.max(0, Number(requestedRefund) || 0), paid) : 0,
     amountPaid: paid,
-    priority: ['Damage to property', 'Professional misbehaved'].includes(cleanReason) ? 'high' : 'medium',
+    priority: isHighPriority ? 'high' : 'medium',
     messages: [{
       senderType: 'system',
       message: `Dispute raised by the ${party === 'user' ? 'customer' : 'professional'}: ${cleanReason}`
@@ -476,5 +507,7 @@ module.exports = {
   raiseDispute,
   addMessage,
   updateStatus,
-  resolveDispute
+  resolveDispute,
+  DEFAULT_CUSTOMER_DISPUTE_REASONS,
+  DEFAULT_WORKER_DISPUTE_REASONS
 };

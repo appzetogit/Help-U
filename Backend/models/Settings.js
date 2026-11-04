@@ -404,6 +404,20 @@ const settingsSchema = new mongoose.Schema({
       'Other'
     ]
   },
+  workerDisputeReasons: {
+    type: [String],
+    default: [
+      'Customer unavailable / Not at location',
+      'Customer refused to pay',
+      'Customer misbehaved / Inappropriate behavior',
+      'Incorrect address / Location unreachable',
+      'Scope mismatch / Extra work demanded',
+      'Customer cancelled at doorstep',
+      'Safety or security concern',
+      'Payment or settlement issue',
+      'Other'
+    ]
+  },
 
   // ==========================================
   // WORKER ASSIGNMENT

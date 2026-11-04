@@ -39,6 +39,17 @@ export const BOOKING_CONFIG_DEFAULTS = {
     'Payment issue',
     'Other'
   ],
+  workerDisputeReasons: [
+    'Customer unavailable / Not at location',
+    'Customer refused to pay',
+    'Customer misbehaved / Inappropriate behavior',
+    'Incorrect address / Location unreachable',
+    'Scope mismatch / Extra work demanded',
+    'Customer cancelled at doorstep',
+    'Safety or security concern',
+    'Payment or settlement issue',
+    'Other'
+  ],
   minWithdrawalAmount: 100,
   isRecurringEnabled: true,
   recurringFrequencies: ['weekly', 'biweekly', 'monthly'],

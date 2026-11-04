@@ -105,12 +105,16 @@ exports.getBookingDisputeInfo = async (req, res) => {
       getBookingConfig()
     ]);
 
+    const reasons = party === 'worker'
+      ? ((config.workerDisputeReasons && config.workerDisputeReasons.length > 0) ? config.workerDisputeReasons : disputeService.DEFAULT_WORKER_DISPUTE_REASONS)
+      : ((config.disputeReasons && config.disputeReasons.length > 0) ? config.disputeReasons : disputeService.DEFAULT_CUSTOMER_DISPUTE_REASONS);
+
     res.status(200).json({
       success: true,
       data: {
         dispute: latest,
         eligibility,
-        reasons: config.disputeReasons,
+        reasons,
         maxEvidence: config.maxDisputeEvidence,
         amountPaid: disputeService.amountPaidOn(booking)
       }

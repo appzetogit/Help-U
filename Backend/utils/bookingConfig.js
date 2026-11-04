@@ -53,6 +53,17 @@ const CONFIG_SCHEMA = {
     'Payment issue',
     'Other'
   ], 'stringList'],
+  workerDisputeReasons: [[
+    'Customer unavailable / Not at location',
+    'Customer refused to pay',
+    'Customer misbehaved / Inappropriate behavior',
+    'Incorrect address / Location unreachable',
+    'Scope mismatch / Extra work demanded',
+    'Customer cancelled at doorstep',
+    'Safety or security concern',
+    'Payment or settlement issue',
+    'Other'
+  ], 'stringList'],
 
   // How a booking finds its professionals - ONE rule at a time:
   //   zone      the customer's zone decides: only professionals in that zone, however far away. Addresses
@@ -259,6 +270,7 @@ const getPublicBookingConfig = async () => {
     disputeWindowDays: c.disputeWindowDays,
     maxDisputeEvidence: c.maxDisputeEvidence,
     disputeReasons: c.disputeReasons,
+    workerDisputeReasons: c.workerDisputeReasons,
     minWithdrawalAmount: c.minWithdrawalAmount,
     isRecurringEnabled: c.isRecurringEnabled,
     recurringFrequencies: c.recurringFrequencies,
