@@ -382,19 +382,44 @@ const getAllWorkerBookings = async (req, res) => {
     // Pagination
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
-    // If search is provided, we need to find workers by business name or name first
-    if (search) {
-      const safeSearch = escapeRegex(search);
-      const workers = await Worker.find({
-        $or: [
-          { businessName: { $regex: safeSearch, $options: 'i' } },
-          { name: { $regex: safeSearch, $options: 'i' } },
-          { phone: { $regex: safeSearch, $options: 'i' } }
-        ]
-      }).select('_id');
+    // If search is provided, match worker business name, name, phone, bookingNumber, or _id
+    if (search && String(search).trim()) {
+      const trimmed = String(search).trim();
+      const safeSearch = escapeRegex(trimmed);
+      const phoneDigits = trimmed.replace(/\D/g, '');
+      const workerConditions = [
+        { businessName: { $regex: safeSearch, $options: 'i' } },
+        { name: { $regex: safeSearch, $options: 'i' } }
+      ];
 
+      if (phoneDigits) {
+        workerConditions.push({ phone: { $regex: escapeRegex(phoneDigits), $options: 'i' } });
+        if (phoneDigits.length >= 12 && phoneDigits.startsWith('91')) {
+          workerConditions.push({ phone: { $regex: escapeRegex(phoneDigits.slice(2)), $options: 'i' } });
+        } else if (phoneDigits.length >= 11 && phoneDigits.startsWith('0')) {
+          workerConditions.push({ phone: { $regex: escapeRegex(phoneDigits.slice(1)), $options: 'i' } });
+        } else if (phoneDigits.length > 10) {
+          workerConditions.push({ phone: { $regex: escapeRegex(phoneDigits.slice(-10)), $options: 'i' } });
+        }
+      } else {
+        workerConditions.push({ phone: { $regex: safeSearch, $options: 'i' } });
+      }
+
+      const workers = await Worker.find({ $or: workerConditions }).select('_id');
       const workerIds = workers.map(v => v._id);
-      query.vendorId = { $in: workerIds };
+
+      const searchOr = [
+        { vendorId: { $in: workerIds } },
+        { bookingNumber: { $regex: safeSearch, $options: 'i' } }
+      ];
+
+      const mongoose = require('mongoose');
+      if (mongoose.Types.ObjectId.isValid(trimmed) && String(new mongoose.Types.ObjectId(trimmed)) === trimmed) {
+        searchOr.push({ _id: new mongoose.Types.ObjectId(trimmed) });
+      }
+
+      query.$and = [{ vendorId: { $exists: true, $ne: null } }, { $or: searchOr }];
+      delete query.vendorId;
     }
 
     const bookings = await Booking.find(query)

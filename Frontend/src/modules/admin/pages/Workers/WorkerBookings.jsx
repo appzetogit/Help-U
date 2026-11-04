@@ -1,16 +1,25 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { FiSearch, FiLoader, FiCalendar, FiClock, FiUser, FiBriefcase } from 'react-icons/fi';
+import { FiSearch, FiLoader, FiCalendar, FiClock, FiUser, FiBriefcase, FiZap } from 'react-icons/fi';
 import { toast } from 'react-hot-toast';
 import CardShell from '../UserCategories/components/CardShell';
 import adminWorkerService from '../../../../services/adminWorkerService';
 
 const WorkerBookings = () => {
+  const navigate = useNavigate();
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [filterStatus, setFilterStatus] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [pagination, setPagination] = useState({ page: 1, limit: 20, total: 0 });
+
+  // Debounce search
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(searchQuery), 400);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
 
   const loadBookings = async (page = 1) => {
     try {
@@ -19,7 +28,7 @@ const WorkerBookings = () => {
         page,
         limit: pagination.limit,
         status: filterStatus === 'all' ? undefined : filterStatus,
-        search: searchQuery || undefined
+        search: debouncedSearch.trim() || undefined
       };
       const response = await adminWorkerService.getAllBookings(params);
       if (response.success) {
@@ -35,8 +44,8 @@ const WorkerBookings = () => {
   };
 
   useEffect(() => {
-    loadBookings();
-  }, [filterStatus, searchQuery]);
+    loadBookings(1);
+  }, [filterStatus, debouncedSearch]);
 
   const getStatusStyle = (status) => {
     const styles = {
@@ -47,6 +56,32 @@ const WorkerBookings = () => {
       cancelled: 'bg-red-100 text-red-800'
     };
     return styles[status] || 'bg-gray-100 text-gray-800';
+  };
+
+  const formatBookingDate = (b) => {
+    const raw = b.scheduledDate || b.createdAt || b.bookingDate;
+    if (!raw) return 'Date not set';
+    const d = new Date(raw);
+    return isNaN(d.getTime())
+      ? 'Date not set'
+      : d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+  };
+
+  const formatBookingSlot = (b) => {
+    const isInstant = Boolean(b.isInstant || b.bookingType === 'instant' || b.pricingType === 'instant');
+    if (isInstant) {
+      return (
+        <span className="inline-flex items-center gap-1 font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200 text-xs">
+          <FiZap className="w-3 h-3 text-amber-500 fill-amber-500" /> Instant
+        </span>
+      );
+    }
+    const timeStr = b.scheduledTime || b.bookingSlot || (b.timeSlot?.start ? `${b.timeSlot.start} - ${b.timeSlot.end}` : null);
+    return timeStr ? (
+      <span className="font-medium text-gray-800">{timeStr}</span>
+    ) : (
+      <span className="text-gray-400">Standard</span>
+    );
   };
 
   return (
@@ -112,28 +147,34 @@ const WorkerBookings = () => {
                             {booking.status.toUpperCase()}
                           </span>
                         </div>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1 text-sm text-gray-600">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1.5 text-sm text-gray-600">
                           <div className="flex items-center gap-2">
-                            <FiBriefcase className="w-4 h-4" />
+                            <FiBriefcase className="w-4 h-4 text-slate-500 shrink-0" />
                             <span>Worker: <span className="font-medium text-gray-800">{booking.vendorId?.businessName || booking.vendorId?.name || 'Unassigned'}</span></span>
                           </div>
                           <div className="flex items-center gap-2">
-                            <FiUser className="w-4 h-4 text-blue-500" />
-                            <span>Customer: <span className="font-medium text-gray-800">{booking.userId?.name}</span></span>
+                            <FiUser className="w-4 h-4 text-blue-500 shrink-0" />
+                            <span>Customer: <span className="font-medium text-gray-800">{booking.userId?.name || 'Customer'}</span></span>
                           </div>
                           <div className="flex items-center gap-2">
-                            <FiCalendar className="w-4 h-4" />
-                            <span>Date: {new Date(booking.bookingDate).toLocaleDateString()}</span>
+                            <FiCalendar className="w-4 h-4 text-gray-400 shrink-0" />
+                            <span>Date: <span className="font-medium text-gray-800">{formatBookingDate(booking)}</span></span>
                           </div>
                           <div className="flex items-center gap-2">
-                            <FiUser className="w-4 h-4 text-green-500" />
+                            <FiClock className="w-4 h-4 text-gray-400 shrink-0" />
+                            <span className="flex items-center gap-1.5">Slot: {formatBookingSlot(booking)}</span>
                           </div>
                         </div>
                       </div>
                     </div>
                     <div className="flex flex-col items-end gap-2">
                       <div className="text-lg font-bold text-gray-900">₹{booking.finalAmount}</div>
-                      <button className="text-sm text-blue-600 font-semibold hover:underline">View Details</button>
+                      <button
+                        onClick={() => navigate(`/admin/bookings/${booking._id}`)}
+                        className="text-sm text-blue-600 font-semibold hover:underline cursor-pointer"
+                      >
+                        View Details
+                      </button>
                     </div>
                   </div>
                 </motion.div>

@@ -41,6 +41,18 @@ async function it(desc, fn) {
     })).insertedId;
     const loneId = (await col.insertOne({ ...base, name: 'Lone Worker', phone: '9333333333', email: 'lw@x.com', referralCode: 'LONE03', service: [] })).insertedId;
 
+    const Booking = require('../models/Booking');
+    const bookingCol = Booking.collection;
+    const testBookingId = (await bookingCol.insertOne({
+      vendorId: referredId,
+      bookingNumber: 'BKWRKTEST01',
+      status: 'confirmed',
+      scheduledDate: new Date('2026-11-12T14:00:00Z'),
+      scheduledTime: '02:00 PM',
+      finalAmount: 799,
+      serviceCategory: 'AC & Appliance Repair'
+    })).insertedId;
+
     const list = async () => {
       const res = await request(server).get('/api/admin/workers').set(auth).query({ limit: 50 });
       assert.strictEqual(res.status, 200, `list answered ${res.status}: ${JSON.stringify(res.body).slice(0, 200)}`);
@@ -76,6 +88,23 @@ async function it(desc, fn) {
     });
     await it('the password is never returned', async () => {
       assert.ok(!JSON.stringify(await list()).includes('"password"'));
+    });
+
+    await it('GET /api/admin/workers/bookings returns bookings with populated worker and scheduledDate', async () => {
+      const res = await request(server).get('/api/admin/workers/bookings').set(auth);
+      assert.strictEqual(res.status, 200);
+      assert.ok(res.body.data.length >= 1);
+      const b = res.body.data.find(x => x.bookingNumber === 'BKWRKTEST01');
+      assert.ok(b, 'found booking');
+      assert.ok(b.vendorId, 'vendorId populated');
+      assert.strictEqual(b.vendorId.name, 'Suresh Rao');
+      assert.ok(b.scheduledDate);
+    });
+
+    await it('GET /api/admin/workers/bookings searches by worker name', async () => {
+      const res = await request(server).get('/api/admin/workers/bookings').set(auth).query({ search: 'Suresh' });
+      assert.strictEqual(res.status, 200);
+      assert.ok(res.body.data.some(x => x.bookingNumber === 'BKWRKTEST01'));
     });
   } finally {
     console.log(`\n${passed} passed, ${failed} failed`);
