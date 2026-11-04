@@ -72,3 +72,4 @@ it('validates correct 10-digit Indian numbers starting with 6-9', () => {
 
 console.log(`\n${passed} passed, ${failed} failed\n`);
 if (failed > 0) process.exit(1);
+

@@ -53,3 +53,4 @@ export const cleanIndianPhoneNumber = (input) => {
 export const isValidIndianPhone = (phone) => {
   return /^[6-9]\d{9}$/.test(String(phone || '').trim());
 };
+
