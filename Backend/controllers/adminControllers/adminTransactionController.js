@@ -157,7 +157,8 @@ const getAllTransactions = async (req, res) => {
         query.$or = [
           { userId: { $ne: null } },
           { type: 'cash_collected' },
-          { type: 'payment' }
+          { type: 'payment' },
+          { type: 'advance_payment' }
         ];
       } else if (entity === 'worker') {
         query.vendorId = { $ne: null };
@@ -270,7 +271,7 @@ const getTransactionStats = async (req, res) => {
     // --- STANDARD LOGIC FOR OTHERS ---
     let matchQuery = {
       status: 'completed',
-      type: { $in: ['credit', 'debit', 'refund', 'commission', 'cash_collected', 'payment'] }
+      type: { $in: ['credit', 'debit', 'refund', 'commission', 'cash_collected', 'payment', 'advance_payment', 'earnings_credit', 'withdrawal', 'settlement'] }
     };
 
     // Apply entity filter
@@ -289,7 +290,7 @@ const getTransactionStats = async (req, res) => {
           _id: null,
           totalRevenue: {
             $sum: {
-              $cond: [{ $in: ['$type', ['credit', 'commission', 'cash_collected', 'payment', 'platform_fee', 'convenience_fee', 'gst', 'penalty', 'tds_deduction']] }, '$amount', 0]
+              $cond: [{ $in: ['$type', ['credit', 'commission', 'cash_collected', 'payment', 'advance_payment', 'platform_fee', 'convenience_fee', 'gst', 'penalty', 'tds_deduction']] }, '$amount', 0]
             }
           },
           totalRefunds: {

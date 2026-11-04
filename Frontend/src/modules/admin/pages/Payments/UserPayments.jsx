@@ -109,10 +109,20 @@ const UserPayments = () => {
 
   const getTypeColor = (type) => {
     switch (type) {
-      case 'credit': return 'text-green-600';
-      case 'debit': return 'text-red-600';
-      case 'refund': return 'text-orange-600';
-      default: return 'text-blue-600';
+      case 'credit':
+      case 'payment':
+      case 'advance_payment':
+      case 'cash_collected':
+      case 'referral_bonus':
+      case 'cashback':
+      case 'promo_credit':
+        return 'text-green-600';
+      case 'debit':
+        return 'text-red-600';
+      case 'refund':
+        return 'text-orange-600';
+      default:
+        return 'text-blue-600';
     }
   };
 
@@ -238,7 +248,9 @@ const UserPayments = () => {
           >
             <option value="all">All Types</option>
             <option value="payment">Online Payment</option>
+            <option value="advance_payment">Advance Payment</option>
             <option value="cash_collected">Cash Collected</option>
+            <option value="credit">Wallet Credit</option>
             <option value="debit">Wallet Debit</option>
             <option value="refund">Refund</option>
           </select>
@@ -309,10 +321,16 @@ const UserPayments = () => {
                       </div>
                     </td>
                     <td className="px-6 py-4">
-                      <span className={`text-sm font-bold ${getTypeColor(tx.type)}`}>
-                        {tx.type === 'credit' ? '+ ' : tx.type === 'debit' ? '- ' : ''}
-                        {formatCurrency(tx.amount)}
-                      </span>
+                      {(() => {
+                        const isInflow = ['credit', 'payment', 'advance_payment', 'cash_collected', 'referral_bonus', 'cashback', 'promo_credit'].includes(tx.type);
+                        const isOutflow = ['debit', 'refund'].includes(tx.type);
+                        return (
+                          <span className={`text-sm font-bold ${getTypeColor(tx.type)}`}>
+                            {isInflow ? '+ ' : isOutflow ? '- ' : ''}
+                            {formatCurrency(tx.amount)}
+                          </span>
+                        );
+                      })()}
                     </td>
                     <td className="px-6 py-4">
                       <span className="px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider bg-blue-50 text-blue-600 border border-blue-100">

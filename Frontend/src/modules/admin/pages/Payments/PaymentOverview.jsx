@@ -136,9 +136,14 @@ const PaymentOverview = () => {
     switch (type) {
       case 'credit': return 'text-green-600 bg-green-50 border-green-100';
       case 'payment': return 'text-blue-600 bg-blue-50 border-blue-100'; // Online Payment
+      case 'advance_payment': return 'text-indigo-600 bg-indigo-50 border-indigo-100';
       case 'cash_collected': return 'text-amber-600 bg-amber-50 border-amber-100'; // Cash
+      case 'earnings_credit': return 'text-emerald-600 bg-emerald-50 border-emerald-100';
+      case 'commission': return 'text-teal-600 bg-teal-50 border-teal-100';
       case 'debit': return 'text-orange-600 bg-orange-50 border-orange-100';
       case 'refund': return 'text-purple-600 bg-purple-50 border-purple-100';
+      case 'withdrawal': return 'text-rose-600 bg-rose-50 border-rose-100';
+      case 'settlement': return 'text-sky-600 bg-sky-50 border-sky-100';
       default: return 'text-gray-600 bg-gray-50 border-gray-100';
     }
   };
@@ -236,10 +241,13 @@ const PaymentOverview = () => {
           >
             <option value="all">All Types</option>
             <option value="credit">Credit (Platform)</option>
-            <option value="debit">Debit (Wallet)</option>
             <option value="payment">Online Payment</option>
+            <option value="advance_payment">Advance Payment</option>
             <option value="cash_collected">Cash Collected</option>
+            <option value="earnings_credit">Earnings Credit</option>
+            <option value="debit">Debit (Wallet)</option>
             <option value="refund">Refund</option>
+            <option value="withdrawal">Withdrawal</option>
           </select>
 
           <button
@@ -309,9 +317,29 @@ const PaymentOverview = () => {
                       </span>
                     </td>
                     <td className="py-3 px-4">
-                      <span className={`text-sm font-semibold ${['credit', 'payment', 'cash_collected'].includes(tx.type) ? 'text-green-600' : 'text-gray-800'}`}>
-                        {['credit', 'payment', 'cash_collected'].includes(tx.type) ? '+' : '-'}{formatCurrency(tx.amount)}
-                      </span>
+                      {(() => {
+                        const isInflow = [
+                          'credit',
+                          'payment',
+                          'advance_payment',
+                          'cash_collected',
+                          'earnings_credit',
+                          'commission',
+                          'platform_fee',
+                          'convenience_fee',
+                          'gst',
+                          'referral_bonus',
+                          'cashback',
+                          'promo_credit',
+                          'settlement',
+                          'scrap_reimbursement'
+                        ].includes(tx.type);
+                        return (
+                          <span className={`text-sm font-semibold ${isInflow ? 'text-green-600' : 'text-gray-800'}`}>
+                            {isInflow ? '+' : '-'}{formatCurrency(tx.amount)}
+                          </span>
+                        );
+                      })()}
                     </td>
                     <td className="py-3 px-4">
                       <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(tx.status)}`}>
