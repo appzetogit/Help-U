@@ -37,6 +37,7 @@ const AllUsers = () => {
 
   const [statusFilter, setStatusFilter] = useState('all'); // all, active, inactive
   const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(20);
   const [totalPages, setTotalPages] = useState(1);
   const [totalUsers, setTotalUsers] = useState(0);
 
@@ -112,12 +113,17 @@ const AllUsers = () => {
     return () => clearTimeout(timer);
   }, [search]);
 
+  // Reset to page 1 whenever search, status filter, or limit changes
+  useEffect(() => {
+    setPage(1);
+  }, [debouncedSearch, statusFilter, limit]);
+
   const fetchUsers = async () => {
     try {
       setLoading(true);
       const params = {
         page,
-        limit: 10,
+        limit,
         search: debouncedSearch
       };
 
@@ -141,7 +147,7 @@ const AllUsers = () => {
 
   useEffect(() => {
     fetchUsers();
-  }, [page, debouncedSearch, statusFilter]);
+  }, [page, debouncedSearch, statusFilter, limit]);
 
   const handleStatusToggle = async (userId, currentStatus) => {
     if (!window.confirm(`Are you sure you want to ${currentStatus ? 'block' : 'activate'} this user?`)) {
@@ -343,22 +349,37 @@ const AllUsers = () => {
 
         {/* Pagination */}
         {!loading && users.length > 0 && (
-          <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100 bg-gray-50/30">
-            <p className="text-[10px] text-gray-500 font-bold uppercase tracking-tight">
-              Showing {users.length} of {totalUsers} users
-            </p>
-            <div className="flex gap-1.5">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3 border-t border-gray-100 bg-gray-50/30">
+            <div className="flex items-center gap-2">
+              <p className="text-[10px] text-gray-500 font-bold uppercase tracking-tight">
+                Showing {((page - 1) * limit) + 1}–{Math.min(page * limit, totalUsers)} of {totalUsers} users
+              </p>
+              <select
+                value={limit}
+                onChange={(e) => setLimit(Number(e.target.value))}
+                className="px-2 py-1 bg-white border border-gray-200 rounded text-[11px] text-gray-600 focus:outline-none cursor-pointer"
+              >
+                <option value={10}>10 / page</option>
+                <option value={20}>20 / page</option>
+                <option value={50}>50 / page</option>
+                <option value={100}>100 / page</option>
+              </select>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="text-[11px] text-gray-500 font-medium mr-1">
+                Page {page} of {Math.max(1, totalPages)}
+              </span>
               <button
                 onClick={() => setPage(p => Math.max(1, p - 1))}
                 disabled={page === 1}
-                className="px-3 py-1.5 border border-gray-200 rounded-lg text-xs font-bold text-gray-600 disabled:opacity-50 hover:bg-white transition-all"
+                className="px-3 py-1.5 border border-gray-200 rounded-lg text-xs font-bold text-gray-600 disabled:opacity-50 hover:bg-white transition-all cursor-pointer disabled:cursor-not-allowed"
               >
                 Prev
               </button>
               <button
                 onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-                disabled={page === totalPages}
-                className="px-3 py-1.5 border border-gray-200 rounded-lg text-xs font-bold text-gray-600 disabled:opacity-50 hover:bg-white transition-all"
+                disabled={page >= totalPages}
+                className="px-3 py-1.5 border border-gray-200 rounded-lg text-xs font-bold text-gray-600 disabled:opacity-50 hover:bg-white transition-all cursor-pointer disabled:cursor-not-allowed"
               >
                 Next
               </button>

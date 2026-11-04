@@ -21,7 +21,11 @@ const getAllUsers = async (req, res) => {
     const query = {};
 
     if (isActive !== undefined) {
-      query.isActive = isActive === 'true';
+      if (isActive === 'true') {
+        query.isActive = true;
+      } else if (isActive === 'false') {
+        query.isActive = { $ne: true };
+      }
     }
     if (isPhoneVerified !== undefined) {
       query.isPhoneVerified = isPhoneVerified === 'true';
@@ -30,14 +34,35 @@ const getAllUsers = async (req, res) => {
       query.isEmailVerified = isEmailVerified === 'true';
     }
 
-    // Search by name, phone, or email
-    if (search) {
-      const safeSearch = escapeRegex(search);
-      query.$or = [
+    // Search by name, phone, email, or _id
+    if (search && String(search).trim()) {
+      const trimmedSearch = String(search).trim();
+      const safeSearch = escapeRegex(trimmedSearch);
+      const searchConditions = [
         { name: { $regex: safeSearch, $options: 'i' } },
-        { phone: { $regex: safeSearch, $options: 'i' } },
         { email: { $regex: safeSearch, $options: 'i' } }
       ];
+
+      const phoneDigits = trimmedSearch.replace(/\D/g, '');
+      if (phoneDigits) {
+        searchConditions.push({ phone: { $regex: escapeRegex(phoneDigits), $options: 'i' } });
+        if (phoneDigits.length >= 12 && phoneDigits.startsWith('91')) {
+          searchConditions.push({ phone: { $regex: escapeRegex(phoneDigits.slice(2)), $options: 'i' } });
+        } else if (phoneDigits.length >= 11 && phoneDigits.startsWith('0')) {
+          searchConditions.push({ phone: { $regex: escapeRegex(phoneDigits.slice(1)), $options: 'i' } });
+        } else if (phoneDigits.length > 10) {
+          searchConditions.push({ phone: { $regex: escapeRegex(phoneDigits.slice(-10)), $options: 'i' } });
+        }
+      } else {
+        searchConditions.push({ phone: { $regex: safeSearch, $options: 'i' } });
+      }
+
+      const mongoose = require('mongoose');
+      if (mongoose.Types.ObjectId.isValid(trimmedSearch) && String(new mongoose.Types.ObjectId(trimmedSearch)) === trimmedSearch) {
+        searchConditions.push({ _id: new mongoose.Types.ObjectId(trimmedSearch) });
+      }
+
+      query.$or = searchConditions;
     }
 
     // Pagination
@@ -377,18 +402,41 @@ const getAllUserBookings = async (req, res) => {
       query.status = status;
     }
 
-    // Search by user name or phone
-    if (search) {
-      const safeSearch = escapeRegex(search);
-      const users = await User.find({
-        $or: [
-          { name: { $regex: safeSearch, $options: 'i' } },
-          { phone: { $regex: safeSearch, $options: 'i' } }
-        ]
-      }).select('_id');
-      
+    // Search by user name, phone, bookingNumber, or booking _id
+    if (search && String(search).trim()) {
+      const trimmed = String(search).trim();
+      const safeSearch = escapeRegex(trimmed);
+      const phoneDigits = trimmed.replace(/\D/g, '');
+      const userConditions = [
+        { name: { $regex: safeSearch, $options: 'i' } }
+      ];
+      if (phoneDigits) {
+        userConditions.push({ phone: { $regex: escapeRegex(phoneDigits), $options: 'i' } });
+        if (phoneDigits.length >= 12 && phoneDigits.startsWith('91')) {
+          userConditions.push({ phone: { $regex: escapeRegex(phoneDigits.slice(2)), $options: 'i' } });
+        } else if (phoneDigits.length >= 11 && phoneDigits.startsWith('0')) {
+          userConditions.push({ phone: { $regex: escapeRegex(phoneDigits.slice(1)), $options: 'i' } });
+        } else if (phoneDigits.length > 10) {
+          userConditions.push({ phone: { $regex: escapeRegex(phoneDigits.slice(-10)), $options: 'i' } });
+        }
+      } else {
+        userConditions.push({ phone: { $regex: safeSearch, $options: 'i' } });
+      }
+
+      const users = await User.find({ $or: userConditions }).select('_id');
       const userIds = users.map(u => u._id);
-      query.userId = { $in: userIds };
+
+      const searchOr = [
+        { userId: { $in: userIds } },
+        { bookingNumber: { $regex: safeSearch, $options: 'i' } }
+      ];
+
+      const mongoose = require('mongoose');
+      if (mongoose.Types.ObjectId.isValid(trimmed) && String(new mongoose.Types.ObjectId(trimmed)) === trimmed) {
+        searchOr.push({ _id: new mongoose.Types.ObjectId(trimmed) });
+      }
+
+      query.$or = searchOr;
     }
 
     const skip = (parseInt(page) - 1) * parseInt(limit);
@@ -396,6 +444,7 @@ const getAllUserBookings = async (req, res) => {
     const bookings = await Booking.find(query)
       .select('-workPhotos') // list views never show them; they can be megabytes
       .populate('userId', 'name phone email')
+      .populate('vendorId', 'name phone businessName profilePhoto')
       .populate('serviceId', 'title')
       .sort({ createdAt: -1 })
       .skip(skip)
