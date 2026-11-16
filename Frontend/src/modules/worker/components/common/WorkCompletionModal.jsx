@@ -76,12 +76,27 @@ const WorkCompletionModal = ({ isOpen, onClose, job, onComplete, loading }) => {
       return job?.extraChargesTotal || 0;
     }
 
-    // For normal bookings, prefer finalAmount (even if 0)
-    if (typeof job?.finalAmount === 'number') {
-      return job.finalAmount;
+    if (job?.bill?.grandTotal > 0) {
+      return job.bill.grandTotal;
     }
 
-    return ((job?.basePrice || 0) + (job?.tax || 0) - (job?.discount || 0));
+    if (typeof job?.totals?.total === 'number' && job.totals.total > 0) {
+      return job.totals.total;
+    }
+
+    const previous = typeof job?.finalAmount === 'number'
+      ? job.finalAmount
+      : ((job?.basePrice || 0) + (job?.tax || 0) - (job?.discount || 0) + (job?.visitingCharges || 0));
+
+    const repairTotal = (job?.customerAddedServices || [])
+      .filter(item => !item.isOther && Number(item.unitPrice) > 0)
+      .reduce((sum, item) => {
+        const base = (Number(item.unitPrice) || 0) * (Number(item.quantity) || 1);
+        const gst = (base * 18) / 100;
+        return sum + base + gst;
+      }, 0);
+
+    return Math.round((previous + repairTotal) * 100) / 100;
   };
 
   const showPhotoError = photoError && workPhotos.length === 0;

@@ -203,6 +203,7 @@ export default function BookingDetails() {
 
           // Also trigger a full reload to be safe/sync
           window.dispatchEvent(new Event('workerJobsUpdated'));
+          loadBooking();
 
           // Check if this update is a payment success, if so, trigger reload for fresh state
           const isPaymentSuccess =
@@ -482,11 +483,37 @@ export default function BookingDetails() {
 
   // Extra Services & Parts from worker bill (if available)
   const allBillServices = bill?.services || [];
-  // Before a bill exists, the repair services the customer added still belong on the invoice (priced by the server)
-  const repairFromTotals = !bill
-    ? (booking?.totals?.lines?.repair || []).map(r => ({ name: r.title, price: r.unitPrice, quantity: r.quantity, gstAmount: r.gst, addedByCustomer: true }))
-    : [];
-  const services = bill ? allBillServices.filter(s => !s.isOriginal) : repairFromTotals;
+  // Customer-added repair services (from totals or customerAddedServices directly)
+  const repairFromTotals = (booking?.totals?.lines?.repair?.length > 0)
+    ? (booking.totals.lines.repair || []).map(r => ({
+        name: r.title,
+        price: r.unitPrice,
+        quantity: r.quantity,
+        gstAmount: r.gst,
+        addedByCustomer: true
+      }))
+    : (booking?.customerAddedServices || [])
+        .filter(i => !i.isOther && Number(i.unitPrice) > 0)
+        .map(i => {
+          const qty = Number(i.quantity) || 1;
+          const base = Number(i.unitPrice) * qty;
+          const gst = Math.round(((base * 18) / 100) * 100) / 100;
+          return {
+            name: i.title,
+            price: Number(i.unitPrice),
+            quantity: qty,
+            gstAmount: gst,
+            addedByCustomer: true
+          };
+        });
+
+  const billExtraServices = allBillServices.filter(s => !s.isOriginal);
+  const billHasCustomerRepairs = billExtraServices.some(s => s.addedByCustomer);
+  // If bill exists and already incorporated customer repairs, use bill's extra services;
+  // otherwise, ensure customer-added repair services are always merged in.
+  const services = billHasCustomerRepairs
+    ? billExtraServices
+    : [...billExtraServices, ...repairFromTotals];
   const originalServiceFromBill = allBillServices.find(s => s.isOriginal);
   const parts = bill?.parts || [];
   const customItems = bill?.customItems || [];
@@ -519,10 +546,19 @@ export default function BookingDetails() {
   const totalGST = originalGST + extraServiceGST + partsGST;
 
   // Final Total from bill or booking
-  // Without a bill, the running total (it includes repair services the customer added)
-  const finalTotal = bill?.grandTotal || booking?.totals?.total || (booking?.finalAmount || 0);
+  const calculatedGrandTotal = (
+    originalBase + extraServiceBase + originalGST + extraServiceGST +
+    partsBase + partsGST +
+    (bill?.visitingCharges || booking.visitingCharges || 0) +
+    (bill?.penaltyCharges || booking.penalty || 0) +
+    (bill?.transportCharges || 0)
+  );
+  // Without a finalized bill, use running total or calculated grand total to include all new added services
+  const finalTotal = (bill?.billFinalizedAt && bill?.grandTotal)
+    ? bill.grandTotal
+    : (booking?.totals?.total || calculatedGrandTotal || (booking?.finalAmount || 0));
   // What is still to collect: the total less any advance or amount paid online earlier
-  const amountToCollect = booking?.totals ? booking.totals.due : (booking?.finalAmount || 0);
+  const amountToCollect = booking?.totals ? booking.totals.due : Math.max(0, finalTotal - (booking.advancePayment?.paidAmount || 0) - (booking.prepaidAmount || 0));
 
   // Show the rate actually applied (from the saved bill) instead of a fixed 18%
   const serviceGstPctShown = bill?.payoutConfig?.serviceGstPercentage;
@@ -792,9 +828,28 @@ export default function BookingDetails() {
                   </div>
                 </div>
               ))}
+              {repairFromTotals.map((r, index) => (
+                <div key={`repair-${index}`} className="flex justify-between items-start bg-teal-50/60 rounded-xl p-3 border border-teal-100/60">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold px-1.5 py-0.5 rounded border text-teal-700 bg-teal-50 border-teal-200">
+                        ×{r.quantity}
+                      </span>
+                      <span className="text-sm font-semibold text-gray-900 truncate">{r.name}</span>
+                      <span className="rounded bg-teal-100/80 px-1.5 py-0.5 text-[10px] font-bold uppercase text-teal-800">added by customer</span>
+                    </div>
+                  </div>
+                  <div className="text-right ml-3 shrink-0">
+                    <p className="text-sm font-bold text-gray-900">₹{(r.price * r.quantity).toLocaleString()}</p>
+                    {r.quantity > 1 && <p className="text-xs text-gray-400">₹{r.price} each</p>}
+                  </div>
+                </div>
+              ))}
               <div className="flex justify-between items-center pt-2 border-t border-gray-100 mt-1">
                 <p className="text-sm font-semibold text-gray-700">Total Base Price</p>
-                <p className="text-base font-bold" style={{ color: themeColors.button }}>₹{(booking.basePrice || 0).toFixed(2)}</p>
+                <p className="text-base font-bold" style={{ color: themeColors.button }}>
+                  ₹{((booking.basePrice || 0) + extraServiceBase).toFixed(2)}
+                </p>
               </div>
             </div>
           </div>
@@ -961,12 +1016,12 @@ export default function BookingDetails() {
               <div className="space-y-2 mb-3 text-sm">
                 <div className="flex justify-between items-center text-emerald-700">
                   <span>Service Earnings{serviceEarningLabel}</span>
-                  <span className="font-bold">₹{(bill?.vendorServiceEarning || (booking.vendorEarnings || 0)).toFixed(2)}</span>
+                  <span className="font-bold">₹{(bill?.vendorServiceEarning || ((booking.vendorEarnings || 0) + (extraServiceBase * 0.7))).toFixed(2)}</span>
                 </div>
                 {(parts.length > 0 || customItems.length > 0 || bill?.vendorPartsEarning > 0) && (
                   <div className="flex justify-between items-center text-emerald-700">
                     <span>Parts Earnings{partsEarningLabel}</span>
-                    <span className="font-bold">₹{(bill?.vendorPartsEarning || 0).toFixed(2)}</span>
+                    <span className="font-bold">₹{(bill?.vendorPartsEarning || (partsBase * 0.1)).toFixed(2)}</span>
                   </div>
                 )}
               </div>
@@ -977,7 +1032,7 @@ export default function BookingDetails() {
                     : 'Estimated Net Earnings'}
                 </span>
                 <span className="text-emerald-700 font-black text-xl">
-                  ₹{(bill?.vendorTotalEarning || booking.vendorEarnings || 0).toFixed(2)}
+                  ₹{(bill?.vendorTotalEarning || ((booking.vendorEarnings || 0) + (extraServiceBase * 0.7) + (partsBase * 0.1))).toFixed(2)}
                 </span>
               </div>
 

@@ -59,7 +59,7 @@ const ActiveJobs = memo(() => {
         location: {
           address: job.address?.addressLine1 || 'Address not available'
         },
-        price: (job.finalAmount ? job.finalAmount * 0.9 : 0).toFixed(2),
+        price: Number(job.totals?.total || job.price || job.finalAmount || 0).toFixed(2),
         status: job.status,
         assignedTo: job.assignedAt ? { name: 'You (Self)' } : null,
         timeSlot: {

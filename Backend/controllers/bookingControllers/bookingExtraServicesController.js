@@ -4,6 +4,7 @@ const UserService = require('../../models/UserService');
 const { BOOKING_STATUS } = require('../../utils/constants');
 const { getBookingConfig } = require('../../utils/bookingConfig');
 const { getDisplayPricing } = require('../../utils/servicePricing');
+const { computeBookingTotals } = require('../../utils/bookingTotals');
 const { createNotification } = require('../notificationControllers/notificationController');
 
 /**
@@ -172,6 +173,21 @@ const updateExtraServices = async (req, res) => {
 
     const config = await getBookingConfig();
     const estimate = summarize(items, config.serviceGstPercentage ?? 18);
+    const totals = computeBookingTotals(booking, { gstPct: config.serviceGstPercentage ?? 18 });
+
+    // Real-time update for both vendor and customer screens
+    const io = req.app.get('io');
+    if (io) {
+      const updatePayload = {
+        bookingId: booking._id.toString(),
+        customerAddedServices: booking.customerAddedServices,
+        totals
+      };
+      if (booking.vendorId) {
+        io.to(`vendor_${booking.vendorId}`).emit('booking_updated', updatePayload);
+      }
+      io.to(`user_${booking.userId}`).emit('booking_updated', updatePayload);
+    }
 
     // Let the professional know so they include it in the bill
     if (booking.vendorId && items.length > 0) {

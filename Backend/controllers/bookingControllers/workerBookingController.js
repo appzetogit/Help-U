@@ -113,7 +113,23 @@ const getWorkerBookings = async (req, res) => {
                 bookingNumber: 1,
                 status: 1,
                 paymentMethod: 1,
+                paymentStatus: 1,
                 finalAmount: 1,
+                userPayableAmount: 1,
+                basePrice: 1,
+                tax: 1,
+                visitingCharges: 1,
+                penalty: 1,
+                discount: 1,
+                addOnsTotal: 1,
+                emergencyCharge: 1,
+                customerAddedServices: 1,
+                vendorBillId: 1,
+                billFinalizedAt: 1,
+                advancePayment: 1,
+                prepaidAmount: 1,
+                cashCollected: 1,
+                vendorEarnings: 1,
                 scheduledDate: 1,
                 scheduledTime: 1,
                 serviceName: 1,
@@ -160,9 +176,19 @@ const getWorkerBookings = async (req, res) => {
       }
     ]);
 
+    const { serviceGstPercentage } = await getBookingConfig();
+    const withTotals = (b) => {
+      const totals = computeBookingTotals(b, { gstPct: serviceGstPercentage });
+      return {
+        ...b,
+        totals,
+        price: totals.total
+      };
+    };
+
     res.status(200).json({
       success: true,
-      data: bookings,
+      data: bookings.map(withTotals),
       pagination: {
         page: parseInt(page),
         limit: parseInt(limit),
