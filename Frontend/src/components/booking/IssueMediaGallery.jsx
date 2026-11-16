@@ -3,6 +3,24 @@ import { createPortal } from 'react-dom';
 import { FiX, FiChevronLeft, FiChevronRight, FiImage, FiPlay } from 'react-icons/fi';
 import ModalLock from '../common/ModalLock';
 
+const toAssetUrl = (url) => {
+  if (!url) return '';
+  if (typeof url !== 'string') return '';
+  if (url.startsWith('blob:') || url.startsWith('data:')) return url;
+  const clean = url.replace('/api/upload', '/upload');
+  if (clean.startsWith('http://') || clean.startsWith('https://')) return clean;
+  const base = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000').replace(/\/api$/, '');
+  return `${base}${clean.startsWith('/') ? '' : '/'}${clean}`;
+};
+
+const getVideoPoster = (url) => {
+  if (!url || typeof url !== 'string') return undefined;
+  if (url.includes('res.cloudinary.com')) {
+    return url.replace(/\.[a-zA-Z0-9]+$/, '.jpg');
+  }
+  return undefined;
+};
+
 /**
  * Photos and videos the customer attached to show the problem.
  * Thumbnails in a row; tapping one opens a full-screen viewer (videos play
@@ -11,9 +29,16 @@ import ModalLock from '../common/ModalLock';
 const IssueMediaGallery = ({ photos = [], videos = [], title = 'Problem photos & videos', size = 'md', className = '' }) => {
   const [activeIndex, setActiveIndex] = useState(null);
 
+  const normalizeMediaItem = (item, type) => {
+    if (!item) return null;
+    const rawUrl = typeof item === 'string' ? item : (item.url || item.preview || '');
+    if (!rawUrl || typeof rawUrl !== 'string' || !rawUrl.trim()) return null;
+    return { url: toAssetUrl(rawUrl.trim()), type };
+  };
+
   const items = [
-    ...(Array.isArray(videos) ? videos.filter(Boolean).map((url) => ({ url, type: 'video' })) : []),
-    ...(Array.isArray(photos) ? photos.filter(Boolean).map((url) => ({ url, type: 'image' })) : [])
+    ...(Array.isArray(videos) ? videos.map((v) => normalizeMediaItem(v, 'video')).filter(Boolean) : []),
+    ...(Array.isArray(photos) ? photos.map((p) => normalizeMediaItem(p, 'image')).filter(Boolean) : [])
   ];
   if (items.length === 0) return null;
 
@@ -52,7 +77,14 @@ const IssueMediaGallery = ({ photos = [], videos = [], title = 'Problem photos &
           >
             {item.type === 'video' ? (
               <>
-                <video src={`${item.url}#t=0.5`} className="w-full h-full object-cover opacity-80" muted preload="metadata" playsInline />
+                <video
+                  src={`${item.url}#t=0.5`}
+                  poster={getVideoPoster(item.url)}
+                  className="w-full h-full object-cover opacity-80"
+                  muted
+                  preload="metadata"
+                  playsInline
+                />
                 <span className="absolute inset-0 flex items-center justify-center">
                   <span className="w-6 h-6 rounded-full bg-white/90 flex items-center justify-center">
                     <FiPlay className="w-3 h-3 text-gray-900 ml-0.5" />
@@ -95,6 +127,7 @@ const IssueMediaGallery = ({ photos = [], videos = [], title = 'Problem photos &
             <video
               key={active.url}
               src={active.url}
+              poster={getVideoPoster(active.url)}
               controls
               autoPlay
               playsInline

@@ -89,6 +89,7 @@ const IssuePhotosPicker = ({ photos, setPhotos, videos = [], setVideos, config =
   };
 
   const addFiles = (files) => {
+    setShowPhotoMenu(false);
     const images = files.filter((f) => f && f.type?.startsWith('image/'));
     if (images.length === 0) return;
 
@@ -102,6 +103,7 @@ const IssuePhotosPicker = ({ photos, setPhotos, videos = [], setVideos, config =
   };
 
   const addVideo = async (file) => {
+    setShowPhotoMenu(false);
     if (!file || !file.type?.startsWith('video/')) return;
     if (videos.length >= maxVideos) {
       toast.error(`You can add up to ${maxVideos} video${maxVideos > 1 ? 's' : ''}`);
@@ -169,7 +171,9 @@ const IssuePhotosPicker = ({ photos, setPhotos, videos = [], setVideos, config =
         <h3 className="text-base font-bold text-black">
           {videoEnabled ? 'Add photos or a video' : 'Add photos'} <span className="text-sm font-medium text-gray-400">(optional)</span>
         </h3>
-        <span className="text-xs font-semibold text-gray-500 shrink-0 mt-0.5">{total}/{max}</span>
+        <span className="text-xs font-semibold text-gray-500 shrink-0 mt-0.5">
+          {total > 0 ? `${total} attached` : `${total}/${max}`}
+        </span>
       </div>
       <p className="text-xs text-gray-500 mb-3">
         Show the problem so the worker knows what to expect before arriving.
@@ -179,7 +183,14 @@ const IssuePhotosPicker = ({ photos, setPhotos, videos = [], setVideos, config =
       <div className="grid grid-cols-5 gap-2">
         {videos.map((video) => (
           <div key={video.id} className="relative aspect-square rounded-lg overflow-hidden bg-gray-900 border border-gray-200">
-            <video src={toAssetUrl(video.preview || video.url)} className="w-full h-full object-cover opacity-80" muted playsInline preload="metadata" />
+            <video
+              src={`${toAssetUrl(video.preview || video.url)}#t=0.1`}
+              poster={video.url?.includes('res.cloudinary.com') ? video.url.replace(/\.[a-zA-Z0-9]+$/, '.jpg') : undefined}
+              className="w-full h-full object-cover opacity-80"
+              muted
+              playsInline
+              preload="metadata"
+            />
             <FiVideo className="absolute bottom-1 left-1 w-3.5 h-3.5 text-white" />
             {video.status === 'uploading' && (
               <div className="absolute inset-0 bg-black/50 flex flex-col items-center justify-center">
@@ -219,20 +230,31 @@ const IssuePhotosPicker = ({ photos, setPhotos, videos = [], setVideos, config =
           </div>
         ))}
 
-        {photos.length < maxPhotos && (
-          <button type="button" onClick={handleAdd}
-            className="aspect-square rounded-lg border-2 border-dashed border-gray-300 text-gray-400 flex flex-col items-center justify-center active:scale-95 transition-transform">
-            <FiCamera className="w-5 h-5" />
-            <span className="text-[10px] font-semibold mt-0.5">Photo</span>
-          </button>
-        )}
+        {/* Only show upload sources if no photos or videos have been uploaded yet */}
+        {photos.length === 0 && videos.length === 0 && (
+          <>
+            {maxPhotos > 0 && (
+              <button
+                type="button"
+                onClick={handleAdd}
+                className="aspect-square rounded-lg border-2 border-dashed border-gray-300 text-gray-400 flex flex-col items-center justify-center active:scale-95 transition-transform hover:border-gray-400 hover:text-gray-600"
+              >
+                <FiCamera className="w-5 h-5" />
+                <span className="text-[10px] font-semibold mt-0.5">Photo</span>
+              </button>
+            )}
 
-        {videoEnabled && videos.length < maxVideos && (
-          <button type="button" onClick={() => videoInputRef.current?.click()}
-            className="aspect-square rounded-lg border-2 border-dashed border-gray-300 text-gray-400 flex flex-col items-center justify-center active:scale-95 transition-transform">
-            <FiVideo className="w-5 h-5" />
-            <span className="text-[10px] font-semibold mt-0.5">Video</span>
-          </button>
+            {videoEnabled && maxVideos > 0 && (
+              <button
+                type="button"
+                onClick={() => videoInputRef.current?.click()}
+                className="aspect-square rounded-lg border-2 border-dashed border-gray-300 text-gray-400 flex flex-col items-center justify-center active:scale-95 transition-transform hover:border-gray-400 hover:text-gray-600"
+              >
+                <FiVideo className="w-5 h-5" />
+                <span className="text-[10px] font-semibold mt-0.5">Video</span>
+              </button>
+            )}
+          </>
         )}
       </div>
 
@@ -241,7 +263,7 @@ const IssuePhotosPicker = ({ photos, setPhotos, videos = [], setVideos, config =
       <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" className="hidden"
         onChange={(e) => { addFiles(Array.from(e.target.files || [])); e.target.value = ''; }} />
       {videoEnabled && (
-        <input ref={videoInputRef} type="file" accept="video/mp4,video/quicktime,video/webm,video/3gpp,video/*" className="hidden"
+        <input ref={videoInputRef} type="file" accept="video/*" className="hidden"
           onChange={(e) => { addVideo(e.target.files?.[0]); e.target.value = ''; }} />
       )}
 
